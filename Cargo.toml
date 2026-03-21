@@ -1,0 +1,7 @@
+[package]
+name = "upx"
+version = "0.0.0"
+edition = "2024"
+
+[dependencies]
+tokio = { version = "1.50.0", features = ["rt", "rt-multi-thread", "macros"] }
