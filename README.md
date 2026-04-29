@@ -2,6 +2,8 @@
 
 Rura is an interactive TUI (Terminal User Interface) tool for building shell command pipelines. It allows you to see the results of your commands in real-time as you type, making it easy to iterate on complex pipes.
 
+![](demo.gif)
+
 ## Usage
 
 You can start Rura by passing a file as an argument or by piping data into it.
