@@ -1,5 +1,8 @@
+use crate::rura::State::{
+    Backslash, Comment, Delimiter, DoubleQuoted, DoubleQuotedBackslash, Pipe, SingleQuoted,
+    Unquoted, UnquotedBackslash,
+};
 use std::{fmt, mem};
-use crate::rura::State::{Backslash, Comment, Delimiter, DoubleQuoted, DoubleQuotedBackslash, Pipe, SingleQuoted, Unquoted, UnquotedBackslash};
 
 #[derive(Debug)]
 pub struct Rura {
@@ -44,18 +47,18 @@ impl Rura {
         }
     }
 
-    pub fn command_until_current_prev(&self) -> (String, usize) {
+    pub fn command_until_current_prev(&self) -> Option<(String, usize)> {
         if !self.subcommands.is_empty() {
             if self.current == 0 {
-                (self.subcommands[0].clone(), 0)
+                None
             } else {
-                (
+                Some((
                     self.subcommands[0..self.current].join("|"),
                     self.current - 1,
-                )
+                ))
             }
         } else {
-            (String::new(), 0)
+            None
         }
     }
 }
@@ -127,9 +130,7 @@ fn split_command(s: &str) -> Result<Vec<String>, ParseError> {
             DoubleQuotedBackslash => match c {
                 None => return Err(ParseError),
                 Some('\n') => DoubleQuoted,
-                Some('$') | Some('`') | Some('"') | Some('\\') => {
-                    DoubleQuoted
-                }
+                Some('$') | Some('`') | Some('"') | Some('\\') => DoubleQuoted,
                 Some(_) => DoubleQuoted,
             },
             Comment => match c {
@@ -180,7 +181,6 @@ impl fmt::Display for ParseError {
 
 impl std::error::Error for ParseError {}
 
-
 #[cfg(test)]
 mod tests {
     use crate::rura::Rura;
@@ -190,27 +190,27 @@ mod tests {
         let rura = Rura::new("a|b|c", 0).unwrap();
         assert_eq!(rura.command_full(), ("a|b|c".into(), 2));
         assert_eq!(rura.command_until_current(), ("a".into(), 0));
-        assert_eq!(rura.command_until_current_prev(), ("a".into(), 0));
+        assert_eq!(rura.command_until_current_prev(), None);
 
         let rura = Rura::new("a|b|c", 1).unwrap();
         assert_eq!(rura.command_full(), ("a|b|c".into(), 2));
         assert_eq!(rura.command_until_current(), ("a".into(), 0));
-        assert_eq!(rura.command_until_current_prev(), ("a".into(), 0));
+        assert_eq!(rura.command_until_current_prev(), None);
 
         let rura = Rura::new("a|b|c", 2).unwrap();
         assert_eq!(rura.command_full(), ("a|b|c".into(), 2));
         assert_eq!(rura.command_until_current(), ("a|b".into(), 1));
-        assert_eq!(rura.command_until_current_prev(), ("a".into(), 0));
+        assert_eq!(rura.command_until_current_prev(), Some(("a".into(), 0)));
 
         let rura = Rura::new("a|b|c", 3).unwrap();
         assert_eq!(rura.command_full(), ("a|b|c".into(), 2));
         assert_eq!(rura.command_until_current(), ("a|b".into(), 1));
-        assert_eq!(rura.command_until_current_prev(), ("a".into(), 0));
+        assert_eq!(rura.command_until_current_prev(), Some(("a".into(), 0)));
 
         let rura = Rura::new("a|b|c", 4).unwrap();
         assert_eq!(rura.command_full(), ("a|b|c".into(), 2));
         assert_eq!(rura.command_until_current(), ("a|b|c".into(), 2));
-        assert_eq!(rura.command_until_current_prev(), ("a|b".into(), 1));
+        assert_eq!(rura.command_until_current_prev(), Some(("a|b".into(), 1)));
     }
 
     use super::*;

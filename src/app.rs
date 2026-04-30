@@ -23,8 +23,8 @@ use std::process::{Command, Stdio};
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 use std::time::Duration;
-use tui_input::{Input, InputRequest};
 use tui_input::backend::crossterm::EventHandler;
+use tui_input::{Input, InputRequest};
 
 pub struct App {
     command_input: Input,
@@ -65,7 +65,6 @@ impl App {
         if let Some(path) = history_path() {
             if let Ok(content) = std::fs::read_to_string(path) {
                 for line in content.lines() {
-                    debug!("reading history from {line}");
                     if !line.is_empty() {
                         history.push_front(line.to_string());
                     }
@@ -130,7 +129,7 @@ impl App {
 
             match (code, mods) {
                 (KeyCode::Tab, KeyModifiers::NONE) => {
-                   self.command_input.handle(InputRequest::SetCursor(0));
+                    self.command_input.handle(InputRequest::SetCursor(0));
                 }
                 (KeyCode::BackTab, KeyModifiers::SHIFT) => {
                     self.command_input.handle(InputRequest::SetCursor(10));
@@ -195,10 +194,21 @@ impl App {
                             self.command_input.visual_cursor(),
                         ) {
                             Ok(r) => {
-                                let (cmd, cmd_index) = r.command_until_current_prev();
-                                self.highlight_until = Some(cmd_index);
-                                self.highlight_tx.send(()).unwrap();
-                                self.command_tx.send((cmd, self.stdin.clone())).unwrap()
+                                match r.command_until_current_prev() {
+                                    Some((cmd, cmd_index)) => {
+                                        self.highlight_until = Some(cmd_index);
+                                        self.highlight_tx.send(()).unwrap();
+                                        self.command_tx.send((cmd, self.stdin.clone())).unwrap()
+                                    }
+                                    // if executing previous on first subcommand then restore original stdin
+                                    None => {
+                                        let new_output = Output::ok(&self.stdin);
+                                        if self.output.len() != new_output.len() {
+                                            self.offset.y = 0;
+                                        }
+                                        self.output = new_output;
+                                    }
+                                }
                             }
                             Err(_) => warn!("Invalid command: {}", self.command_input.value()),
                         };
@@ -232,6 +242,7 @@ impl App {
                         self.wrap = !self.wrap;
                     }
                     UiCmd::HistoryPrev => {
+                        // todo replace check on size with check optional history_index?
                         if !self.history.is_empty() {
                             self.command_input =
                                 Input::from(self.history[self.history_index].clone());
@@ -253,28 +264,20 @@ impl App {
 
     fn push_history(&mut self) {
         let value = self.command_input.value().to_string();
-        let should_add = match self.history.front() {
-            Some(most_recent) if most_recent != &value => true,
-            Some(_duplicate) => false,
-            None => true,
-        };
-        if should_add {
-            self.history.push_front(value.clone());
-            self.history_index = 0;
-
-            if let Some(path) = history_path() {
-                if let Some(parent) = path.parent() {
-                    let _ = std::fs::create_dir_all(parent);
-                }
-                if let Ok(mut file) = std::fs::OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open(path)
-                {
-                    let _ = writeln!(file, "{}", value);
-                }
+        match self.history.front() {
+            Some(most_recent) if most_recent != &value => {
+                self.history.push_front(value.clone());
+                // set to previous history item, not the one just executed
+                self.history_index = 1;
+                save_to_history(value);
             }
-        }
+            Some(_duplicate) => {}
+            None => {
+                self.history.push_front(value.clone());
+                self.history_index = 0;
+                save_to_history(value);
+            }
+        };
     }
 
     pub fn render(&mut self, frame: &mut Frame, area: Rect) {
@@ -392,7 +395,7 @@ impl App {
             .clone()
             .map(|i| format!("{: >pad$}", i + 1, pad = line_nums_width))
             .collect::<Vec<String>>();
-        let lines_par = Paragraph::new(line_nums.join("\n")).set_style(theme.line_nums);
+        let lines_par = Paragraph::new(line_nums.join("\n")).style(theme.line_nums);
         if self.output.ok {
             frame.render_widget(lines_par, line_nums_area);
         }
@@ -740,4 +743,19 @@ fn to_ui_command(bindings: &KeyBindings, code: KeyCode, mods: KeyModifiers) -> O
             None
         }
     })
+}
+
+fn save_to_history(value: String) {
+    if let Some(path) = history_path() {
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+        {
+            let _ = writeln!(file, "{}", value);
+        }
+    }
 }
