@@ -1202,6 +1202,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "ratatui-textarea"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2950274c0e155944158cf766848dd87bd6db6dad27da1c23ee4a7c8de71dbf1f"
+dependencies = [
+ "ratatui-core",
+ "ratatui-crossterm",
+ "ratatui-widgets",
+ "unicode-segmentation",
+ "unicode-width",
+]
+
+[[package]]
 name = "ratatui-widgets"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1280,6 +1293,7 @@ dependencies = [
  "insta",
  "log",
  "ratatui",
+ "ratatui-textarea",
  "serde",
  "toml",
  "tui-input",

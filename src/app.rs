@@ -15,6 +15,7 @@ use ratatui::style::{Style, Styled};
 use ratatui::widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation};
 use ratatui::widgets::{ScrollbarState, Wrap};
 use ratatui::{DefaultTerminal, Frame};
+use ratatui_textarea::{TextArea, WrapMode};
 use std::collections::{HashMap, VecDeque};
 use std::error::Error;
 use std::io::{Read, Write, stdin};
@@ -23,13 +24,15 @@ use std::process::{Command, Stdio};
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 use std::time::Duration;
+use ratatui::style::Color::Magenta;
 use tui_input::backend::crossterm::EventHandler;
 use tui_input::{Input, InputRequest};
 
-pub struct App {
+pub struct App<'a> {
     command_input: Input,
     stdin: String,
     output: Output,
+    text_area: TextArea<'a>,
     offset: Position,
     history: VecDeque<String>,
     history_index: usize,
@@ -43,7 +46,7 @@ pub struct App {
     key_bindings: KeyBindings,
 }
 
-impl App {
+impl App<'_> {
     pub fn new(args: Args, theme_config: &ThemeConfig, kb_config: &KeyBindingsConfig) -> Self {
         let (action_tx, action_rx) = std::sync::mpsc::channel::<Action>();
         let (command_tx, command_rx) = std::sync::mpsc::channel::<(String, String)>();
@@ -77,6 +80,7 @@ impl App {
             stdin: "".to_string(),
             offset: Position::default(),
             output: Output::ok(""),
+            text_area: TextArea::default(),
             history,
             action_rx,
             command_tx,
@@ -109,6 +113,7 @@ impl App {
             StdinRead(stdin) => {
                 self.stdin = stdin;
                 self.output = Output::ok(&self.stdin);
+                self.text_area = TextArea::new(self.stdin.split('\n').map(String::from).collect());
             }
         }
     }
@@ -140,6 +145,7 @@ impl App {
             match to_ui_command(key_bindings, code, mods) {
                 None => {
                     self.command_input.handle_event(event);
+                    self.text_area.input(event.clone());
                 }
                 Some(a) => match a {
                     UiCmd::Quit => {
@@ -222,24 +228,32 @@ impl App {
                     }
                     UiCmd::ScrollDown => {
                         self.offset.y = self.offset.y.saturating_add(1);
+                        self.text_area.scroll((1, 0));
                     }
                     UiCmd::ScrollDownPage => {
                         self.offset.y = self.offset.y.saturating_add(10);
+                        self.text_area.scroll((10, 0));
                     }
                     UiCmd::ScrollUp => {
                         self.offset.y = self.offset.y.saturating_sub(1);
+                        self.text_area.scroll((-1, 0));
                     }
                     UiCmd::ScrollUpPage => {
                         self.offset.y = self.offset.y.saturating_sub(10);
+                        self.text_area.scroll((-10, 0));
                     }
                     UiCmd::ScrollLeft => {
                         self.offset.x = self.offset.x.saturating_sub(1);
+                        self.text_area.scroll((0, -1));
                     }
                     UiCmd::ScrollRight => {
                         self.offset.x = self.offset.x.saturating_add(1);
+                        self.text_area.scroll((0, 1));
                     }
                     UiCmd::ToggleWrap => {
                         self.wrap = !self.wrap;
+                        self.text_area.set_wrap_mode(WrapMode::Word);
+                        self.text_area.set_line_number_style(Style::default().fg(Magenta));
                     }
                     UiCmd::HistoryPrev => {
                         // todo replace check on size with check optional history_index?
@@ -283,7 +297,11 @@ impl App {
     pub fn render(&mut self, frame: &mut Frame, area: Rect) {
         let theme = &self.theme;
 
-        let [command_input_area, output_area, status_area] = Layout::default()
+        let [
+            command_input_area,
+            outs,
+            status_area,
+        ] = Layout::default()
             .direction(Direction::Vertical)
             .constraints(vec![
                 Constraint::Length(3),
@@ -291,6 +309,13 @@ impl App {
                 Constraint::Length(1),
             ])
             .areas(area);
+
+        let [output_area, output_text_area] = Layout::default().direction(Direction::Horizontal).constraints(vec![
+                Constraint::Fill(1),
+                Constraint::Fill(1),
+            ]).areas(outs);
+
+        frame.render_widget(&self.text_area, output_text_area);
 
         let line_nums_width = self.output.len().to_string().len();
         let [line_nums_area, output_content_area, vscroll_area] = Layout::default()
