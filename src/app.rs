@@ -1,6 +1,6 @@
 use crate::Args;
 use crate::app::Action::{CommandCompleted, ResetHighlight, StdinRead, UserInput};
-use crate::config::{KeyBindingsConfig, ThemeConfig};
+use crate::config::{KeyBindingsConfig, ThemeConfig, history_path};
 use crate::rura::Rura;
 use crossterm::event::{KeyCode, KeyModifiers};
 use crossterm::tty::IsTty;
@@ -15,7 +15,7 @@ use ratatui::style::{Style, Styled};
 use ratatui::widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation};
 use ratatui::widgets::{ScrollbarState, Wrap};
 use ratatui::{DefaultTerminal, Frame};
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::error::Error;
 use std::io::{Read, Write, stdin};
 use std::ops::Range;
@@ -23,7 +23,7 @@ use std::process::{Command, Stdio};
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 use std::time::Duration;
-use tui_input::Input;
+use tui_input::{Input, InputRequest};
 use tui_input::backend::crossterm::EventHandler;
 
 pub struct App {
@@ -38,9 +38,9 @@ pub struct App {
     action_rx: Receiver<Action>,
     command_tx: Sender<(String, String)>,
     highlight_until: Option<usize>,
-    pub highlight_tx: Sender<()>,
+    highlight_tx: Sender<()>,
     theme: Theme,
-    kb: KeyBindings,
+    key_bindings: KeyBindings,
 }
 
 impl App {
@@ -61,12 +61,24 @@ impl App {
         let s4 = action_tx.clone();
         thread::spawn(move || reset_highlight_task(highlight_rx, s4).unwrap());
 
+        let mut history = VecDeque::new();
+        if let Some(path) = history_path() {
+            if let Ok(content) = std::fs::read_to_string(path) {
+                for line in content.lines() {
+                    debug!("reading history from {line}");
+                    if !line.is_empty() {
+                        history.push_front(line.to_string());
+                    }
+                }
+            }
+        }
+
         Self {
             command_input: Input::from(""),
             stdin: "".to_string(),
             offset: Position::default(),
             output: Output::ok(""),
-            history: VecDeque::new(),
+            history,
             action_rx,
             command_tx,
             highlight_tx,
@@ -75,7 +87,7 @@ impl App {
             exit: false,
             highlight_until: None,
             theme: Theme::from_config(theme_config),
-            kb: KeyBindings::from_config(kb_config),
+            key_bindings: KeyBindings::from_config(kb_config),
         }
     }
 
@@ -114,103 +126,154 @@ impl App {
         if let Event::Key(key_event) = event {
             let code = key_event.code;
             let mods = key_event.modifiers;
-            let kb = &self.kb;
+            let key_bindings = &self.key_bindings;
 
-            if key_matches(&kb.quit, code, mods) {
-                self.exit = true;
-            } else if key_matches(&kb.execute_until_prev, code, mods) {
-                if self.command_input.value().is_empty() {
-                    self.output = Output::ok(&self.stdin);
-                    return;
+            match (code, mods) {
+                (KeyCode::Tab, KeyModifiers::NONE) => {
+                   self.command_input.handle(InputRequest::SetCursor(0));
                 }
-                self.push_history();
-                match Rura::new(self.command_input.value(), self.command_input.visual_cursor()) {
-                    Ok(r) => {
-                        let (cmd, cmd_index) = r.command_until_current_prev();
-                        self.highlight_until = Some(cmd_index);
-                        self.highlight_tx.send(()).unwrap();
-                        self.command_tx.send((cmd, self.stdin.clone())).unwrap()
+                (KeyCode::BackTab, KeyModifiers::SHIFT) => {
+                    self.command_input.handle(InputRequest::SetCursor(10));
+                }
+                _ => {}
+            };
+
+            match to_ui_command(key_bindings, code, mods) {
+                None => {
+                    self.command_input.handle_event(event);
+                }
+                Some(a) => match a {
+                    UiCmd::Quit => {
+                        self.exit = true;
                     }
-                    Err(_) => warn!("Invalid command: {}", self.command_input.value()),
-                };
-            } else if key_matches(&kb.execute_until_current, code, mods) {
-                if self.command_input.value().is_empty() {
-                    self.output = Output::ok(&self.stdin);
-                    return;
-                }
-                self.push_history();
-                match Rura::new(self.command_input.value(), self.command_input.visual_cursor()) {
-                    Ok(r) => {
-                        let (cmd, cmd_index) = r.command_until_current();
-                        self.highlight_until = Some(cmd_index);
-                        self.highlight_tx.send(()).unwrap();
-                        self.command_tx.send((cmd, self.stdin.clone())).unwrap()
+                    UiCmd::ExecuteFull => {
+                        if self.command_input.value().is_empty() {
+                            self.output = Output::ok(&self.stdin);
+                            return;
+                        }
+                        self.push_history();
+                        match Rura::new(
+                            self.command_input.value(),
+                            self.command_input.visual_cursor(),
+                        ) {
+                            Ok(r) => {
+                                let (cmd, cmd_index) = r.command_full();
+                                self.highlight_until = Some(cmd_index);
+                                self.highlight_tx.send(()).unwrap();
+                                self.command_tx.send((cmd, self.stdin.clone())).unwrap()
+                            }
+                            Err(_) => warn!("Invalid command: {}", self.command_input.value()),
+                        };
                     }
-                    Err(_) => warn!("Invalid command: {}", self.command_input.value()),
-                };
-            } else if key_matches(&kb.execute_full, code, mods) {
-                if self.command_input.value().is_empty() {
-                    self.output = Output::ok(&self.stdin);
-                    return;
-                }
-                self.push_history();
-                match Rura::new(self.command_input.value(), self.command_input.visual_cursor()) {
-                    Ok(r) => {
-                        let (cmd, cmd_index) = r.command_full();
-                        self.highlight_until = Some(cmd_index);
-                        self.highlight_tx.send(()).unwrap();
-                        self.command_tx.send((cmd, self.stdin.clone())).unwrap()
+                    UiCmd::ExecuteUntilCurrent => {
+                        if self.command_input.value().is_empty() {
+                            self.output = Output::ok(&self.stdin);
+                            return;
+                        }
+                        self.push_history();
+                        match Rura::new(
+                            self.command_input.value(),
+                            self.command_input.visual_cursor(),
+                        ) {
+                            Ok(r) => {
+                                let (cmd, cmd_index) = r.command_until_current();
+                                self.highlight_until = Some(cmd_index);
+                                self.highlight_tx.send(()).unwrap();
+                                self.command_tx.send((cmd, self.stdin.clone())).unwrap()
+                            }
+                            Err(_) => warn!("Invalid command: {}", self.command_input.value()),
+                        };
                     }
-                    Err(_) => warn!("Invalid command: {}", self.command_input.value()),
-                };
-            } else if key_matches(&kb.reset_input, code, mods) {
-                let new_output = Output::ok(&self.stdin);
-                if self.output.len() != new_output.len() {
-                    self.offset.y = 0;
-                }
-                self.output = new_output;
-            } else if key_matches(&kb.scroll_down, code, mods) {
-                self.offset.y = self.offset.y.saturating_add(1);
-            } else if key_matches(&kb.scroll_down_page, code, mods) {
-                self.offset.y = self.offset.y.saturating_add(10);
-            } else if key_matches(&kb.scroll_up, code, mods) {
-                self.offset.y = self.offset.y.saturating_sub(1);
-            } else if key_matches(&kb.scroll_up_page, code, mods) {
-                self.offset.y = self.offset.y.saturating_sub(10);
-            } else if key_matches(&kb.scroll_left, code, mods) {
-                self.offset.x = self.offset.x.saturating_sub(1);
-            } else if key_matches(&kb.scroll_right, code, mods) {
-                self.offset.x = self.offset.x.saturating_add(1);
-            } else if key_matches(&kb.toggle_wrap, code, mods) {
-                self.wrap = !self.wrap;
-            } else if key_matches(&kb.history_prev, code, mods) {
-                if !self.history.is_empty() {
-                    self.history_index =
-                        (self.history_index + 1).min(self.history.len() - 1);
-                    self.command_input =
-                        Input::from(self.history[self.history_index].clone());
-                }
-            } else if key_matches(&kb.history_next, code, mods) {
-                if !self.history.is_empty() {
-                    self.history_index = self.history_index.saturating_sub(1);
-                    self.command_input =
-                        Input::from(self.history[self.history_index].clone());
-                }
-            } else {
-                self.command_input.handle_event(event);
+                    UiCmd::ExecuteUntilPrev => {
+                        if self.command_input.value().is_empty() {
+                            self.output = Output::ok(&self.stdin);
+                            return;
+                        }
+                        self.push_history();
+                        match Rura::new(
+                            self.command_input.value(),
+                            self.command_input.visual_cursor(),
+                        ) {
+                            Ok(r) => {
+                                let (cmd, cmd_index) = r.command_until_current_prev();
+                                self.highlight_until = Some(cmd_index);
+                                self.highlight_tx.send(()).unwrap();
+                                self.command_tx.send((cmd, self.stdin.clone())).unwrap()
+                            }
+                            Err(_) => warn!("Invalid command: {}", self.command_input.value()),
+                        };
+                    }
+                    UiCmd::ResetInput => {
+                        let new_output = Output::ok(&self.stdin);
+                        if self.output.len() != new_output.len() {
+                            self.offset.y = 0;
+                        }
+                        self.output = new_output;
+                    }
+                    UiCmd::ScrollDown => {
+                        self.offset.y = self.offset.y.saturating_add(1);
+                    }
+                    UiCmd::ScrollDownPage => {
+                        self.offset.y = self.offset.y.saturating_add(10);
+                    }
+                    UiCmd::ScrollUp => {
+                        self.offset.y = self.offset.y.saturating_sub(1);
+                    }
+                    UiCmd::ScrollUpPage => {
+                        self.offset.y = self.offset.y.saturating_sub(10);
+                    }
+                    UiCmd::ScrollLeft => {
+                        self.offset.x = self.offset.x.saturating_sub(1);
+                    }
+                    UiCmd::ScrollRight => {
+                        self.offset.x = self.offset.x.saturating_add(1);
+                    }
+                    UiCmd::ToggleWrap => {
+                        self.wrap = !self.wrap;
+                    }
+                    UiCmd::HistoryPrev => {
+                        if !self.history.is_empty() {
+                            self.command_input =
+                                Input::from(self.history[self.history_index].clone());
+                            self.history_index =
+                                (self.history_index + 1).min(self.history.len() - 1);
+                        }
+                    }
+                    UiCmd::HistoryNext => {
+                        if !self.history.is_empty() {
+                            self.history_index = self.history_index.saturating_sub(1);
+                            self.command_input =
+                                Input::from(self.history[self.history_index].clone());
+                        }
+                    }
+                },
             }
         }
     }
 
     fn push_history(&mut self) {
+        let value = self.command_input.value().to_string();
         let should_add = match self.history.front() {
-            Some(most_recent) if most_recent != self.command_input.value() => true,
+            Some(most_recent) if most_recent != &value => true,
             Some(_duplicate) => false,
             None => true,
         };
         if should_add {
-            self.history.push_front(self.command_input.value().to_string());
+            self.history.push_front(value.clone());
             self.history_index = 0;
+
+            if let Some(path) = history_path() {
+                if let Some(parent) = path.parent() {
+                    let _ = std::fs::create_dir_all(parent);
+                }
+                if let Ok(mut file) = std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(path)
+                {
+                    let _ = writeln!(file, "{}", value);
+                }
+            }
         }
     }
 
@@ -356,6 +419,7 @@ impl App {
     }
 }
 
+#[derive(PartialEq, Eq)]
 struct Output {
     lines: Vec<String>,
     ok: bool,
@@ -478,6 +542,24 @@ enum Action {
     ResetHighlight,
 }
 
+#[derive(PartialEq, Eq, Hash)]
+enum UiCmd {
+    Quit,
+    ExecuteFull,
+    ExecuteUntilCurrent,
+    ExecuteUntilPrev,
+    ResetInput,
+    ScrollDown,
+    ScrollDownPage,
+    ScrollUp,
+    ScrollUpPage,
+    ScrollLeft,
+    ScrollRight,
+    ToggleWrap,
+    HistoryPrev,
+    HistoryNext,
+}
+
 struct Theme {
     pub cmd_regular: Style,
     pub cmd_regular_pipe: Style,
@@ -509,12 +591,24 @@ impl Theme {
 
 fn style_from_config(sc: &crate::config::StyleConfig) -> Style {
     let mut s = Style::default();
-    if let Some(c) = sc.fg.as_deref().and_then(parse_color) { s = s.fg(c); }
-    if let Some(c) = sc.bg.as_deref().and_then(parse_color) { s = s.bg(c); }
-    if sc.bold.unwrap_or(false) { s = s.bold(); }
-    if sc.italic.unwrap_or(false) { s = s.italic(); }
-    if sc.underlined.unwrap_or(false) { s = s.underlined(); }
-    if sc.dim.unwrap_or(false) { s = s.dim(); }
+    if let Some(c) = sc.fg.as_deref().and_then(parse_color) {
+        s = s.fg(c);
+    }
+    if let Some(c) = sc.bg.as_deref().and_then(parse_color) {
+        s = s.bg(c);
+    }
+    if sc.bold.unwrap_or(false) {
+        s = s.bold();
+    }
+    if sc.italic.unwrap_or(false) {
+        s = s.italic();
+    }
+    if sc.underlined.unwrap_or(false) {
+        s = s.underlined();
+    }
+    if sc.dim.unwrap_or(false) {
+        s = s.dim();
+    }
     s
 }
 
@@ -547,40 +641,36 @@ fn parse_color(s: &str) -> Option<Color> {
 }
 
 struct KeyBindings {
-    quit: Vec<(KeyCode, KeyModifiers)>,
-    execute_full: Vec<(KeyCode, KeyModifiers)>,
-    execute_until_current: Vec<(KeyCode, KeyModifiers)>,
-    execute_until_prev: Vec<(KeyCode, KeyModifiers)>,
-    reset_input: Vec<(KeyCode, KeyModifiers)>,
-    scroll_down: Vec<(KeyCode, KeyModifiers)>,
-    scroll_down_page: Vec<(KeyCode, KeyModifiers)>,
-    scroll_up: Vec<(KeyCode, KeyModifiers)>,
-    scroll_up_page: Vec<(KeyCode, KeyModifiers)>,
-    scroll_left: Vec<(KeyCode, KeyModifiers)>,
-    scroll_right: Vec<(KeyCode, KeyModifiers)>,
-    toggle_wrap: Vec<(KeyCode, KeyModifiers)>,
-    history_prev: Vec<(KeyCode, KeyModifiers)>,
-    history_next: Vec<(KeyCode, KeyModifiers)>,
+    bindings: HashMap<UiCmd, Vec<(KeyCode, KeyModifiers)>>,
 }
 
 impl KeyBindings {
     fn from_config(config: &KeyBindingsConfig) -> Self {
-        KeyBindings {
-            quit: parse_bindings(&config.quit),
-            execute_full: parse_bindings(&config.execute_full),
-            execute_until_current: parse_bindings(&config.execute_until_current),
-            execute_until_prev: parse_bindings(&config.execute_until_prev),
-            reset_input: parse_bindings(&config.reset_input),
-            scroll_down: parse_bindings(&config.scroll_down),
-            scroll_down_page: parse_bindings(&config.scroll_down_page),
-            scroll_up: parse_bindings(&config.scroll_up),
-            scroll_up_page: parse_bindings(&config.scroll_up_page),
-            scroll_left: parse_bindings(&config.scroll_left),
-            scroll_right: parse_bindings(&config.scroll_right),
-            toggle_wrap: parse_bindings(&config.toggle_wrap),
-            history_prev: parse_bindings(&config.history_prev),
-            history_next: parse_bindings(&config.history_next),
-        }
+        let mut bindings: HashMap<UiCmd, Vec<(KeyCode, KeyModifiers)>> = HashMap::new();
+        bindings.insert(UiCmd::Quit, parse_bindings(&config.quit));
+        bindings.insert(UiCmd::ExecuteFull, parse_bindings(&config.execute_full));
+        bindings.insert(
+            UiCmd::ExecuteUntilCurrent,
+            parse_bindings(&config.execute_until_current),
+        );
+        bindings.insert(
+            UiCmd::ExecuteUntilPrev,
+            parse_bindings(&config.execute_until_prev),
+        );
+        bindings.insert(UiCmd::ResetInput, parse_bindings(&config.reset_input));
+        bindings.insert(UiCmd::ScrollDown, parse_bindings(&config.scroll_down));
+        bindings.insert(
+            UiCmd::ScrollDownPage,
+            parse_bindings(&config.scroll_down_page),
+        );
+        bindings.insert(UiCmd::ScrollUp, parse_bindings(&config.scroll_up));
+        bindings.insert(UiCmd::ScrollUpPage, parse_bindings(&config.scroll_up_page));
+        bindings.insert(UiCmd::ScrollLeft, parse_bindings(&config.scroll_left));
+        bindings.insert(UiCmd::ScrollRight, parse_bindings(&config.scroll_right));
+        bindings.insert(UiCmd::ToggleWrap, parse_bindings(&config.toggle_wrap));
+        bindings.insert(UiCmd::HistoryPrev, parse_bindings(&config.history_prev));
+        bindings.insert(UiCmd::HistoryNext, parse_bindings(&config.history_next));
+        KeyBindings { bindings }
     }
 }
 
@@ -642,6 +732,12 @@ fn parse_key_binding(s: &str) -> Option<(KeyCode, KeyModifiers)> {
     Some((code, modifiers))
 }
 
-fn key_matches(bindings: &[(KeyCode, KeyModifiers)], code: KeyCode, mods: KeyModifiers) -> bool {
-    bindings.iter().any(|(c, m)| *c == code && *m == mods)
+fn to_ui_command(bindings: &KeyBindings, code: KeyCode, mods: KeyModifiers) -> Option<&UiCmd> {
+    bindings.bindings.iter().find_map(|(action, bindings)| {
+        if bindings.contains(&(code, mods)) {
+            Some(action)
+        } else {
+            None
+        }
+    })
 }
