@@ -112,6 +112,10 @@ pub fn config_path() -> Option<PathBuf> {
     dirs::config_dir().map(|d| d.join(APP_NAME).join("config.toml"))
 }
 
+pub fn history_path() -> Option<PathBuf> {
+    dirs::data_dir().map(|d| d.join(APP_NAME).join("history.txt"))
+}
+
 pub fn load_config() -> Config {
     let Some(path) = config_path() else {
         return Config::default();
