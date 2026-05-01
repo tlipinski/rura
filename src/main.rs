@@ -49,7 +49,7 @@ struct Args {
 fn run(args: Args, config: config::Config) -> Result<(), Box<dyn Error>> {
     info!("Starting TUI");
     let mut terminal = ratatui::init();
-    std::io::stdout().execute(crossterm::event::EnableMouseCapture)?;
+    // std::io::stdout().execute(crossterm::event::EnableMouseCapture)?;
 
     let app = App::new(args, &config.theme, &config.keybindings);
     let last_command = app.run(&mut terminal)?;

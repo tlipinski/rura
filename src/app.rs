@@ -276,6 +276,8 @@ impl App<'_> {
     }
 
     pub fn render(&mut self, frame: &mut Frame, area: Rect) {
+        // todo rerenders on mouse move
+        
         let theme = &self.theme;
 
         let [command_input_area, output_text_area, status_area] = Layout::default()
