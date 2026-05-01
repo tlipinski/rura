@@ -80,7 +80,7 @@ impl App<'_> {
             stdin: "".to_string(),
             offset: Position::default(),
             output: Output::ok(""),
-            text_area: TextArea::default(),
+            text_area: Self::output_text_area(vec![]),
             history,
             action_rx,
             command_tx,
@@ -92,6 +92,14 @@ impl App<'_> {
             theme: Theme::from_config(theme_config),
             key_bindings: KeyBindings::from_config(kb_config),
         }
+    }
+
+    fn output_text_area<'a>(lines: Vec<String>) -> TextArea<'a> {
+        let mut area = TextArea::new(lines);
+        area.set_line_number_style(Style::default().fg(Magenta));
+        area.set_cursor_line_style(Style::default()); // no default underline
+        area.set_cursor_style(Style::default()); // hide default cursor
+        area
     }
 
     pub fn run(mut self, terminal: &mut DefaultTerminal) -> Result<String, Box<dyn Error>> {
@@ -113,7 +121,7 @@ impl App<'_> {
             StdinRead(stdin) => {
                 self.stdin = stdin;
                 self.output = Output::ok(&self.stdin);
-                self.text_area = TextArea::new(self.stdin.split('\n').map(String::from).collect());
+                self.text_area = Self::output_text_area(self.stdin.split('\n').map(String::from).collect());
             }
         }
     }
@@ -145,7 +153,6 @@ impl App<'_> {
             match to_ui_command(key_bindings, code, mods) {
                 None => {
                     self.command_input.handle_event(event);
-                    self.text_area.input(event.clone());
                 }
                 Some(a) => match a {
                     UiCmd::Quit => {
@@ -299,7 +306,7 @@ impl App<'_> {
 
         let [
             command_input_area,
-            outs,
+            output_text_area,
             status_area,
         ] = Layout::default()
             .direction(Direction::Vertical)
@@ -310,22 +317,16 @@ impl App<'_> {
             ])
             .areas(area);
 
-        let [output_area, output_text_area] = Layout::default().direction(Direction::Horizontal).constraints(vec![
-                Constraint::Fill(1),
-                Constraint::Fill(1),
-            ]).areas(outs);
 
-        frame.render_widget(&self.text_area, output_text_area);
-
-        let line_nums_width = self.output.len().to_string().len();
-        let [line_nums_area, output_content_area, vscroll_area] = Layout::default()
+        let [output_content_area, vscroll_area] = Layout::default()
             .direction(Direction::Horizontal)
             .constraints(vec![
-                Constraint::Length((line_nums_width + 1) as u16),
                 Constraint::Fill(1),
                 Constraint::Length(1),
             ])
-            .areas(output_area);
+            .areas(output_text_area);
+
+        frame.render_widget(&self.text_area, output_content_area);
 
         let max_cursor_pos = (command_input_area.inner(Margin::new(1, 0)).width - 1) as usize;
 
@@ -413,25 +414,6 @@ impl App<'_> {
             let to = (self.offset.y as usize + height as usize).min(self.output.len());
             from..to
         };
-
-        // debug!("range: {range:?}");
-
-        let line_nums = range
-            .clone()
-            .map(|i| format!("{: >pad$}", i + 1, pad = line_nums_width))
-            .collect::<Vec<String>>();
-        let lines_par = Paragraph::new(line_nums.join("\n")).style(theme.line_nums);
-        if self.output.ok {
-            frame.render_widget(lines_par, line_nums_area);
-        }
-
-        let mut output_par =
-            Paragraph::new(self.output.lines[range].join("\n")).scroll((0, self.offset.x));
-
-        if self.wrap {
-            output_par = output_par.wrap(Wrap::default())
-        };
-        frame.render_widget(output_par, output_content_area);
 
         let scroll_bar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
         let mut state = ScrollbarState::new(self.output.len());
