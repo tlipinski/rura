@@ -2,6 +2,7 @@ mod app;
 mod config;
 mod props;
 mod rura;
+mod history;
 
 use crate::app::App;
 use crate::config::load_config;

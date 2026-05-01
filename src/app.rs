@@ -1,6 +1,7 @@
 use crate::Args;
 use crate::app::Action::{CommandCompleted, ResetHighlight, StdinRead, UserInput};
 use crate::config::{KeyBindingsConfig, ThemeConfig, history_path};
+use crate::history::History;
 use crate::rura::Rura;
 use crossterm::event::{KeyCode, KeyModifiers};
 use crossterm::tty::IsTty;
@@ -31,8 +32,7 @@ pub struct App {
     stdin: String,
     output: Output,
     offset: Position,
-    history: VecDeque<String>,
-    history_index: usize,
+    history: History,
     wrap: bool,
     exit: bool,
     action_rx: Receiver<Action>,
@@ -77,11 +77,10 @@ impl App {
             stdin: "".to_string(),
             offset: Position::default(),
             output: Output::ok(""),
-            history,
+            history: History::load(),
             action_rx,
             command_tx,
             highlight_tx,
-            history_index: 0,
             wrap: false,
             exit: false,
             highlight_until: None,
@@ -150,7 +149,6 @@ impl App {
                             self.output = Output::ok(&self.stdin);
                             return;
                         }
-                        self.push_history();
                         match Rura::new(
                             self.command_input.value(),
                             self.command_input.visual_cursor(),
@@ -159,7 +157,8 @@ impl App {
                                 let (cmd, cmd_index) = r.command_full();
                                 self.highlight_until = Some(cmd_index);
                                 self.highlight_tx.send(()).unwrap();
-                                self.command_tx.send((cmd, self.stdin.clone())).unwrap()
+                                self.command_tx.send((cmd, self.stdin.clone())).unwrap();
+                                self.history.push(self.command_input.value());
                             }
                             Err(_) => warn!("Invalid command: {}", self.command_input.value()),
                         };
@@ -169,7 +168,6 @@ impl App {
                             self.output = Output::ok(&self.stdin);
                             return;
                         }
-                        self.push_history();
                         match Rura::new(
                             self.command_input.value(),
                             self.command_input.visual_cursor(),
@@ -178,7 +176,8 @@ impl App {
                                 let (cmd, cmd_index) = r.command_until_current();
                                 self.highlight_until = Some(cmd_index);
                                 self.highlight_tx.send(()).unwrap();
-                                self.command_tx.send((cmd, self.stdin.clone())).unwrap()
+                                self.command_tx.send((cmd, self.stdin.clone())).unwrap();
+                                self.history.push(self.command_input.value());
                             }
                             Err(_) => warn!("Invalid command: {}", self.command_input.value()),
                         };
@@ -188,7 +187,6 @@ impl App {
                             self.output = Output::ok(&self.stdin);
                             return;
                         }
-                        self.push_history();
                         match Rura::new(
                             self.command_input.value(),
                             self.command_input.visual_cursor(),
@@ -198,7 +196,8 @@ impl App {
                                     Some((cmd, cmd_index)) => {
                                         self.highlight_until = Some(cmd_index);
                                         self.highlight_tx.send(()).unwrap();
-                                        self.command_tx.send((cmd, self.stdin.clone())).unwrap()
+                                        self.command_tx.send((cmd, self.stdin.clone())).unwrap();
+                                        self.history.push(self.command_input.value());
                                     }
                                     // if executing previous on first subcommand then restore original stdin
                                     None => {
@@ -242,42 +241,14 @@ impl App {
                         self.wrap = !self.wrap;
                     }
                     UiCmd::HistoryPrev => {
-                        // todo replace check on size with check optional history_index?
-                        if !self.history.is_empty() {
-                            self.command_input =
-                                Input::from(self.history[self.history_index].clone());
-                            self.history_index =
-                                (self.history_index + 1).min(self.history.len() - 1);
-                        }
+                        self.command_input = Input::from(self.history.previous());
                     }
                     UiCmd::HistoryNext => {
-                        if !self.history.is_empty() {
-                            self.history_index = self.history_index.saturating_sub(1);
-                            self.command_input =
-                                Input::from(self.history[self.history_index].clone());
-                        }
+                        self.command_input = Input::from(self.history.next());
                     }
                 },
             }
         }
-    }
-
-    fn push_history(&mut self) {
-        let value = self.command_input.value().to_string();
-        match self.history.front() {
-            Some(most_recent) if most_recent != &value => {
-                self.history.push_front(value.clone());
-                // set to previous history item, not the one just executed
-                self.history_index = 1;
-                save_to_history(value);
-            }
-            Some(_duplicate) => {}
-            None => {
-                self.history.push_front(value.clone());
-                self.history_index = 0;
-                save_to_history(value);
-            }
-        };
     }
 
     pub fn render(&mut self, frame: &mut Frame, area: Rect) {
@@ -743,19 +714,4 @@ fn to_ui_command(bindings: &KeyBindings, code: KeyCode, mods: KeyModifiers) -> O
             None
         }
     })
-}
-
-fn save_to_history(value: String) {
-    if let Some(path) = history_path() {
-        if let Some(parent) = path.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-        if let Ok(mut file) = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)
-        {
-            let _ = writeln!(file, "{}", value);
-        }
-    }
 }
