@@ -22,10 +22,8 @@ use std::process::{Command, Stdio};
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 use std::time::Duration;
-use ratatui::style::Color::Magenta;
 use tui_input::backend::crossterm::EventHandler;
 use tui_input::{Input, InputRequest};
-use crate::app::UiCmd::ScrollDownPage;
 
 pub struct App<'a> {
     command_input: Input,
