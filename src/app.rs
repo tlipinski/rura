@@ -516,7 +516,7 @@ fn reset_highlight_task(rx: Receiver<()>, tx: Sender<Action>) -> Result<(), Box<
 enum Action {
     UserInput(Event),
     CommandCompleted(CommandOutput),
-    StdinRead(String),
+    StdinRead(String), // todo replace with CommandOutput?
     ResetHighlight,
 }
 
