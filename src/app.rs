@@ -277,7 +277,7 @@ impl App<'_> {
 
     pub fn render(&mut self, frame: &mut Frame, area: Rect) {
         // todo rerenders on mouse move
-        
+
         let theme = &self.theme;
 
         let [command_input_area, output_text_area, status_area] = Layout::default()
@@ -728,7 +728,7 @@ fn save_to_history(value: String) {
 fn output_text_area<'a>(command_output: CommandOutput, theme: &Theme) -> TextArea<'a> {
     let mut area = TextArea::new(command_output.lines);
     area.set_line_number_style(theme.line_nums);
-    area.set_cursor_line_style(Style::default()); // no default underline
-    area.set_cursor_style(Style::default()); // hide default cursor
+    // area.set_cursor_line_style(Style::default()); // no default underline
+    // area.set_cursor_style(Style::default()); // hide default cursor
     area
 }
