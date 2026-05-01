@@ -75,7 +75,7 @@ impl App<'_> {
         Self {
             command_input: Input::from(""),
             stdin: "".to_string(),
-            output_text_area: Self::output_text_area(CommandOutput::ok("").lines, &theme),
+            output_text_area: Self::output_text_area(CommandOutput::ok(""), &theme),
             history,
             action_rx,
             command_tx,
@@ -90,16 +90,16 @@ impl App<'_> {
     }
 
     fn update_output(&mut self, command_output: CommandOutput) {
-        self.output_text_area = Self::output_text_area(command_output.lines, &self.theme);
+        self.output_text_area = Self::output_text_area(command_output, &self.theme);
     }
 
     fn reset_output(&mut self) {
         let output = CommandOutput::ok(&self.stdin);
-        self.output_text_area = Self::output_text_area(output.lines, &self.theme);
+        self.output_text_area = Self::output_text_area(output, &self.theme);
     }
 
-    fn output_text_area<'a>(lines: Vec<String>, theme: &Theme) -> TextArea<'a> {
-        let mut area = TextArea::new(lines);
+    fn output_text_area<'a>(command_output: CommandOutput, theme: &Theme) -> TextArea<'a> {
+        let mut area = TextArea::new(command_output.lines);
         area.set_line_number_style(theme.line_nums);
         area.set_cursor_line_style(Style::default()); // no default underline
         area.set_cursor_style(Style::default()); // hide default cursor
