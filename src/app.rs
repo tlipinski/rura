@@ -251,7 +251,11 @@ impl App<'_> {
                     }
                     UiCmd::ToggleWrap => {
                         self.wrap = !self.wrap;
-                        self.output_text_area.set_wrap_mode(WrapMode::Word);
+                        if self.wrap {
+                            self.output_text_area.set_wrap_mode(WrapMode::Word);
+                        } else {
+                            self.output_text_area.set_wrap_mode(WrapMode::None);
+                        }
                     }
                     UiCmd::HistoryPrev => {
                         // todo replace check on size with check optional history_index?
@@ -395,6 +399,11 @@ impl App<'_> {
         // debug!("vcur: {}", self.command_input.visual_cursor());
         frame.set_cursor_position((area.x + (cursor + 1) as u16, area.y + 1));
         frame.render_widget(command_input_par, command_input_area);
+
+        let cur = self.output_text_area.cursor();
+        debug!("cur: {:?}", cur);
+        let scrcur = self.output_text_area.screen_cursor();
+        debug!("scrcur: {:?}", scrcur);
 
         let scroll_bar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
         let mut state = ScrollbarState::new(self.output.len());
