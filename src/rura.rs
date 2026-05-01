@@ -33,6 +33,7 @@ impl Rura {
     }
 
     pub fn command_full(&self) -> (String, usize) {
+        // todo len() - 1 fails on empty subcommands
         (self.subcommands.join("|"), self.subcommands.len() - 1)
     }
 
