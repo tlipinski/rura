@@ -28,7 +28,6 @@ use tui_input::{Input, InputRequest};
 pub struct App<'a> {
     command_input: Input,
     stdin: String,
-    output: Output,
     output_text_area: TextArea<'a>,
     history: VecDeque<String>,
     history_index: usize,
@@ -76,8 +75,7 @@ impl App<'_> {
         Self {
             command_input: Input::from(""),
             stdin: "".to_string(),
-            output: Output::ok(""),
-            output_text_area: Self::output_text_area(vec![], &theme),
+            output_text_area: Self::output_text_area("", &theme),
             history,
             action_rx,
             command_tx,
@@ -91,7 +89,16 @@ impl App<'_> {
         }
     }
 
-    fn output_text_area<'a>(lines: Vec<String>, theme: &Theme) -> TextArea<'a> {
+    fn update_output(&mut self, s: &str) {
+        self.output_text_area = Self::output_text_area(s, &self.theme);
+    }
+
+    fn reset_output(&mut self) {
+        self.output_text_area = Self::output_text_area(&self.stdin, &self.theme);
+    }
+
+    fn output_text_area<'a>(s: &str, theme: &Theme) -> TextArea<'a> {
+        let lines = s.lines().map(String::from).collect();
         let mut area = TextArea::new(lines);
         area.set_line_number_style(theme.line_nums);
         area.set_cursor_line_style(Style::default()); // no default underline
@@ -116,22 +123,14 @@ impl App<'_> {
             CommandCompleted(output) => self.handle_command_output(output),
             ResetHighlight => self.highlight_until = None,
             StdinRead(stdin) => {
+                self.update_output(&stdin);
                 self.stdin = stdin;
-                self.output = Output::ok(&self.stdin);
-                self.output_text_area = Self::output_text_area(
-                    self.stdin.split('\n').map(String::from).collect(),
-                    &self.theme,
-                );
             }
         }
     }
 
     fn handle_command_output(&mut self, output: Output) {
-        // if self.output.len() != output.len() {
-        //     self.offset.y = 0;
-        // }
-
-        self.output = output;
+        self.update_output(&output.lines.join("\n"));
     }
 
     pub fn handle_event(&mut self, event: &Event) {
@@ -166,10 +165,6 @@ impl App<'_> {
                             self.exit = true;
                         }
                         UiCmd::ExecuteFull => {
-                            if self.command_input.value().is_empty() {
-                                self.output = Output::ok(&self.stdin);
-                                return;
-                            }
                             self.push_history();
                             match Rura::new(
                                 self.command_input.value(),
@@ -185,10 +180,6 @@ impl App<'_> {
                             };
                         }
                         UiCmd::ExecuteUntilCurrent => {
-                            if self.command_input.value().is_empty() {
-                                self.output = Output::ok(&self.stdin);
-                                return;
-                            }
                             self.push_history();
                             match Rura::new(
                                 self.command_input.value(),
@@ -204,10 +195,6 @@ impl App<'_> {
                             };
                         }
                         UiCmd::ExecuteUntilPrev => {
-                            if self.command_input.value().is_empty() {
-                                self.output = Output::ok(&self.stdin);
-                                return;
-                            }
                             self.push_history();
                             match Rura::new(
                                 self.command_input.value(),
@@ -226,7 +213,7 @@ impl App<'_> {
                                             // if self.output.len() != new_output.len() {
                                             //     self.offset.y = 0;
                                             // }
-                                            self.output = new_output;
+                                            // self.update_output(&self.stdin);
                                         }
                                     }
                                 }
@@ -234,11 +221,7 @@ impl App<'_> {
                             };
                         }
                         UiCmd::ResetInput => {
-                            let new_output = Output::ok(&self.stdin);
-                            // if self.output.len() != new_output.len() {
-                            //     self.offset.y = 0;
-                            // }
-                            self.output = new_output;
+                            self.reset_output();
                         }
                         UiCmd::ScrollDown => {
                             self.output_text_area.scroll((1, 0));
@@ -406,12 +389,12 @@ impl App<'_> {
         frame.render_widget(command_input_par, command_input_area);
 
         let scroll_bar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
-        let mut state = ScrollbarState::new(self.output.len());
+        let mut state = ScrollbarState::new(self.output_text_area.lines().len());
         state = state.position(self.output_text_area.cursor().0.into());
         frame.render_stateful_widget(scroll_bar, vscroll_area, &mut state);
 
         frame.render_widget(
-            format!("Lines: {} ", self.output.len())
+            format!("Lines: {} ", self.output_text_area.lines().len())
                 .bold()
                 .into_right_aligned_line(),
             status_area,
