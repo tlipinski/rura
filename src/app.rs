@@ -294,7 +294,10 @@ impl App<'_> {
 
         frame.render_widget(&self.output_text_area, output_content_area);
 
-        let max_cursor_pos = (command_input_area.inner(Margin::new(1, 0)).width - 1) as usize;
+        let max_cursor_pos = command_input_area
+            .inner(Margin::new(1, 0))
+            .width
+            .saturating_sub(1) as usize;
 
         let command_input_par = {
             let block = Block::bordered();
