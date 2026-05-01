@@ -14,7 +14,7 @@ use ratatui::style::{Style, Styled};
 use ratatui::widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation};
 use ratatui::widgets::ScrollbarState;
 use ratatui::{DefaultTerminal, Frame};
-use ratatui_textarea::{TextArea, WrapMode};
+use ratatui_textarea::{Scrolling, TextArea, WrapMode};
 use std::collections::{HashMap, VecDeque};
 use std::error::Error;
 use std::io::{Read, Write, stdin};
@@ -25,6 +25,7 @@ use std::time::Duration;
 use ratatui::style::Color::Magenta;
 use tui_input::backend::crossterm::EventHandler;
 use tui_input::{Input, InputRequest};
+use crate::app::UiCmd::ScrollDownPage;
 
 pub struct App<'a> {
     command_input: Input,
@@ -235,13 +236,13 @@ impl App<'_> {
                         self.output_text_area.scroll((1, 0));
                     }
                     UiCmd::ScrollDownPage => {
-                        self.output_text_area.scroll((10, 0));
+                        self.output_text_area.scroll(Scrolling::PageDown);
                     }
                     UiCmd::ScrollUp => {
                         self.output_text_area.scroll((-1, 0));
                     }
                     UiCmd::ScrollUpPage => {
-                        self.output_text_area.scroll((-10, 0));
+                        self.output_text_area.scroll(Scrolling::PageUp);
                     }
                     UiCmd::ScrollLeft => {
                         self.output_text_area.scroll((0, -1));
