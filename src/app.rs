@@ -75,7 +75,7 @@ impl App<'_> {
         Self {
             command_input: Input::from(""),
             stdin: "".to_string(),
-            output_text_area: Self::output_text_area("", &theme),
+            output_text_area: Self::output_text_area(CommandOutput::ok("").lines, &theme),
             history,
             action_rx,
             command_tx,
@@ -89,16 +89,16 @@ impl App<'_> {
         }
     }
 
-    fn update_output(&mut self, s: &str) {
-        self.output_text_area = Self::output_text_area(s, &self.theme);
+    fn update_output(&mut self, command_output: CommandOutput) {
+        self.output_text_area = Self::output_text_area(command_output.lines, &self.theme);
     }
 
     fn reset_output(&mut self) {
-        self.output_text_area = Self::output_text_area(&self.stdin, &self.theme);
+        let output = CommandOutput::ok(&self.stdin);
+        self.output_text_area = Self::output_text_area(output.lines, &self.theme);
     }
 
-    fn output_text_area<'a>(s: &str, theme: &Theme) -> TextArea<'a> {
-        let lines = s.lines().map(String::from).collect();
+    fn output_text_area<'a>(lines: Vec<String>, theme: &Theme) -> TextArea<'a> {
         let mut area = TextArea::new(lines);
         area.set_line_number_style(theme.line_nums);
         area.set_cursor_line_style(Style::default()); // no default underline
@@ -123,14 +123,15 @@ impl App<'_> {
             CommandCompleted(output) => self.handle_command_output(output),
             ResetHighlight => self.highlight_until = None,
             StdinRead(stdin) => {
-                self.update_output(&stdin);
+                let command_output = CommandOutput::ok(&stdin);
+                self.update_output(command_output);
                 self.stdin = stdin;
             }
         }
     }
 
-    fn handle_command_output(&mut self, output: Output) {
-        self.update_output(&output.lines.join("\n"));
+    fn handle_command_output(&mut self, output: CommandOutput) {
+        self.update_output(output);
     }
 
     pub fn handle_event(&mut self, event: &Event) {
@@ -399,12 +400,12 @@ impl App<'_> {
 }
 
 #[derive(PartialEq, Eq)]
-struct Output {
+struct CommandOutput {
     lines: Vec<String>,
     ok: bool,
 }
 
-impl Output {
+impl CommandOutput {
     fn ok(str: &str) -> Self {
         Self {
             lines: Self::lines(str),
@@ -417,10 +418,6 @@ impl Output {
             lines: Self::lines(str),
             ok: false,
         }
-    }
-
-    fn len(&self) -> usize {
-        self.lines.len()
     }
 
     fn lines(input: &str) -> Vec<String> {
@@ -458,14 +455,16 @@ fn handle_command_task(
                 if output.status.success() {
                     let stdout = output.stdout.as_slice();
                     let str = String::from_utf8_lossy(stdout);
-                    action_tx.send(CommandCompleted(Output::ok(&str)))?;
+                    action_tx.send(CommandCompleted(CommandOutput::ok(&str)))?;
                 } else {
                     let stderr = output.stderr.as_slice();
                     let str = String::from_utf8_lossy(stderr);
-                    action_tx.send(CommandCompleted(Output::err(&str)))?;
+                    action_tx.send(CommandCompleted(CommandOutput::err(&str)))?;
                 }
             } else {
-                action_tx.send(CommandCompleted(Output::err("Failed to execute command")))?;
+                action_tx.send(CommandCompleted(CommandOutput::err(
+                    "Failed to execute command",
+                )))?;
             }
         }
     }
@@ -516,7 +515,7 @@ fn reset_highlight_task(rx: Receiver<()>, tx: Sender<Action>) -> Result<(), Box<
 
 enum Action {
     UserInput(Event),
-    CommandCompleted(Output),
+    CommandCompleted(CommandOutput),
     StdinRead(String),
     ResetHighlight,
 }
