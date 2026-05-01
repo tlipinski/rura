@@ -289,7 +289,7 @@ impl App<'_> {
             ])
             .areas(area);
 
-        let [output_content_area, vscroll_area] = Layout::default()
+        let [output_content_area, _vscroll_area] = Layout::default()
             .direction(Direction::Horizontal)
             .constraints(vec![Constraint::Fill(1), Constraint::Length(0)])
             .areas(output_text_area);
@@ -379,7 +379,7 @@ impl App<'_> {
         let scroll_bar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
         let mut state = ScrollbarState::new(self.output_text_area.lines().len());
         state = state.position(self.output_text_area.cursor().0.into());
-        // frame.render_stateful_widget(scroll_bar, vscroll_area, &mut state);
+        // frame.render_stateful_widget(scroll_bar, _vscroll_area, &mut state);
 
         frame.render_widget(
             format!("Lines: {} ", self.output_text_area.lines().len())
