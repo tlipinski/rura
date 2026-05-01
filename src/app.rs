@@ -291,7 +291,7 @@ impl App<'_> {
 
         let [output_content_area, vscroll_area] = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints(vec![Constraint::Fill(1), Constraint::Length(1)])
+            .constraints(vec![Constraint::Fill(1), Constraint::Length(0)])
             .areas(output_text_area);
 
         frame.render_widget(&self.output_text_area, output_content_area);
@@ -379,7 +379,7 @@ impl App<'_> {
         let scroll_bar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
         let mut state = ScrollbarState::new(self.output_text_area.lines().len());
         state = state.position(self.output_text_area.cursor().0.into());
-        frame.render_stateful_widget(scroll_bar, vscroll_area, &mut state);
+        // frame.render_stateful_widget(scroll_bar, vscroll_area, &mut state);
 
         frame.render_widget(
             format!("Lines: {} ", self.output_text_area.lines().len())
@@ -728,7 +728,7 @@ fn save_to_history(value: String) {
 fn output_text_area<'a>(command_output: CommandOutput, theme: &Theme) -> TextArea<'a> {
     let mut area = TextArea::new(command_output.lines);
     area.set_line_number_style(theme.line_nums);
-    // area.set_cursor_line_style(Style::default()); // no default underline
-    // area.set_cursor_style(Style::default()); // hide default cursor
+    area.set_cursor_line_style(Style::default()); // no default underline
+    area.set_cursor_style(Style::default()); // hide default cursor
     area
 }
