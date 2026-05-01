@@ -391,14 +391,14 @@ impl App<'_> {
                     .set_style(theme.cmd_invalid),
             }
         };
-        let x = self.command_input.visual_cursor().min(max_cursor_pos);
+        let cursor = self.command_input.visual_cursor().min(max_cursor_pos);
         // debug!("vcur: {}", self.command_input.visual_cursor());
-        frame.set_cursor_position((area.x + (x + 1) as u16, area.y + 1));
+        frame.set_cursor_position((area.x + (cursor + 1) as u16, area.y + 1));
         frame.render_widget(command_input_par, command_input_area);
 
         let scroll_bar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
         let mut state = ScrollbarState::new(self.output.len());
-        state = state.position(self.output_text_area.screen_cursor().row.into());
+        state = state.position(self.output_text_area.cursor().0.into());
         frame.render_stateful_widget(scroll_bar, vscroll_area, &mut state);
 
         frame.render_widget(
