@@ -244,13 +244,13 @@ impl App<'_> {
                             self.output_text_area.scroll((1, 0));
                         }
                         UiCmd::ScrollDownPage => {
-                            self.output_text_area.scroll(Scrolling::PageDown);
+                            self.output_text_area.scroll(Scrolling::HalfPageDown);
                         }
                         UiCmd::ScrollUp => {
                             self.output_text_area.scroll((-1, 0));
                         }
                         UiCmd::ScrollUpPage => {
-                            self.output_text_area.scroll(Scrolling::PageUp);
+                            self.output_text_area.scroll(Scrolling::HalfPageUp);
                         }
                         UiCmd::ScrollLeft => {
                             self.output_text_area.scroll((0, -1));
