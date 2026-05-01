@@ -32,7 +32,7 @@ pub struct App<'a> {
     command_input: Input,
     stdin: String,
     output: Output,
-    text_area: TextArea<'a>,
+    output_text_area: TextArea<'a>,
     history: VecDeque<String>,
     history_index: usize,
     wrap: bool,
@@ -78,7 +78,7 @@ impl App<'_> {
             command_input: Input::from(""),
             stdin: "".to_string(),
             output: Output::ok(""),
-            text_area: Self::output_text_area(vec![]),
+            output_text_area: Self::output_text_area(vec![]),
             history,
             action_rx,
             command_tx,
@@ -119,7 +119,7 @@ impl App<'_> {
             StdinRead(stdin) => {
                 self.stdin = stdin;
                 self.output = Output::ok(&self.stdin);
-                self.text_area = Self::output_text_area(self.stdin.split('\n').map(String::from).collect());
+                self.output_text_area = Self::output_text_area(self.stdin.split('\n').map(String::from).collect());
             }
         }
     }
@@ -232,26 +232,26 @@ impl App<'_> {
                         self.output = new_output;
                     }
                     UiCmd::ScrollDown => {
-                        self.text_area.scroll((1, 0));
+                        self.output_text_area.scroll((1, 0));
                     }
                     UiCmd::ScrollDownPage => {
-                        self.text_area.scroll((10, 0));
+                        self.output_text_area.scroll((10, 0));
                     }
                     UiCmd::ScrollUp => {
-                        self.text_area.scroll((-1, 0));
+                        self.output_text_area.scroll((-1, 0));
                     }
                     UiCmd::ScrollUpPage => {
-                        self.text_area.scroll((-10, 0));
+                        self.output_text_area.scroll((-10, 0));
                     }
                     UiCmd::ScrollLeft => {
-                        self.text_area.scroll((0, -1));
+                        self.output_text_area.scroll((0, -1));
                     }
                     UiCmd::ScrollRight => {
-                        self.text_area.scroll((0, 1));
+                        self.output_text_area.scroll((0, 1));
                     }
                     UiCmd::ToggleWrap => {
                         self.wrap = !self.wrap;
-                        self.text_area.set_wrap_mode(WrapMode::Word);
+                        self.output_text_area.set_wrap_mode(WrapMode::Word);
                     }
                     UiCmd::HistoryPrev => {
                         // todo replace check on size with check optional history_index?
@@ -317,7 +317,7 @@ impl App<'_> {
             ])
             .areas(output_text_area);
 
-        frame.render_widget(&self.text_area, output_content_area);
+        frame.render_widget(&self.output_text_area, output_content_area);
 
         let max_cursor_pos = (command_input_area.inner(Margin::new(1, 0)).width - 1) as usize;
 
@@ -398,7 +398,7 @@ impl App<'_> {
 
         let scroll_bar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
         let mut state = ScrollbarState::new(self.output.len());
-        state = state.position(self.text_area.screen_cursor().row.into());
+        state = state.position(self.output_text_area.screen_cursor().row.into());
         frame.render_stateful_widget(scroll_bar, vscroll_area, &mut state);
 
         frame.render_widget(
