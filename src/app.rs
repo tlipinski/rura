@@ -75,7 +75,7 @@ impl App<'_> {
         Self {
             command_input: Input::from(""),
             stdin: "".to_string(),
-            output_text_area: Self::output_text_area(CommandOutput::ok(""), &theme),
+            output_text_area: output_text_area(CommandOutput::ok(""), &theme),
             history,
             action_rx,
             command_tx,
@@ -89,21 +89,9 @@ impl App<'_> {
         }
     }
 
-    fn update_output(&mut self, command_output: CommandOutput) {
-        self.output_text_area = Self::output_text_area(command_output, &self.theme);
-    }
-
     fn reset_output(&mut self) {
         let output = CommandOutput::ok(&self.stdin);
-        self.output_text_area = Self::output_text_area(output, &self.theme);
-    }
-
-    fn output_text_area<'a>(command_output: CommandOutput, theme: &Theme) -> TextArea<'a> {
-        let mut area = TextArea::new(command_output.lines);
-        area.set_line_number_style(theme.line_nums);
-        area.set_cursor_line_style(Style::default()); // no default underline
-        area.set_cursor_style(Style::default()); // hide default cursor
-        area
+        self.output_text_area = output_text_area(output, &self.theme);
     }
 
     pub fn run(mut self, terminal: &mut DefaultTerminal) -> Result<String, Box<dyn Error>> {
@@ -120,18 +108,16 @@ impl App<'_> {
     fn handle_action(&mut self, action: Action) {
         match action {
             UserInput(event) => self.handle_event(&event),
-            CommandCompleted(output) => self.handle_command_output(output),
+            CommandCompleted(output) => {
+                self.output_text_area = output_text_area(output, &self.theme);
+            }
             ResetHighlight => self.highlight_until = None,
             StdinRead(stdin) => {
                 let command_output = CommandOutput::ok(&stdin);
-                self.update_output(command_output);
+                self.output_text_area = output_text_area(command_output, &self.theme);
                 self.stdin = stdin;
             }
         }
-    }
-
-    fn handle_command_output(&mut self, output: CommandOutput) {
-        self.update_output(output);
     }
 
     pub fn handle_event(&mut self, event: &Event) {
@@ -733,4 +719,11 @@ fn save_to_history(value: String) {
             let _ = writeln!(file, "{}", value);
         }
     }
+}
+fn output_text_area<'a>(command_output: CommandOutput, theme: &Theme) -> TextArea<'a> {
+    let mut area = TextArea::new(command_output.lines);
+    area.set_line_number_style(theme.line_nums);
+    area.set_cursor_line_style(Style::default()); // no default underline
+    area.set_cursor_style(Style::default()); // hide default cursor
+    area
 }
