@@ -8,18 +8,16 @@ use log::{debug, warn};
 use ratatui::crossterm::event;
 use ratatui::crossterm::event::Event;
 use ratatui::layout::{Constraint, Direction, Layout, Margin, Rect};
-use ratatui::prelude::Position;
 use ratatui::prelude::{Line, Stylize};
 use ratatui::style::Color;
 use ratatui::style::{Style, Styled};
 use ratatui::widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation};
-use ratatui::widgets::{ScrollbarState, Wrap};
+use ratatui::widgets::ScrollbarState;
 use ratatui::{DefaultTerminal, Frame};
 use ratatui_textarea::{TextArea, WrapMode};
 use std::collections::{HashMap, VecDeque};
 use std::error::Error;
 use std::io::{Read, Write, stdin};
-use std::ops::Range;
 use std::process::{Command, Stdio};
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
@@ -74,11 +72,13 @@ impl App<'_> {
             }
         }
 
+        let theme = Theme::from_config(theme_config);
+
         Self {
             command_input: Input::from(""),
             stdin: "".to_string(),
             output: Output::ok(""),
-            output_text_area: Self::output_text_area(vec![]),
+            output_text_area: Self::output_text_area(vec![], &theme),
             history,
             action_rx,
             command_tx,
@@ -87,14 +87,14 @@ impl App<'_> {
             wrap: false,
             exit: false,
             highlight_until: None,
-            theme: Theme::from_config(theme_config),
+            theme,
             key_bindings: KeyBindings::from_config(kb_config),
         }
     }
 
-    fn output_text_area<'a>(lines: Vec<String>) -> TextArea<'a> {
+    fn output_text_area<'a>(lines: Vec<String>, theme: &Theme) -> TextArea<'a> {
         let mut area = TextArea::new(lines);
-        area.set_line_number_style(Style::default().fg(Magenta));
+        area.set_line_number_style(theme.line_nums);
         area.set_cursor_line_style(Style::default()); // no default underline
         area.set_cursor_style(Style::default()); // hide default cursor
         area
@@ -119,7 +119,7 @@ impl App<'_> {
             StdinRead(stdin) => {
                 self.stdin = stdin;
                 self.output = Output::ok(&self.stdin);
-                self.output_text_area = Self::output_text_area(self.stdin.split('\n').map(String::from).collect());
+                self.output_text_area = Self::output_text_area(self.stdin.split('\n').map(String::from).collect(), &self.theme);
             }
         }
     }
