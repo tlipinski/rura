@@ -417,7 +417,7 @@ impl App<'_> {
 
         let scroll_bar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
         let mut state = ScrollbarState::new(self.output.len());
-        state = state.position(self.offset.y.into());
+        state = state.position(self.text_area.screen_cursor().row.into());
         frame.render_stateful_widget(scroll_bar, vscroll_area, &mut state);
 
         frame.render_widget(
