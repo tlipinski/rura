@@ -1278,11 +1278,13 @@ dependencies = [
  "dirs",
  "env_logger",
  "insta",
+ "itertools",
  "log",
  "ratatui",
  "serde",
  "toml",
  "tui-input",
+ "unicode-width",
 ]
 
 [[package]]

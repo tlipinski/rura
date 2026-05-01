@@ -5,14 +5,17 @@ use crate::history::History;
 use crate::rura::Rura;
 use crossterm::event::{KeyCode, KeyModifiers};
 use crossterm::tty::IsTty;
+use itertools::{Chunk, Itertools};
 use log::{debug, warn};
+use ratatui::buffer::Buffer;
 use ratatui::crossterm::event;
 use ratatui::crossterm::event::Event;
 use ratatui::layout::{Constraint, Direction, Layout, Margin, Rect};
-use ratatui::prelude::Position;
 use ratatui::prelude::{Line, Stylize};
+use ratatui::prelude::{Position, Widget};
 use ratatui::style::Color;
 use ratatui::style::{Style, Styled};
+use ratatui::text::{Span, StyledGrapheme};
 use ratatui::widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation};
 use ratatui::widgets::{ScrollbarState, Wrap};
 use ratatui::{DefaultTerminal, Frame};
@@ -26,6 +29,7 @@ use std::thread;
 use std::time::Duration;
 use tui_input::backend::crossterm::EventHandler;
 use tui_input::{Input, InputRequest};
+use unicode_width::UnicodeWidthStr;
 
 pub struct App {
     command_input: Input,
@@ -254,10 +258,17 @@ impl App {
     pub fn render(&mut self, frame: &mut Frame, area: Rect) {
         let theme = &self.theme;
 
+        let margin = Margin::new(1, 1);
+
+        let command_input_height = {
+            let inner_area = area.inner(margin);
+            (self.command_input.value().len() / inner_area.width as usize) + 3
+        };
+
         let [command_input_area, output_area, status_area] = Layout::default()
             .direction(Direction::Vertical)
             .constraints(vec![
-                Constraint::Length(3),
+                Constraint::Length(command_input_height as u16),
                 Constraint::Fill(1),
                 Constraint::Length(1),
             ])
@@ -273,85 +284,41 @@ impl App {
             ])
             .areas(output_area);
 
-        let max_cursor_pos = (command_input_area.inner(Margin::new(1, 0)).width - 1) as usize;
+        let command_input_block = Block::bordered();
 
-        let command_input_par = {
-            let block = Block::bordered();
-            let line = Line::from(self.command_input.value());
-            let offset = self
-                .command_input
-                .visual_cursor()
-                .saturating_sub(max_cursor_pos);
-
-            let rura = Rura::new(
+        let command_input_line = {
+            match Rura::new(
                 self.command_input.value(),
                 self.command_input.visual_cursor(),
-            );
-
-            match rura {
-                Ok(ref r) => {
-                    let mut spans = vec![];
-
-                    for (index, part) in r.subcommands.iter().enumerate() {
-                        match self.highlight_until {
-                            None => {
-                                if index > 0 {
-                                    spans.push("|".set_style(theme.cmd_regular_pipe));
-                                }
-
-                                if index == r.current {
-                                    spans.push(part.clone().set_style(theme.cmd_regular_current));
-                                } else {
-                                    spans.push(part.clone().set_style(theme.cmd_regular));
-                                }
-                            }
-                            Some(until) => {
-                                if index <= until {
-                                    if index > 0 {
-                                        spans.push("|".set_style(theme.cmd_highlight_pipe));
-                                    }
-
-                                    if index == r.current {
-                                        spans.push(
-                                            part.clone().set_style(theme.cmd_highlight_current),
-                                        );
-                                    } else {
-                                        spans.push(part.clone().set_style(theme.cmd_highlight));
-                                    }
-                                } else {
-                                    if index > 0 {
-                                        spans.push("|".set_style(theme.cmd_regular_pipe));
-                                    }
-
-                                    if index == r.current {
-                                        spans.push(
-                                            part.clone().set_style(theme.cmd_regular_current),
-                                        );
-                                    } else {
-                                        spans.push(part.clone().set_style(theme.cmd_regular));
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    Paragraph::new(Line::from_iter(spans))
-                        .scroll((0, offset as u16))
-                        .block(block)
-                }
-                Err(_) => Paragraph::new(line)
-                    .scroll((0, offset as u16))
-                    .block(block)
-                    .set_style(theme.cmd_invalid),
+            ) {
+                Ok(r) => to_line(r, self.highlight_until, &self.theme),
+                Err(_) => Line::from(self.command_input.value()),
             }
         };
-        let x = self.command_input.visual_cursor().min(max_cursor_pos);
-        // debug!("vcur: {}", self.command_input.visual_cursor());
-        frame.set_cursor_position((area.x + (x + 1) as u16, area.y + 1));
-        frame.render_widget(command_input_par, command_input_area);
+
+        let graphemes = command_input_line
+            .styled_graphemes(Style::default())
+            .collect_vec();
+
+        let inner_rect = command_input_area.inner(margin);
+
+        let chunks = graphemes.chunks(inner_rect.width as usize);
+
+        for (i, c) in chunks.enumerate() {
+            render_line(c.to_vec(), inner_rect, frame.buffer_mut(), i as u16)
+        }
+
+        frame.render_widget(command_input_block, command_input_area);
+
+        let cursor = self.command_input.visual_cursor();
+
+        frame.set_cursor_position((
+            inner_rect.x + (cursor % inner_rect.width as usize) as u16,
+            inner_rect.y + (cursor / inner_rect.width as usize) as u16,
+        ));
 
         let height = output_content_area.height.min(self.output.len() as u16);
-        // debug!("height: {height:?}");
+
         let range: Range<usize> = if height >= self.output.len() as u16 {
             0..self.output.len()
         } else {
@@ -714,4 +681,64 @@ fn to_ui_command(bindings: &KeyBindings, code: KeyCode, mods: KeyModifiers) -> O
             None
         }
     })
+}
+
+fn render_line(line: Vec<StyledGrapheme>, area: Rect, buf: &mut Buffer, y: u16) {
+    let mut x = 0;
+    for StyledGrapheme { symbol, style } in line {
+        let width = symbol.width();
+        if width == 0 {
+            continue;
+        }
+        // Make sure to overwrite any previous character with a space (rather than a zero-width)
+        let symbol = if symbol.is_empty() { " " } else { symbol };
+        let position = Position::new(area.left() + x, area.top() + y);
+        buf[position].set_symbol(symbol).set_style(style);
+        x += u16::try_from(width).unwrap_or(u16::MAX);
+    }
+}
+
+fn to_line<'a>(r: Rura, highlight_until: Option<usize>, theme: &Theme) -> Line<'a> {
+    let mut spans = vec![];
+
+    for (index, part) in r.subcommands.iter().enumerate() {
+        match highlight_until {
+            None => {
+                if index > 0 {
+                    spans.push("|".set_style(theme.cmd_regular_pipe));
+                }
+
+                if index == r.current {
+                    spans.push(part.clone().set_style(theme.cmd_regular_current));
+                } else {
+                    spans.push(part.clone().set_style(theme.cmd_regular));
+                }
+            }
+            Some(until) => {
+                if index <= until {
+                    if index > 0 {
+                        spans.push("|".set_style(theme.cmd_highlight_pipe));
+                    }
+
+                    if index == r.current {
+                        spans.push(part.clone().set_style(theme.cmd_highlight_current));
+                    } else {
+                        spans.push(part.clone().set_style(theme.cmd_highlight));
+                    }
+                } else {
+                    if index > 0 {
+                        spans.push("|".set_style(theme.cmd_regular_pipe));
+                    }
+
+                    if index == r.current {
+                        spans.push(part.clone().set_style(theme.cmd_regular_current));
+                    } else {
+                        spans.push(part.clone().set_style(theme.cmd_regular));
+                    }
+                }
+            }
+        }
+    }
+
+    Line::from_iter(spans)
 }
