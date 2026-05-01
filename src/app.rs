@@ -209,11 +209,7 @@ impl App<'_> {
                                         }
                                         // if executing previous on first subcommand then restore original stdin
                                         None => {
-                                            let new_output = Output::ok(&self.stdin);
-                                            // if self.output.len() != new_output.len() {
-                                            //     self.offset.y = 0;
-                                            // }
-                                            // self.update_output(&self.stdin);
+                                            self.reset_output();
                                         }
                                     }
                                 }
