@@ -33,7 +33,6 @@ pub struct App<'a> {
     stdin: String,
     output: Output,
     text_area: TextArea<'a>,
-    offset: Position,
     history: VecDeque<String>,
     history_index: usize,
     wrap: bool,
@@ -78,7 +77,6 @@ impl App<'_> {
         Self {
             command_input: Input::from(""),
             stdin: "".to_string(),
-            offset: Position::default(),
             output: Output::ok(""),
             text_area: Self::output_text_area(vec![]),
             history,
@@ -127,9 +125,9 @@ impl App<'_> {
     }
 
     fn handle_command_output(&mut self, output: Output) {
-        if self.output.len() != output.len() {
-            self.offset.y = 0;
-        }
+        // if self.output.len() != output.len() {
+        //     self.offset.y = 0;
+        // }
 
         self.output = output;
     }
@@ -216,9 +214,9 @@ impl App<'_> {
                                     // if executing previous on first subcommand then restore original stdin
                                     None => {
                                         let new_output = Output::ok(&self.stdin);
-                                        if self.output.len() != new_output.len() {
-                                            self.offset.y = 0;
-                                        }
+                                        // if self.output.len() != new_output.len() {
+                                        //     self.offset.y = 0;
+                                        // }
                                         self.output = new_output;
                                     }
                                 }
@@ -228,39 +226,32 @@ impl App<'_> {
                     }
                     UiCmd::ResetInput => {
                         let new_output = Output::ok(&self.stdin);
-                        if self.output.len() != new_output.len() {
-                            self.offset.y = 0;
-                        }
+                        // if self.output.len() != new_output.len() {
+                        //     self.offset.y = 0;
+                        // }
                         self.output = new_output;
                     }
                     UiCmd::ScrollDown => {
-                        self.offset.y = self.offset.y.saturating_add(1);
                         self.text_area.scroll((1, 0));
                     }
                     UiCmd::ScrollDownPage => {
-                        self.offset.y = self.offset.y.saturating_add(10);
                         self.text_area.scroll((10, 0));
                     }
                     UiCmd::ScrollUp => {
-                        self.offset.y = self.offset.y.saturating_sub(1);
                         self.text_area.scroll((-1, 0));
                     }
                     UiCmd::ScrollUpPage => {
-                        self.offset.y = self.offset.y.saturating_sub(10);
                         self.text_area.scroll((-10, 0));
                     }
                     UiCmd::ScrollLeft => {
-                        self.offset.x = self.offset.x.saturating_sub(1);
                         self.text_area.scroll((0, -1));
                     }
                     UiCmd::ScrollRight => {
-                        self.offset.x = self.offset.x.saturating_add(1);
                         self.text_area.scroll((0, 1));
                     }
                     UiCmd::ToggleWrap => {
                         self.wrap = !self.wrap;
                         self.text_area.set_wrap_mode(WrapMode::Word);
-                        self.text_area.set_line_number_style(Style::default().fg(Magenta));
                     }
                     UiCmd::HistoryPrev => {
                         // todo replace check on size with check optional history_index?
@@ -404,16 +395,6 @@ impl App<'_> {
         // debug!("vcur: {}", self.command_input.visual_cursor());
         frame.set_cursor_position((area.x + (x + 1) as u16, area.y + 1));
         frame.render_widget(command_input_par, command_input_area);
-
-        let height = output_content_area.height.min(self.output.len() as u16);
-        // debug!("height: {height:?}");
-        let range: Range<usize> = if height >= self.output.len() as u16 {
-            0..self.output.len()
-        } else {
-            let from = (self.offset.y as usize).min(self.output.len());
-            let to = (self.offset.y as usize + height as usize).min(self.output.len());
-            from..to
-        };
 
         let scroll_bar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
         let mut state = ScrollbarState::new(self.output.len());
