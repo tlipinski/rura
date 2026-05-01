@@ -11,8 +11,8 @@ use ratatui::layout::{Constraint, Direction, Layout, Margin, Rect};
 use ratatui::prelude::{Line, Stylize};
 use ratatui::style::Color;
 use ratatui::style::{Style, Styled};
-use ratatui::widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation};
 use ratatui::widgets::ScrollbarState;
+use ratatui::widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation};
 use ratatui::{DefaultTerminal, Frame};
 use ratatui_textarea::{Scrolling, TextArea, WrapMode};
 use std::collections::{HashMap, VecDeque};
@@ -112,13 +112,16 @@ impl App<'_> {
 
     fn handle_action(&mut self, action: Action) {
         match action {
-            UserInput(event) => self.handle_key_event(&event),
+            UserInput(event) => self.handle_event(&event),
             CommandCompleted(output) => self.handle_command_output(output),
             ResetHighlight => self.highlight_until = None,
             StdinRead(stdin) => {
                 self.stdin = stdin;
                 self.output = Output::ok(&self.stdin);
-                self.output_text_area = Self::output_text_area(self.stdin.split('\n').map(String::from).collect(), &self.theme);
+                self.output_text_area = Self::output_text_area(
+                    self.stdin.split('\n').map(String::from).collect(),
+                    &self.theme,
+                );
             }
         }
     }
@@ -131,149 +134,158 @@ impl App<'_> {
         self.output = output;
     }
 
-    pub fn handle_key_event(&mut self, event: &Event) {
-        if let Event::Key(key_event) = event {
-            let code = key_event.code;
-            let mods = key_event.modifiers;
-            let key_bindings = &self.key_bindings;
+    pub fn handle_event(&mut self, event: &Event) {
+        match event {
+            Event::Mouse(me) => {
+                // increase scroll speed
+                for _ in 0..3 {
+                    self.output_text_area.input(*me);
+                }
+            }
+            Event::Key(key_event) => {
+                let code = key_event.code;
+                let mods = key_event.modifiers;
+                let key_bindings = &self.key_bindings;
 
-            match (code, mods) {
-                (KeyCode::Tab, KeyModifiers::NONE) => {
-                    self.command_input.handle(InputRequest::SetCursor(0));
-                }
-                (KeyCode::BackTab, KeyModifiers::SHIFT) => {
-                    self.command_input.handle(InputRequest::SetCursor(10));
-                }
-                _ => {}
-            };
+                match (code, mods) {
+                    (KeyCode::Tab, KeyModifiers::NONE) => {
+                        self.command_input.handle(InputRequest::SetCursor(0));
+                    }
+                    (KeyCode::BackTab, KeyModifiers::SHIFT) => {
+                        self.command_input.handle(InputRequest::SetCursor(10));
+                    }
+                    _ => {}
+                };
 
-            match to_ui_command(key_bindings, code, mods) {
-                None => {
-                    self.command_input.handle_event(event);
-                }
-                Some(a) => match a {
-                    UiCmd::Quit => {
-                        self.exit = true;
+                match to_ui_command(key_bindings, code, mods) {
+                    None => {
+                        self.command_input.handle_event(event);
                     }
-                    UiCmd::ExecuteFull => {
-                        if self.command_input.value().is_empty() {
-                            self.output = Output::ok(&self.stdin);
-                            return;
+                    Some(a) => match a {
+                        UiCmd::Quit => {
+                            self.exit = true;
                         }
-                        self.push_history();
-                        match Rura::new(
-                            self.command_input.value(),
-                            self.command_input.visual_cursor(),
-                        ) {
-                            Ok(r) => {
-                                let (cmd, cmd_index) = r.command_full();
-                                self.highlight_until = Some(cmd_index);
-                                self.highlight_tx.send(()).unwrap();
-                                self.command_tx.send((cmd, self.stdin.clone())).unwrap()
+                        UiCmd::ExecuteFull => {
+                            if self.command_input.value().is_empty() {
+                                self.output = Output::ok(&self.stdin);
+                                return;
                             }
-                            Err(_) => warn!("Invalid command: {}", self.command_input.value()),
-                        };
-                    }
-                    UiCmd::ExecuteUntilCurrent => {
-                        if self.command_input.value().is_empty() {
-                            self.output = Output::ok(&self.stdin);
-                            return;
+                            self.push_history();
+                            match Rura::new(
+                                self.command_input.value(),
+                                self.command_input.visual_cursor(),
+                            ) {
+                                Ok(r) => {
+                                    let (cmd, cmd_index) = r.command_full();
+                                    self.highlight_until = Some(cmd_index);
+                                    self.highlight_tx.send(()).unwrap();
+                                    self.command_tx.send((cmd, self.stdin.clone())).unwrap()
+                                }
+                                Err(_) => warn!("Invalid command: {}", self.command_input.value()),
+                            };
                         }
-                        self.push_history();
-                        match Rura::new(
-                            self.command_input.value(),
-                            self.command_input.visual_cursor(),
-                        ) {
-                            Ok(r) => {
-                                let (cmd, cmd_index) = r.command_until_current();
-                                self.highlight_until = Some(cmd_index);
-                                self.highlight_tx.send(()).unwrap();
-                                self.command_tx.send((cmd, self.stdin.clone())).unwrap()
+                        UiCmd::ExecuteUntilCurrent => {
+                            if self.command_input.value().is_empty() {
+                                self.output = Output::ok(&self.stdin);
+                                return;
                             }
-                            Err(_) => warn!("Invalid command: {}", self.command_input.value()),
-                        };
-                    }
-                    UiCmd::ExecuteUntilPrev => {
-                        if self.command_input.value().is_empty() {
-                            self.output = Output::ok(&self.stdin);
-                            return;
+                            self.push_history();
+                            match Rura::new(
+                                self.command_input.value(),
+                                self.command_input.visual_cursor(),
+                            ) {
+                                Ok(r) => {
+                                    let (cmd, cmd_index) = r.command_until_current();
+                                    self.highlight_until = Some(cmd_index);
+                                    self.highlight_tx.send(()).unwrap();
+                                    self.command_tx.send((cmd, self.stdin.clone())).unwrap()
+                                }
+                                Err(_) => warn!("Invalid command: {}", self.command_input.value()),
+                            };
                         }
-                        self.push_history();
-                        match Rura::new(
-                            self.command_input.value(),
-                            self.command_input.visual_cursor(),
-                        ) {
-                            Ok(r) => {
-                                match r.command_until_current_prev() {
-                                    Some((cmd, cmd_index)) => {
-                                        self.highlight_until = Some(cmd_index);
-                                        self.highlight_tx.send(()).unwrap();
-                                        self.command_tx.send((cmd, self.stdin.clone())).unwrap()
-                                    }
-                                    // if executing previous on first subcommand then restore original stdin
-                                    None => {
-                                        let new_output = Output::ok(&self.stdin);
-                                        // if self.output.len() != new_output.len() {
-                                        //     self.offset.y = 0;
-                                        // }
-                                        self.output = new_output;
+                        UiCmd::ExecuteUntilPrev => {
+                            if self.command_input.value().is_empty() {
+                                self.output = Output::ok(&self.stdin);
+                                return;
+                            }
+                            self.push_history();
+                            match Rura::new(
+                                self.command_input.value(),
+                                self.command_input.visual_cursor(),
+                            ) {
+                                Ok(r) => {
+                                    match r.command_until_current_prev() {
+                                        Some((cmd, cmd_index)) => {
+                                            self.highlight_until = Some(cmd_index);
+                                            self.highlight_tx.send(()).unwrap();
+                                            self.command_tx.send((cmd, self.stdin.clone())).unwrap()
+                                        }
+                                        // if executing previous on first subcommand then restore original stdin
+                                        None => {
+                                            let new_output = Output::ok(&self.stdin);
+                                            // if self.output.len() != new_output.len() {
+                                            //     self.offset.y = 0;
+                                            // }
+                                            self.output = new_output;
+                                        }
                                     }
                                 }
+                                Err(_) => warn!("Invalid command: {}", self.command_input.value()),
+                            };
+                        }
+                        UiCmd::ResetInput => {
+                            let new_output = Output::ok(&self.stdin);
+                            // if self.output.len() != new_output.len() {
+                            //     self.offset.y = 0;
+                            // }
+                            self.output = new_output;
+                        }
+                        UiCmd::ScrollDown => {
+                            self.output_text_area.scroll((1, 0));
+                        }
+                        UiCmd::ScrollDownPage => {
+                            self.output_text_area.scroll(Scrolling::PageDown);
+                        }
+                        UiCmd::ScrollUp => {
+                            self.output_text_area.scroll((-1, 0));
+                        }
+                        UiCmd::ScrollUpPage => {
+                            self.output_text_area.scroll(Scrolling::PageUp);
+                        }
+                        UiCmd::ScrollLeft => {
+                            self.output_text_area.scroll((0, -1));
+                        }
+                        UiCmd::ScrollRight => {
+                            self.output_text_area.scroll((0, 1));
+                        }
+                        UiCmd::ToggleWrap => {
+                            self.wrap = !self.wrap;
+                            if self.wrap {
+                                self.output_text_area.set_wrap_mode(WrapMode::Word);
+                            } else {
+                                self.output_text_area.set_wrap_mode(WrapMode::None);
                             }
-                            Err(_) => warn!("Invalid command: {}", self.command_input.value()),
-                        };
-                    }
-                    UiCmd::ResetInput => {
-                        let new_output = Output::ok(&self.stdin);
-                        // if self.output.len() != new_output.len() {
-                        //     self.offset.y = 0;
-                        // }
-                        self.output = new_output;
-                    }
-                    UiCmd::ScrollDown => {
-                        self.output_text_area.scroll((1, 0));
-                    }
-                    UiCmd::ScrollDownPage => {
-                        self.output_text_area.scroll(Scrolling::PageDown);
-                    }
-                    UiCmd::ScrollUp => {
-                        self.output_text_area.scroll((-1, 0));
-                    }
-                    UiCmd::ScrollUpPage => {
-                        self.output_text_area.scroll(Scrolling::PageUp);
-                    }
-                    UiCmd::ScrollLeft => {
-                        self.output_text_area.scroll((0, -1));
-                    }
-                    UiCmd::ScrollRight => {
-                        self.output_text_area.scroll((0, 1));
-                    }
-                    UiCmd::ToggleWrap => {
-                        self.wrap = !self.wrap;
-                        if self.wrap {
-                            self.output_text_area.set_wrap_mode(WrapMode::Word);
-                        } else {
-                            self.output_text_area.set_wrap_mode(WrapMode::None);
                         }
-                    }
-                    UiCmd::HistoryPrev => {
-                        // todo replace check on size with check optional history_index?
-                        if !self.history.is_empty() {
-                            self.command_input =
-                                Input::from(self.history[self.history_index].clone());
-                            self.history_index =
-                                (self.history_index + 1).min(self.history.len() - 1);
+                        UiCmd::HistoryPrev => {
+                            // todo replace check on size with check optional history_index?
+                            if !self.history.is_empty() {
+                                self.command_input =
+                                    Input::from(self.history[self.history_index].clone());
+                                self.history_index =
+                                    (self.history_index + 1).min(self.history.len() - 1);
+                            }
                         }
-                    }
-                    UiCmd::HistoryNext => {
-                        if !self.history.is_empty() {
-                            self.history_index = self.history_index.saturating_sub(1);
-                            self.command_input =
-                                Input::from(self.history[self.history_index].clone());
+                        UiCmd::HistoryNext => {
+                            if !self.history.is_empty() {
+                                self.history_index = self.history_index.saturating_sub(1);
+                                self.command_input =
+                                    Input::from(self.history[self.history_index].clone());
+                            }
                         }
-                    }
-                },
+                    },
+                }
             }
+            _ => {}
         }
     }
 
@@ -298,11 +310,7 @@ impl App<'_> {
     pub fn render(&mut self, frame: &mut Frame, area: Rect) {
         let theme = &self.theme;
 
-        let [
-            command_input_area,
-            output_text_area,
-            status_area,
-        ] = Layout::default()
+        let [command_input_area, output_text_area, status_area] = Layout::default()
             .direction(Direction::Vertical)
             .constraints(vec![
                 Constraint::Length(3),
@@ -311,13 +319,9 @@ impl App<'_> {
             ])
             .areas(area);
 
-
         let [output_content_area, vscroll_area] = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints(vec![
-                Constraint::Fill(1),
-                Constraint::Length(1),
-            ])
+            .constraints(vec![Constraint::Fill(1), Constraint::Length(1)])
             .areas(output_text_area);
 
         frame.render_widget(&self.output_text_area, output_content_area);

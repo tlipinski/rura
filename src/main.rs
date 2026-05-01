@@ -10,6 +10,7 @@ use env_logger::{Builder, Target};
 use log::{LevelFilter, error, info};
 use std::error::Error;
 use std::fs::OpenOptions;
+use crossterm::ExecutableCommand;
 use props::APP_NAME;
 
 fn main() {
@@ -48,6 +49,7 @@ struct Args {
 fn run(args: Args, config: config::Config) -> Result<(), Box<dyn Error>> {
     info!("Starting TUI");
     let mut terminal = ratatui::init();
+    std::io::stdout().execute(crossterm::event::EnableMouseCapture).unwrap();
 
     let app = App::new(args, &config.theme, &config.keybindings);
     let last_command = app.run(&mut terminal)?;
