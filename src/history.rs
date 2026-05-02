@@ -5,7 +5,6 @@ use std::io::Write;
 
 pub struct History {
     history: VecDeque<String>,
-    temp: Option<String>,
     position: Option<usize>,
     save_to_file: bool,
 }
@@ -25,7 +24,6 @@ impl History {
         }
         History {
             history,
-            temp: None,
             position: None,
             save_to_file: true,
         }
@@ -53,7 +51,6 @@ impl History {
             }
         }
     }
-
 
     pub fn next(&mut self) -> String {
         match self.position {
@@ -112,7 +109,6 @@ mod tests {
     fn test_empty_history() {
         let mut history = History {
             history: VecDeque::new(),
-            temp: None,
             position: None,
             save_to_file: false,
         };
@@ -125,7 +121,6 @@ mod tests {
     fn test_history_push() {
         let mut history = History {
             history: VecDeque::from(vec!["test1".into(), "test2".into(), "test3".into()]),
-            temp: None,
             position: None,
             save_to_file: false,
         };
@@ -142,5 +137,4 @@ mod tests {
         assert_eq!(history.next(), "test1");
         assert_eq!(history.previous(), "test2");
     }
-
 }

@@ -1,17 +1,20 @@
 mod app;
 mod config;
+mod history;
 mod props;
 mod rura;
-mod history;
+mod rura_widget;
+mod uicmd;
+mod theme;
 
 use crate::app::App;
 use crate::config::load_config;
 use clap::Parser;
 use env_logger::{Builder, Target};
 use log::{LevelFilter, error, info};
+use props::APP_NAME;
 use std::error::Error;
 use std::fs::OpenOptions;
-use props::APP_NAME;
 
 fn main() {
     let file = OpenOptions::new()
@@ -55,7 +58,7 @@ fn run(args: Args, config: config::Config) -> Result<(), Box<dyn Error>> {
 
     info!("Restoring terminal");
     ratatui::restore();
-    
+
     println!("{}", last_command);
 
     Ok(())
