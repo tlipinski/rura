@@ -1,6 +1,7 @@
-use tui_input::backend::crossterm::EventHandler;
 use crate::history::History;
 use crate::rura::{ExecuteType, Rura};
+use crate::theme::Theme;
+use crate::uicmd::{KeyBindings, UiCmd, to_ui_command};
 use crossterm::event::{Event, KeyCode, KeyModifiers};
 use itertools::Itertools;
 use log::warn;
@@ -10,10 +11,9 @@ use ratatui::prelude::{Line, Style, Widget};
 use ratatui::style::Styled;
 use ratatui::text::StyledGrapheme;
 use std::sync::mpsc::Sender;
+use tui_input::backend::crossterm::EventHandler;
 use tui_input::{Input, InputRequest};
 use unicode_width::UnicodeWidthStr;
-use crate::theme::Theme;
-use crate::uicmd::{to_ui_command, KeyBindings, UiCmd};
 
 pub struct RuraWidget {
     pub command_input: Input,
@@ -70,10 +70,30 @@ impl RuraWidget {
 
                 match (code, mods) {
                     (KeyCode::Tab, KeyModifiers::NONE) => {
-                        self.command_input.handle(InputRequest::SetCursor(0));
+                        match Rura::new(
+                            self.command_input.value(),
+                            self.command_input.visual_cursor(),
+                        ) {
+                            Ok(r) => {
+                                if let Some(cursor) = r.cursor_next() {
+                                    self.command_input.handle(InputRequest::SetCursor(cursor));
+                                }
+                            }
+                            Err(_) => {}
+                        }
                     }
                     (KeyCode::BackTab, KeyModifiers::SHIFT) => {
-                        self.command_input.handle(InputRequest::SetCursor(10));
+                        match Rura::new(
+                            self.command_input.value(),
+                            self.command_input.visual_cursor(),
+                        ) {
+                            Ok(r) => {
+                                if let Some(cursor) = r.cursor_prev() {
+                                    self.command_input.handle(InputRequest::SetCursor(cursor));
+                                }
+                            }
+                            Err(_) => {}
+                        }
                     }
                     _ => {}
                 };
