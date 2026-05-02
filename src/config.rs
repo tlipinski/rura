@@ -67,7 +67,7 @@ impl Default for ThemeConfig {
 
 /// Key binding strings use the format: `[modifier+]*key`
 /// Modifiers: `ctrl`, `alt`, `shift`
-/// Named keys: `enter`, `esc`, `backspace`, `delete`, `tab`, `up`, `down`, `left`, `right`,
+/// Named keys: `enter`, `esc`, `backspace`, `delete`, `tab`, `backtab`, `up`, `down`, `left`, `right`,
 ///             `pageup`, `pagedown`, `home`, `end`, `f1`–`f12`
 /// Single characters: `a`–`z`, `0`–`9`, symbols like `|`, `\`, etc.
 /// Examples: `"ctrl+c"`, `"alt+j"`, `"enter"`, `"pagedown"`, `"alt+\\"`
@@ -88,6 +88,8 @@ pub struct KeyBindingsConfig {
     pub toggle_wrap: Vec<String>,
     pub history_prev: Vec<String>,
     pub history_next: Vec<String>,
+    pub subcommand_next: Vec<String>,
+    pub subcommand_prev: Vec<String>,
 }
 
 impl Default for KeyBindingsConfig {
@@ -107,6 +109,8 @@ impl Default for KeyBindingsConfig {
             toggle_wrap: vec!["alt+w".into()],
             history_prev: vec!["ctrl+p".into()],
             history_next: vec!["ctrl+n".into()],
+            subcommand_next: vec!["tab".into()],
+            subcommand_prev: vec!["shift+backtab".into(), "shift+tab".into(), "backtab".into()],
         }
     }
 }

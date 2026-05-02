@@ -18,6 +18,8 @@ pub enum UiCmd {
     ToggleWrap,
     HistoryPrev,
     HistoryNext,
+    SubcommandNext,
+    SubcommandPrev,
 }
 
 pub struct KeyBindings {
@@ -50,6 +52,8 @@ impl KeyBindings {
         bindings.insert(UiCmd::ToggleWrap, parse_bindings(&config.toggle_wrap));
         bindings.insert(UiCmd::HistoryPrev, parse_bindings(&config.history_prev));
         bindings.insert(UiCmd::HistoryNext, parse_bindings(&config.history_next));
+        bindings.insert(UiCmd::SubcommandNext, parse_bindings(&config.subcommand_next));
+        bindings.insert(UiCmd::SubcommandPrev, parse_bindings(&config.subcommand_prev));
         KeyBindings { bindings }
     }
 }
@@ -85,6 +89,7 @@ fn parse_key_binding(s: &str) -> Option<(KeyCode, KeyModifiers)> {
         "backspace" => KeyCode::Backspace,
         "delete" | "del" => KeyCode::Delete,
         "tab" => KeyCode::Tab,
+        "backtab" => KeyCode::BackTab,
         "up" => KeyCode::Up,
         "down" => KeyCode::Down,
         "left" => KeyCode::Left,
