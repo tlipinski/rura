@@ -1,3 +1,4 @@
+use crate::rura::ExecuteType::{Full, UntilCurrent, UntilCurrentPrev};
 use crate::rura::State::{
     Backslash, Comment, Delimiter, DoubleQuoted, DoubleQuotedBackslash, Pipe, SingleQuoted,
     Unquoted, UnquotedBackslash,
@@ -32,35 +33,47 @@ impl Rura {
         })
     }
 
-    pub fn command_full(&self) -> (String, usize) {
-        (self.subcommands.join("|"), self.subcommands.len() - 1)
-    }
-
-    pub fn command_until_current(&self) -> (String, usize) {
-        if !self.subcommands.is_empty() {
-            (
-                self.subcommands[0..self.current + 1].join("|"),
-                self.current,
-            )
-        } else {
-            (String::new(), 0)
-        }
-    }
-
-    pub fn command_until_current_prev(&self) -> Option<(String, usize)> {
-        if !self.subcommands.is_empty() {
-            if self.current == 0 {
-                None
-            } else {
-                Some((
-                    self.subcommands[0..self.current].join("|"),
-                    self.current - 1,
-                ))
+    pub fn command(&self, execute_type: ExecuteType) -> Option<(String, usize)> {
+        match execute_type {
+            Full => {
+                if self.subcommands.is_empty() {
+                    None
+                } else {
+                    Some((self.subcommands.join("|"), self.subcommands.len() - 1))
+                }
             }
-        } else {
-            None
+            UntilCurrent => {
+                if !self.subcommands.is_empty() {
+                    Some((
+                        self.subcommands[0..self.current + 1].join("|"),
+                        self.current,
+                    ))
+                } else {
+                    None
+                }
+            }
+            UntilCurrentPrev => {
+                if !self.subcommands.is_empty() {
+                    if self.current == 0 {
+                        None
+                    } else {
+                        Some((
+                            self.subcommands[0..self.current].join("|"),
+                            self.current - 1,
+                        ))
+                    }
+                } else {
+                    None
+                }
+            }
         }
     }
+}
+
+pub enum ExecuteType {
+    Full,
+    UntilCurrent,
+    UntilCurrentPrev,
 }
 
 // Inspired by https://github.com/tmiasko/shell-words
@@ -183,34 +196,35 @@ impl std::error::Error for ParseError {}
 
 #[cfg(test)]
 mod tests {
+    use crate::rura::ExecuteType::UntilCurrent;
     use crate::rura::Rura;
 
     #[test]
     fn commands() {
         let rura = Rura::new("a|b|c", 0).unwrap();
-        assert_eq!(rura.command_full(), ("a|b|c".into(), 2));
-        assert_eq!(rura.command_until_current(), ("a".into(), 0));
-        assert_eq!(rura.command_until_current_prev(), None);
+        assert_eq!(rura.command(Full), Some(("a|b|c".into(), 2)));
+        assert_eq!(rura.command(UntilCurrent), Some(("a".into(), 0)));
+        assert_eq!(rura.command(UntilCurrentPrev), None);
 
         let rura = Rura::new("a|b|c", 1).unwrap();
-        assert_eq!(rura.command_full(), ("a|b|c".into(), 2));
-        assert_eq!(rura.command_until_current(), ("a".into(), 0));
-        assert_eq!(rura.command_until_current_prev(), None);
+        assert_eq!(rura.command(Full), Some(("a|b|c".into(), 2)));
+        assert_eq!(rura.command(UntilCurrent), Some(("a".into(), 0)));
+        assert_eq!(rura.command(UntilCurrentPrev), None);
 
         let rura = Rura::new("a|b|c", 2).unwrap();
-        assert_eq!(rura.command_full(), ("a|b|c".into(), 2));
-        assert_eq!(rura.command_until_current(), ("a|b".into(), 1));
-        assert_eq!(rura.command_until_current_prev(), Some(("a".into(), 0)));
+        assert_eq!(rura.command(Full), Some(("a|b|c".into(), 2)));
+        assert_eq!(rura.command(UntilCurrent), Some(("a|b".into(), 1)));
+        assert_eq!(rura.command(UntilCurrentPrev), Some(("a".into(), 0)));
 
         let rura = Rura::new("a|b|c", 3).unwrap();
-        assert_eq!(rura.command_full(), ("a|b|c".into(), 2));
-        assert_eq!(rura.command_until_current(), ("a|b".into(), 1));
-        assert_eq!(rura.command_until_current_prev(), Some(("a".into(), 0)));
+        assert_eq!(rura.command(Full), Some(("a|b|c".into(), 2)));
+        assert_eq!(rura.command(UntilCurrent), Some(("a|b".into(), 1)));
+        assert_eq!(rura.command(UntilCurrentPrev), Some(("a".into(), 0)));
 
         let rura = Rura::new("a|b|c", 4).unwrap();
-        assert_eq!(rura.command_full(), ("a|b|c".into(), 2));
-        assert_eq!(rura.command_until_current(), ("a|b|c".into(), 2));
-        assert_eq!(rura.command_until_current_prev(), Some(("a|b".into(), 1)));
+        assert_eq!(rura.command(Full), Some(("a|b|c".into(), 2)));
+        assert_eq!(rura.command(UntilCurrent), Some(("a|b|c".into(), 2)));
+        assert_eq!(rura.command(UntilCurrentPrev), Some(("a|b".into(), 1)));
     }
 
     use super::*;

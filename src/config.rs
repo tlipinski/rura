@@ -15,15 +15,25 @@ pub struct StyleConfig {
 
 impl StyleConfig {
     fn fg(fg: &str) -> Self {
-        StyleConfig { fg: Some(fg.to_string()), ..Default::default() }
+        StyleConfig {
+            fg: Some(fg.to_string()),
+            ..Default::default()
+        }
     }
 
     fn bg(bg: &str) -> Self {
-        StyleConfig { bg: Some(bg.to_string()), ..Default::default() }
+        StyleConfig {
+            bg: Some(bg.to_string()),
+            ..Default::default()
+        }
     }
 
     fn fg_bg(fg: &str, bg: &str) -> Self {
-        StyleConfig { fg: Some(fg.to_string()), bg: Some(bg.to_string()), ..Default::default() }
+        StyleConfig {
+            fg: Some(fg.to_string()),
+            bg: Some(bg.to_string()),
+            ..Default::default()
+        }
     }
 }
 
