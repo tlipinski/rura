@@ -2,7 +2,7 @@ use crate::history::History;
 use crate::rura::{ExecuteType, Rura};
 use crate::theme::Theme;
 use crate::uicmd::{KeyBindings, UiCmd, to_ui_command};
-use crossterm::event::{Event, KeyCode, KeyModifiers};
+use crossterm::event::Event;
 use itertools::Itertools;
 use log::warn;
 use ratatui::buffer::Buffer;
@@ -68,9 +68,12 @@ impl RuraWidget {
                 let mods = key_event.modifiers;
                 let key_bindings = &self.key_bindings;
 
-                match (code, mods) {
-                    (KeyCode::Tab, KeyModifiers::NONE) => {
-                        match Rura::new(
+                match to_ui_command(key_bindings, code, mods) {
+                    None => {
+                        self.command_input.handle_event(event);
+                    }
+                    Some(a) => match a {
+                        UiCmd::SubcommandNext => match Rura::new(
                             self.command_input.value(),
                             self.command_input.visual_cursor(),
                         ) {
@@ -80,10 +83,8 @@ impl RuraWidget {
                                 }
                             }
                             Err(_) => {}
-                        }
-                    }
-                    (KeyCode::BackTab, KeyModifiers::SHIFT) => {
-                        match Rura::new(
+                        },
+                        UiCmd::SubcommandPrev => match Rura::new(
                             self.command_input.value(),
                             self.command_input.visual_cursor(),
                         ) {
@@ -93,16 +94,7 @@ impl RuraWidget {
                                 }
                             }
                             Err(_) => {}
-                        }
-                    }
-                    _ => {}
-                };
-
-                match to_ui_command(key_bindings, code, mods) {
-                    None => {
-                        self.command_input.handle_event(event);
-                    }
-                    Some(a) => match a {
+                        },
                         UiCmd::HistoryPrev => {
                             self.command_input = Input::from(self.history.previous());
                         }
