@@ -73,28 +73,26 @@ impl RuraWidget {
                         self.command_input.handle_event(event);
                     }
                     Some(a) => match a {
-                        UiCmd::SubcommandNext => match Rura::new(
-                            self.command_input.value(),
-                            self.command_input.visual_cursor(),
-                        ) {
-                            Ok(r) => {
+                        UiCmd::SubcommandNext => {
+                            if let Ok(r) = Rura::new(
+                                self.command_input.value(),
+                                self.command_input.visual_cursor(),
+                            ) {
                                 if let Some(cursor) = r.cursor_next() {
                                     self.command_input.handle(InputRequest::SetCursor(cursor));
                                 }
                             }
-                            Err(_) => {}
-                        },
-                        UiCmd::SubcommandPrev => match Rura::new(
-                            self.command_input.value(),
-                            self.command_input.visual_cursor(),
-                        ) {
-                            Ok(r) => {
+                        }
+                        UiCmd::SubcommandPrev => {
+                            if let Ok(r) = Rura::new(
+                                self.command_input.value(),
+                                self.command_input.visual_cursor(),
+                            ) {
                                 if let Some(cursor) = r.cursor_prev() {
                                     self.command_input.handle(InputRequest::SetCursor(cursor));
                                 }
                             }
-                            Err(_) => {}
-                        },
+                        }
                         UiCmd::HistoryPrev => {
                             self.command_input = Input::from(self.history.previous());
                         }
