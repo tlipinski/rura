@@ -15,6 +15,8 @@ use log::{LevelFilter, error, info};
 use props::APP_NAME;
 use std::error::Error;
 use std::fs::OpenOptions;
+use std::process::exit;
+use crate::history::History;
 
 fn main() {
     let file = OpenOptions::new()
@@ -29,6 +31,12 @@ fn main() {
         .init();
 
     let args = Args::parse();
+
+    if args.last {
+        println!("{}", History::load().previous());
+        exit(0)
+    }
+
     let config = load_config();
 
     info!("{args:?}");
@@ -46,7 +54,12 @@ fn main() {
 #[derive(Parser, Debug)]
 #[command(version = crate::props::VERSION, about, long_about = None)]
 struct Args {
+    #[arg(short, long)]
     file: Option<String>,
+    #[arg(short, long)]
+    command: Option<String>,
+    #[arg(short, long)]
+    last: bool
 }
 
 fn run(args: Args, config: config::Config) -> Result<(), Box<dyn Error>> {

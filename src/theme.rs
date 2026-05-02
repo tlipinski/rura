@@ -10,6 +10,8 @@ pub struct Theme {
     pub cmd_highlight_pipe: Style,
     pub cmd_highlight_current: Style,
 
+    pub cmd_quoted: Style,
+
     pub cmd_invalid: Style,
 
     pub line_nums: Style,
@@ -24,6 +26,7 @@ impl Theme {
             cmd_highlight: style_from_config(&config.cmd_highlight),
             cmd_highlight_pipe: style_from_config(&config.cmd_highlight_pipe),
             cmd_highlight_current: style_from_config(&config.cmd_highlight_current),
+            cmd_quoted: style_from_config(&config.cmd_quoted),
             cmd_invalid: style_from_config(&config.cmd_invalid),
             line_nums: style_from_config(&config.line_nums),
         }

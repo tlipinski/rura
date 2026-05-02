@@ -46,6 +46,7 @@ pub struct ThemeConfig {
     pub cmd_highlight: StyleConfig,
     pub cmd_highlight_pipe: StyleConfig,
     pub cmd_highlight_current: StyleConfig,
+    pub cmd_quoted: StyleConfig,
     pub cmd_invalid: StyleConfig,
     pub line_nums: StyleConfig,
 }
@@ -59,6 +60,7 @@ impl Default for ThemeConfig {
             cmd_highlight: StyleConfig::fg_bg("black", "yellow"),
             cmd_highlight_pipe: StyleConfig::bg("yellow"),
             cmd_highlight_current: StyleConfig::fg_bg("black", "yellow"),
+            cmd_quoted: StyleConfig::fg("yellow"),
             cmd_invalid: StyleConfig::default(),
             line_nums: StyleConfig::fg("magenta"),
         }

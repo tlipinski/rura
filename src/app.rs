@@ -70,7 +70,7 @@ impl App {
 
         Self {
             rura_widget: RuraWidget {
-                command_input: Input::from(""),
+                command_input: Input::from(args.command.unwrap_or_default()),
                 highlight_until: None,
                 theme: Theme::from_config(theme_config),
                 history: History::load(),
@@ -381,7 +381,7 @@ fn read_stdin_task(file_opt: Option<String>, tx: Sender<Action>) -> Result<(), B
 fn reset_highlight_task(rx: Receiver<()>, tx: Sender<Action>) -> Result<(), Box<dyn Error>> {
     loop {
         if let Ok(_) = rx.recv() {
-            thread::sleep(Duration::from_millis(150));
+            thread::sleep(Duration::from_millis(250));
             tx.send(ResetHighlight)?
         }
     }

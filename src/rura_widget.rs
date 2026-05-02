@@ -1,5 +1,5 @@
 use crate::history::History;
-use crate::rura::{ExecuteType, Rura};
+use crate::rura::{ExecuteType, Part, Rura};
 use crate::theme::Theme;
 use crate::uicmd::{KeyBindings, UiCmd, to_ui_command};
 use crossterm::event::Event;
@@ -150,42 +150,37 @@ fn render_line(line: Vec<StyledGrapheme>, area: Rect, buf: &mut Buffer, y: u16) 
 fn to_line<'a>(r: Rura, highlight_until: Option<usize>, theme: &Theme) -> Line<'a> {
     let mut spans = vec![];
 
-    for (index, part) in r.subcommands.iter().enumerate() {
-        match highlight_until {
-            None => {
-                if index > 0 {
-                    spans.push("|".set_style(theme.cmd_regular_pipe));
-                }
+    for (index, parts) in r.subcommands.iter().enumerate() {
+        let is_current = index == r.current;
+        let is_highlighted = highlight_until.map_or(false, |until| index <= until);
 
-                if index == r.current {
-                    spans.push(part.clone().set_style(theme.cmd_regular_current));
-                } else {
-                    spans.push(part.clone().set_style(theme.cmd_regular));
-                }
+        if index > 0 {
+            let pipe_style = if is_highlighted {
+                theme.cmd_highlight_pipe
+            } else {
+                theme.cmd_regular_pipe
+            };
+            spans.push("|".set_style(pipe_style));
+        }
+
+        let base_style = if is_highlighted {
+            if is_current {
+                theme.cmd_highlight_current
+            } else {
+                theme.cmd_highlight
             }
-            Some(until) => {
-                if index <= until {
-                    if index > 0 {
-                        spans.push("|".set_style(theme.cmd_highlight_pipe));
-                    }
+        } else if is_current {
+            theme.cmd_regular_current
+        } else {
+            theme.cmd_regular
+        };
 
-                    if index == r.current {
-                        spans.push(part.clone().set_style(theme.cmd_highlight_current));
-                    } else {
-                        spans.push(part.clone().set_style(theme.cmd_highlight));
-                    }
-                } else {
-                    if index > 0 {
-                        spans.push("|".set_style(theme.cmd_regular_pipe));
-                    }
-
-                    if index == r.current {
-                        spans.push(part.clone().set_style(theme.cmd_regular_current));
-                    } else {
-                        spans.push(part.clone().set_style(theme.cmd_regular));
-                    }
-                }
-            }
+        for part in parts {
+            let style = match part {
+                Part::Unquoted(_) => base_style,
+                Part::Quoted(_) => theme.cmd_quoted.patch(base_style),
+            };
+            spans.push(part.content().to_string().set_style(style));
         }
     }
 
