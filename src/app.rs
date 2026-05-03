@@ -192,7 +192,14 @@ impl App {
                             self.confirming_live = None;
                             self.input_mode = confirming_live;
                         }
-                        _ => {}
+                        _ => {
+                            match to_ui_command(key_bindings, code, mods) {
+                                Some(UiCmd::Quit) => {
+                                    self.exit = true;
+                                }
+                                _ => {}
+                            }
+                        }
                     }
                     return
                 }
@@ -563,13 +570,15 @@ impl App {
         if self.confirming_live.is_some() {
             let body = Text::from(vec![
                 Line::from("").centered(),
-                Line::from("   Confirm entering LIVE mode.   ").centered(),
+                Line::from("   Warning: This might be dangerous!   ").centered().bold(),
+                Line::from("").centered(),
+                Line::from("   Commands will be executed automatically as you type.   ").centered(),
                 Line::from("").centered(),
                 Line::from("[Y]es / [N]o").centered(),
                 Line::from("").centered(),
             ]);
             let popup = Popup::new(body)
-                .title(" LIVE mode ")
+                .title(" Confirm entering LIVE mode ")
                 .style(Style::new().white().on_yellow());
             frame.render_widget(popup, frame.area());
         }
