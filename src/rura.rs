@@ -1,8 +1,9 @@
-use crate::rura::ExecuteType::{Full, UntilCurrent, UntilCurrentPrev};
+use crate::rura::ExecuteType::{Full, FullLive, UntilCurrent, UntilCurrentLive, UntilCurrentPrev};
 use crate::rura::State::{
     Backslash, Comment, Delimiter, DoubleQuoted, DoubleQuotedBackslash, Pipe, SingleQuoted,
     Unquoted, UnquotedBackslash,
 };
+use itertools::Itertools;
 use std::{fmt, mem};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -51,7 +52,7 @@ impl Rura {
         })
     }
 
-    pub fn command(&self, execute_type: ExecuteType) -> Option<(String, usize)> {
+    pub fn command(&self, execute_type: &ExecuteType) -> Option<(String, usize)> {
         let join_parts = |parts: &[Vec<Part>]| -> String {
             parts
                 .iter()
@@ -61,14 +62,14 @@ impl Rura {
         };
 
         match execute_type {
-            Full => {
+            Full | FullLive => {
                 if self.subcommands.is_empty() {
                     None
                 } else {
                     Some((join_parts(&self.subcommands), self.subcommands.len() - 1))
                 }
             }
-            UntilCurrent => {
+            UntilCurrent | UntilCurrentLive => {
                 if !self.subcommands.is_empty() {
                     Some((
                         join_parts(&self.subcommands[0..self.current + 1]),
@@ -83,7 +84,10 @@ impl Rura {
                     if self.current == 0 {
                         None
                     } else {
-                        Some((join_parts(&self.subcommands[0..self.current]), self.current - 1))
+                        Some((
+                            join_parts(&self.subcommands[0..self.current]),
+                            self.current - 1,
+                        ))
                     }
                 } else {
                     None
@@ -175,12 +179,13 @@ impl Rura {
         }
         None
     }
-
 }
 
 pub enum ExecuteType {
     Full,
+    FullLive,
     UntilCurrent,
+    UntilCurrentLive,
     UntilCurrentPrev,
 }
 
@@ -372,7 +377,19 @@ fn split_command(s: &str) -> Result<Vec<Vec<Part>>, ParseError> {
         }
     }
 
-    Ok(commands)
+    if commands.iter().any(|parts| {
+        // fail if empty subcommands exist
+        parts
+            .iter()
+            .map(|part| part.content())
+            .join("")
+            .trim()
+            .is_empty()
+    }) {
+        Err(ParseError)
+    } else {
+        Ok(commands)
+    }
 }
 
 enum State {
@@ -415,29 +432,29 @@ mod tests {
     #[test]
     fn commands() {
         let rura = Rura::new("a|b|c", 0).unwrap();
-        assert_eq!(rura.command(Full), Some(("a|b|c".into(), 2)));
-        assert_eq!(rura.command(UntilCurrent), Some(("a".into(), 0)));
-        assert_eq!(rura.command(UntilCurrentPrev), None);
+        assert_eq!(rura.command(&Full), Some(("a|b|c".into(), 2)));
+        assert_eq!(rura.command(&UntilCurrent), Some(("a".into(), 0)));
+        assert_eq!(rura.command(&UntilCurrentPrev), None);
 
         let rura = Rura::new("a|b|c", 1).unwrap();
-        assert_eq!(rura.command(Full), Some(("a|b|c".into(), 2)));
-        assert_eq!(rura.command(UntilCurrent), Some(("a".into(), 0)));
-        assert_eq!(rura.command(UntilCurrentPrev), None);
+        assert_eq!(rura.command(&Full), Some(("a|b|c".into(), 2)));
+        assert_eq!(rura.command(&UntilCurrent), Some(("a".into(), 0)));
+        assert_eq!(rura.command(&UntilCurrentPrev), None);
 
         let rura = Rura::new("a|b|c", 2).unwrap();
-        assert_eq!(rura.command(Full), Some(("a|b|c".into(), 2)));
-        assert_eq!(rura.command(UntilCurrent), Some(("a|b".into(), 1)));
-        assert_eq!(rura.command(UntilCurrentPrev), Some(("a".into(), 0)));
+        assert_eq!(rura.command(&Full), Some(("a|b|c".into(), 2)));
+        assert_eq!(rura.command(&UntilCurrent), Some(("a|b".into(), 1)));
+        assert_eq!(rura.command(&UntilCurrentPrev), Some(("a".into(), 0)));
 
         let rura = Rura::new("a|b|c", 3).unwrap();
-        assert_eq!(rura.command(Full), Some(("a|b|c".into(), 2)));
-        assert_eq!(rura.command(UntilCurrent), Some(("a|b".into(), 1)));
-        assert_eq!(rura.command(UntilCurrentPrev), Some(("a".into(), 0)));
+        assert_eq!(rura.command(&Full), Some(("a|b|c".into(), 2)));
+        assert_eq!(rura.command(&UntilCurrent), Some(("a|b".into(), 1)));
+        assert_eq!(rura.command(&UntilCurrentPrev), Some(("a".into(), 0)));
 
         let rura = Rura::new("a|b|c", 4).unwrap();
-        assert_eq!(rura.command(Full), Some(("a|b|c".into(), 2)));
-        assert_eq!(rura.command(UntilCurrent), Some(("a|b|c".into(), 2)));
-        assert_eq!(rura.command(UntilCurrentPrev), Some(("a|b".into(), 1)));
+        assert_eq!(rura.command(&Full), Some(("a|b|c".into(), 2)));
+        assert_eq!(rura.command(&UntilCurrent), Some(("a|b|c".into(), 2)));
+        assert_eq!(rura.command(&UntilCurrentPrev), Some(("a|b".into(), 1)));
     }
 
     #[test]
@@ -526,8 +543,16 @@ mod tests {
     }
 
     #[test]
-    fn test_split_pipe_in_wrong_place() {
-        let cmd = " | some_cmd \n| ls ";
+    fn test_empty_subcommands() {
+        let cmd = " | cmd";
+        let split = split_command(cmd);
+        assert_eq!(split, Err(ParseError));
+
+        let cmd = "cmd | | a";
+        let split = split_command(cmd);
+        assert_eq!(split, Err(ParseError));
+
+        let cmd = "cmd | ";
         let split = split_command(cmd);
         assert_eq!(split, Err(ParseError));
     }

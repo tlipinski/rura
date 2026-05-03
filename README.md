@@ -9,10 +9,10 @@ your logic.
 ## Features
 
 - **Partial Pipeline Execution**: Execute only up to the current subcommand to debug complex pipes.
-- **Syntax Highlighting**: Visual feedback for subcommand boundaries and pipes.
+- **Live Execution Modes**: Real-time feedback as you type, with optional "Live Until Cursor" or "Live Full" modes.
+- **Syntax Highlighting**: Visual feedback for subcommand boundaries, quotes, and pipes.
 - **Persistent History**: Quickly access and reuse previous commands.
-- **Customizable**: Fully configurable key bindings and themes via TOML.
-- **Terminal Integration**: Prints the last executed command on exit for immediate use in your shell.
+- **Customizable**: Fully configurable key bindings, themes, and UI placement via TOML.
 
 ## Installation
 
@@ -42,6 +42,7 @@ rura --last
 
 - `-f, --file <FILE>`: Path to the input file.
 - `-c, --command <COMMAND>`: Initial command to populate the input field.
+- `-C, --config <FILE>`: Path to a custom TOML configuration file.
 - `-l, --last`: Print the last command from history and exit.
 - `-V, --version`: Print version information.
 
@@ -61,6 +62,12 @@ rura --last
 - **Ctrl + u / Ctrl + d**: Scroll up or down quickly.
 - **Alt + Home / Alt + End**: Scroll to the beginning or end of the line (horizontal).
 - **Alt + w**: Toggle line wrapping.
+- **F2**: Toggle error display mode (Inline vs Pane).
+
+### Live Execution Modes
+
+- **F11**: Toggle "Live Until Cursor" mode. Executes the pipeline up to the cursor as you type.
+- **F12**: Toggle "Live Full" mode. Executes the entire pipeline as you type.
 
 ### Command Input & Subcommands
 
@@ -71,6 +78,7 @@ rura --last
 
 ### General
 
+- **F1**: Toggle help screen.
 - **Ctrl + c**: Exit Rura. The last executed command is printed to your terminal.
 
 ## Configuration
@@ -78,6 +86,11 @@ rura --last
 Rura can be configured via a TOML file located at:
 - **Linux**: `~/.config/rura/config.toml`
 - **macOS**: `~/Library/Application Support/rura/config.toml`
+
+### General Options
+
+- `command_line_placement`: Set to `"top"` or `"bottom"` (default) to change where the input field is rendered.
+- `highlight_duration_ms`: Duration in milliseconds for the temporary highlighting when executing commands (default: `250`).
 
 ### Customizing Key Bindings
 
@@ -92,7 +105,18 @@ subcommand_next = ["tab", "alt+right"]
 
 ### Customizing Theme
 
-Colors and styles can be adjusted in the `[theme]` section. Supported colors include `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `gray`, `black`, `white`, and hex codes.
+Colors and styles can be adjusted in the `[theme]` section. Supported colors include `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `gray`, `black`, `white`, and hex codes (e.g., `"#ffffff"`).
+
+Available theme keys:
+- `cmd_regular`: Default subcommand style.
+- `cmd_regular_pipe`: Style for the pipe character in regular mode.
+- `cmd_regular_current`: Background style for the currently selected subcommand.
+- `cmd_highlight`: Style for the subcommand being executed.
+- `cmd_highlight_pipe`: Style for the pipe character during execution.
+- `cmd_highlight_current`: Style for the current subcommand during execution.
+- `cmd_quoted`: Style for quoted strings.
+- `cmd_invalid`: Style for invalid subcommands (if parsing fails).
+- `line_nums`: Style for line numbers in the output.
 
 ```toml
 [theme.cmd_highlight]
@@ -103,7 +127,3 @@ bold = true
 [theme.line_nums]
 fg = "magenta"
 ```
-
-## License
-
-MIT

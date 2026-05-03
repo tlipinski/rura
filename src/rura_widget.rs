@@ -61,7 +61,7 @@ impl RuraWidget {
         (cursor % width, cursor / width)
     }
 
-    pub fn handle_event(&mut self, event: &Event) {
+    pub fn handle_event(&mut self, event: &Event) -> bool {
         match event {
             Event::Key(key_event) => {
                 let code = key_event.code;
@@ -69,9 +69,11 @@ impl RuraWidget {
                 let key_bindings = &self.key_bindings;
 
                 match to_ui_command(key_bindings, code, mods) {
-                    None => {
-                        self.command_input.handle_event(event);
-                    }
+                    None => self
+                        .command_input
+                        .handle_event(event)
+                        .map(|change| change.value)
+                        .unwrap_or(false),
                     Some(a) => match a {
                         UiCmd::SubcommandNext => {
                             if let Ok(r) = Rura::new(
@@ -82,6 +84,7 @@ impl RuraWidget {
                                     self.command_input.handle(InputRequest::SetCursor(cursor));
                                 }
                             }
+                            false
                         }
                         UiCmd::SubcommandPrev => {
                             if let Ok(r) = Rura::new(
@@ -92,22 +95,29 @@ impl RuraWidget {
                                     self.command_input.handle(InputRequest::SetCursor(cursor));
                                 }
                             }
+                            false
                         }
                         UiCmd::HistoryPrev => {
-                            self.command_input = Input::from(self.history.previous(self.command_input.value()));
+                            self.command_input =
+                                Input::from(self.history.previous(self.command_input.value()));
+
+                            false
                         }
                         UiCmd::HistoryNext => {
-                            self.command_input = Input::from(self.history.next(self.command_input.value()));
+                            self.command_input =
+                                Input::from(self.history.next(self.command_input.value()));
+
+                            false
                         }
-                        _ => {}
+                        _ => false,
                     },
                 }
             }
-            _ => {}
+            _ => false,
         }
     }
 
-    pub fn command(&mut self, execute_type: ExecuteType) -> Option<String> {
+    pub fn execute(&mut self, execute_type: ExecuteType) -> Option<String> {
         if self.command_input.value().is_empty() {
             return Some(String::new()); // todo replace with enum?
         }
@@ -115,12 +125,17 @@ impl RuraWidget {
             self.command_input.value(),
             self.command_input.visual_cursor(),
         ) {
-            Ok(r) => match r.command(execute_type) {
+            Ok(r) => match r.command(&execute_type) {
                 None => Some(String::new()),
                 Some((cmd, cmd_index)) => {
-                    self.highlight_until = Some(cmd_index);
-                    self.highlight_reset_tx.send(()).unwrap();
-                    self.history.push(self.command_input.value());
+                    if !matches!(
+                        execute_type,
+                        ExecuteType::FullLive | ExecuteType::UntilCurrentLive
+                    ) {
+                        self.highlight_until = Some(cmd_index);
+                        self.highlight_reset_tx.send(()).unwrap();
+                        self.history.push(self.command_input.value());
+                    }
                     Some(cmd)
                 }
             },

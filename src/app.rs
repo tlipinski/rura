@@ -1,22 +1,27 @@
 use crate::Args;
 use crate::app::Action::{CommandCompleted, ResetHighlight, StdinRead, UserInput};
 use crate::config::{KeyBindingsConfig, ThemeConfig, history_path};
+use crate::debouncer::debouncer_task;
 use crate::history::History;
 use crate::rura::ExecuteType;
 use crate::rura_widget::RuraWidget;
 use crate::theme::Theme;
 use crate::uicmd::{KeyBindings, UiCmd, to_ui_command};
+use Action::Debounced;
+use crossterm::event::KeyCode::Char;
 use crossterm::event::{KeyCode, KeyModifiers};
 use crossterm::tty::IsTty;
 use log::debug;
 use ratatui::crossterm::event;
 use ratatui::crossterm::event::Event;
 use ratatui::layout::{Constraint, Direction, Layout, Margin, Rect};
-use ratatui::prelude::Position;
+use ratatui::prelude::Color::Red;
 use ratatui::prelude::Stylize;
+use ratatui::prelude::{Position, Span};
+use ratatui::style::Color::Yellow;
 use ratatui::style::Style;
 use ratatui::text::{Line, Text};
-use ratatui::widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation};
+use ratatui::widgets::{Block, BorderType, Paragraph, Scrollbar, ScrollbarOrientation};
 use ratatui::widgets::{ScrollbarState, Wrap};
 use ratatui::{DefaultTerminal, Frame};
 use serde::{Deserialize, Serialize};
@@ -35,6 +40,7 @@ pub struct App {
     rura_widget: RuraWidget,
     stdin: String,
     output: Output,
+    error_output_opt: Option<Output>,
     offset: Position,
     wrap: bool,
     exit: bool,
@@ -45,6 +51,10 @@ pub struct App {
     command_line_placement: CommandLinePlacement,
     kb_config: KeyBindingsConfig,
     help: bool,
+    input_mode: InputMode,
+    debouncer_tx: Sender<()>,
+    error_display_mode: ErrorDisplayMode,
+    confirming_live: Option<InputMode>,
 }
 
 impl App {
@@ -53,10 +63,12 @@ impl App {
         theme_config: &ThemeConfig,
         kb_config: KeyBindingsConfig,
         command_line_placement: CommandLinePlacement,
+        highlight_duration_ms: u64,
     ) -> Self {
         let (action_tx, action_rx) = std::sync::mpsc::channel::<Action>();
         let (command_tx, command_rx) = std::sync::mpsc::channel::<(String, String)>();
         let (highlight_reset_tx, highlight_reset_rx) = std::sync::mpsc::channel::<()>();
+        let (debouncer_tx, debouncer_rx) = std::sync::mpsc::channel::<()>();
 
         let s1 = action_tx.clone();
         thread::spawn(move || handle_input_task(s1).unwrap());
@@ -68,7 +80,18 @@ impl App {
         thread::spawn(move || read_stdin_task(args.file, s3).unwrap());
 
         let s4 = action_tx.clone();
-        thread::spawn(move || reset_highlight_task(highlight_reset_rx, s4).unwrap());
+        thread::spawn(move || {
+            reset_highlight_task(highlight_reset_rx, s4, highlight_duration_ms).unwrap()
+        });
+
+        thread::spawn(move || {
+            debouncer_task(debouncer_rx, Duration::from_millis(500), move || {
+                action_tx
+                    .send(Debounced)
+                    .expect("Sending to channel failed");
+            })
+            .unwrap()
+        });
 
         let mut history = VecDeque::new();
         if let Some(path) = history_path() {
@@ -93,15 +116,20 @@ impl App {
             stdin: "".to_string(),
             offset: Position::default(),
             output: Output::ok(""),
+            error_output_opt: None,
             action_rx,
             command_tx,
+            debouncer_tx,
             wrap: false,
             exit: false,
             theme: Theme::from_config(theme_config),
             key_bindings: KeyBindings::from_config(&kb_config),
-            command_line_placement: command_line_placement,
-            kb_config: kb_config,
+            command_line_placement,
+            kb_config,
             help: false,
+            input_mode: InputMode::Normal,
+            error_display_mode: ErrorDisplayMode::Pane,
+            confirming_live: None,
         }
     }
 
@@ -125,6 +153,18 @@ impl App {
                 self.stdin = stdin;
                 self.output = Output::ok(&self.stdin);
             }
+            Debounced => {
+                match self.input_mode {
+                    InputMode::Normal => {
+                        // Should not happen in normal mode
+                        // Probably user turned off live before debouncer responded
+                    }
+                    InputMode::LiveFull => self.handle_execute(ExecuteType::FullLive),
+                    InputMode::LiveUntilCursor => {
+                        self.handle_execute(ExecuteType::UntilCurrentLive)
+                    }
+                }
+            }
         }
     }
 
@@ -133,7 +173,12 @@ impl App {
             self.offset.y = 0;
         }
 
-        self.output = output;
+        if output.ok {
+            self.output = output;
+            self.error_output_opt = None;
+        } else {
+            self.error_output_opt = Some(output);
+        }
     }
 
     pub fn handle_event(&mut self, event: &Event) {
@@ -143,6 +188,25 @@ impl App {
                 let mods = key_event.modifiers;
                 let key_bindings = &self.key_bindings;
 
+                if let Some(confirming_live) = self.confirming_live.clone() {
+                    match (code, mods) {
+                        (KeyCode::Esc | Char('n'), KeyModifiers::NONE) => {
+                            self.confirming_live = None
+                        }
+                        (Char('y'), KeyModifiers::NONE) => {
+                            self.confirming_live = None;
+                            self.input_mode = confirming_live;
+                        }
+                        _ => match to_ui_command(key_bindings, code, mods) {
+                            Some(UiCmd::Quit) => {
+                                self.exit = true;
+                            }
+                            _ => {}
+                        },
+                    }
+                    return;
+                }
+
                 match (code, mods) {
                     (KeyCode::Esc, KeyModifiers::NONE) => {
                         self.help = false;
@@ -150,57 +214,117 @@ impl App {
                     (KeyCode::F(1), KeyModifiers::NONE) => {
                         self.help = !self.help;
                     }
-                    _ => {}
-                }
-
-                match to_ui_command(key_bindings, code, mods) {
-                    None => {
-                        self.rura_widget.handle_event(event);
-                    }
-                    Some(a) => match a {
-                        UiCmd::Quit => {
-                            self.exit = true;
+                    (KeyCode::F(2), KeyModifiers::NONE) => match self.error_display_mode {
+                        ErrorDisplayMode::Inline => {
+                            self.error_display_mode = ErrorDisplayMode::Pane
                         }
-                        UiCmd::ExecuteFull => {
-                            self.handle_execute(ExecuteType::Full);
+                        ErrorDisplayMode::Pane => {
+                            self.error_display_mode = ErrorDisplayMode::Inline
                         }
-                        UiCmd::ExecuteUntilCurrent => {
-                            self.handle_execute(ExecuteType::UntilCurrent)
+                    },
+                    (KeyCode::F(11), KeyModifiers::NONE) => match self.input_mode {
+                        InputMode::Normal => {
+                            // self.input_mode = InputMode::LiveUntilCursor;
+                            self.confirming_live = Some(InputMode::LiveUntilCursor);
                         }
-                        UiCmd::ExecuteUntilPrev => {
-                            self.handle_execute(ExecuteType::UntilCurrentPrev)
+                        InputMode::LiveFull => {
+                            self.input_mode = InputMode::LiveUntilCursor;
                         }
-                        UiCmd::ResetInput => {
-                            let new_output = Output::ok(&self.stdin);
-                            if self.output.len() != new_output.len() {
-                                self.offset.y = 0;
+                        InputMode::LiveUntilCursor => {
+                            self.input_mode = InputMode::Normal;
+                        }
+                    },
+                    (KeyCode::F(12), KeyModifiers::NONE) => match self.input_mode {
+                        InputMode::Normal => {
+                            // self.input_mode = InputMode::LiveFull;
+                            self.confirming_live = Some(InputMode::LiveFull);
+                        }
+                        InputMode::LiveFull => {
+                            self.input_mode = InputMode::Normal;
+                        }
+                        InputMode::LiveUntilCursor => {
+                            self.input_mode = InputMode::LiveFull;
+                        }
+                    },
+                    (Char(_) | KeyCode::Backspace, KeyModifiers::NONE) => {
+                        if self.rura_widget.handle_event(event) {
+                            match self.input_mode {
+                                InputMode::Normal => {}
+                                InputMode::LiveFull | InputMode::LiveUntilCursor => {
+                                    self.debouncer_tx.send(()).unwrap();
+                                }
                             }
-                            self.output = new_output;
                         }
-                        UiCmd::ScrollDown => {
-                            self.offset.y = self.offset.y.saturating_add(1);
+                    }
+                    _ => match to_ui_command(key_bindings, code, mods) {
+                        None => {
+                            if self.rura_widget.handle_event(event) {
+                                match self.input_mode {
+                                    InputMode::Normal => {}
+                                    InputMode::LiveFull | InputMode::LiveUntilCursor => {
+                                        self.debouncer_tx.send(()).unwrap();
+                                    }
+                                }
+                            }
                         }
-                        UiCmd::ScrollDownPage => {
-                            self.offset.y = self.offset.y.saturating_add(10);
-                        }
-                        UiCmd::ScrollUp => {
-                            self.offset.y = self.offset.y.saturating_sub(1);
-                        }
-                        UiCmd::ScrollUpPage => {
-                            self.offset.y = self.offset.y.saturating_sub(10);
-                        }
-                        UiCmd::ScrollLeft => {
-                            self.offset.x = self.offset.x.saturating_sub(1);
-                        }
-                        UiCmd::ScrollRight => {
-                            self.offset.x = self.offset.x.saturating_add(1);
-                        }
-                        UiCmd::ToggleWrap => {
-                            self.wrap = !self.wrap;
-                        }
-                        _ => {
-                            self.rura_widget.handle_event(event);
-                        }
+                        Some(a) => match a {
+                            UiCmd::Quit => {
+                                self.exit = true;
+                            }
+                            UiCmd::ExecuteFull => {
+                                self.handle_execute(ExecuteType::Full);
+                            }
+                            UiCmd::ExecuteUntilCurrent => {
+                                self.handle_execute(ExecuteType::UntilCurrent)
+                            }
+                            UiCmd::ExecuteUntilPrev => {
+                                self.handle_execute(ExecuteType::UntilCurrentPrev)
+                            }
+                            UiCmd::ResetInput => {
+                                let new_output = Output::ok(&self.stdin);
+                                if self.output.len() != new_output.len() {
+                                    self.offset.y = 0;
+                                }
+                                self.output = new_output;
+                                self.error_output_opt = None
+                            }
+                            UiCmd::ScrollDown => {
+                                self.offset.y = self.offset.y.saturating_add(1);
+                            }
+                            UiCmd::ScrollDownPage => {
+                                self.offset.y = self.offset.y.saturating_add(10);
+                            }
+                            UiCmd::ScrollUp => {
+                                self.offset.y = self.offset.y.saturating_sub(1);
+                            }
+                            UiCmd::ScrollUpPage => {
+                                self.offset.y = self.offset.y.saturating_sub(10);
+                            }
+                            UiCmd::ScrollLeft => {
+                                self.offset.x = self.offset.x.saturating_sub(1);
+                            }
+                            UiCmd::ScrollRight => {
+                                self.offset.x = self.offset.x.saturating_add(1);
+                            }
+                            UiCmd::ToggleWrap => {
+                                self.wrap = !self.wrap;
+                            }
+                            UiCmd::HistoryNext => {
+                                // disable history for live mode
+                                if matches!(self.input_mode, InputMode::Normal) {
+                                    self.rura_widget.handle_event(event);
+                                }
+                            }
+                            UiCmd::HistoryPrev => {
+                                // disable history for live mode
+                                if matches!(self.input_mode, InputMode::Normal) {
+                                    self.rura_widget.handle_event(event);
+                                }
+                            }
+                            UiCmd::SubcommandNext | UiCmd::SubcommandPrev => {
+                                self.rura_widget.handle_event(event);
+                            }
+                        },
                     },
                 }
             }
@@ -209,8 +333,8 @@ impl App {
     }
 
     fn handle_execute(&mut self, kind: ExecuteType) {
-        match self.rura_widget.command(kind) {
-            Some(c) if c.is_empty() => {
+        match self.rura_widget.execute(kind) {
+            Some(command) if command.is_empty() => {
                 self.output = Output::ok(&self.stdin);
             }
             Some(c) => self.command_tx.send((c, self.stdin.clone())).unwrap(),
@@ -225,32 +349,44 @@ impl App {
 
         let inner_area = area.inner(margin);
 
-        let (command_input_area, output_area, status_area) = match self.command_line_placement {
-            CommandLinePlacement::Top => {
-                let layout = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints(vec![
-                        Constraint::Length(self.rura_widget.height(inner_area.width) + 2),
-                        Constraint::Fill(1),
-                        Constraint::Length(1),
-                    ])
-                    .split(area);
-
-                (layout[0], layout[1], layout[2])
-            }
-            CommandLinePlacement::Bottom => {
-                let layout = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints(vec![
-                        Constraint::Fill(1),
-                        Constraint::Length(self.rura_widget.height(inner_area.width) + 2),
-                        Constraint::Length(1),
-                    ])
-                    .split(area);
-
-                (layout[1], layout[0], layout[2])
-            }
+        let error_output_lines = match self.error_display_mode {
+            ErrorDisplayMode::Inline => 0,
+            ErrorDisplayMode::Pane => self
+                .error_output_opt
+                .as_ref()
+                .map(|e| e.lines.len() + 2)
+                .unwrap_or(0),
         };
+
+        let (command_input_area, output_area, errors_area, status_area) =
+            match self.command_line_placement {
+                CommandLinePlacement::Top => {
+                    let layout = Layout::default()
+                        .direction(Direction::Vertical)
+                        .constraints(vec![
+                            Constraint::Length(self.rura_widget.height(inner_area.width) + 2),
+                            Constraint::Length(error_output_lines.min(10) as u16),
+                            Constraint::Fill(1),
+                            Constraint::Length(1),
+                        ])
+                        .split(area);
+
+                    (layout[0], layout[2], layout[1], layout[3])
+                }
+                CommandLinePlacement::Bottom => {
+                    let layout = Layout::default()
+                        .direction(Direction::Vertical)
+                        .constraints(vec![
+                            Constraint::Fill(1),
+                            Constraint::Length(error_output_lines.min(10) as u16),
+                            Constraint::Length(self.rura_widget.height(inner_area.width) + 2),
+                            Constraint::Length(1),
+                        ])
+                        .split(area);
+
+                    (layout[2], layout[0], layout[1], layout[3])
+                }
+            };
 
         let line_nums_width = self.output.len().to_string().len();
         let [line_nums_area, output_content_area, vscroll_area] = Layout::default()
@@ -262,7 +398,13 @@ impl App {
             ])
             .areas(output_area);
 
-        let command_input_block = Block::bordered();
+        let command_input_block = if matches!(self.input_mode, InputMode::Normal) {
+            Block::bordered()
+        } else {
+            Block::bordered()
+                .border_style(Style::default().fg(Yellow))
+                .border_type(BorderType::Thick)
+        };
 
         let inner_rect = command_input_area.inner(margin);
 
@@ -272,13 +414,31 @@ impl App {
         let (x, y) = self.rura_widget.cursor(inner_rect.width);
         frame.set_cursor_position((command_input_area.x + 1 + x, command_input_area.y + 1 + y));
 
-        let height = output_content_area.height.min(self.output.len() as u16);
+        if matches!(self.error_display_mode, ErrorDisplayMode::Pane) {
+            if let Some(err_output) = &self.error_output_opt {
+                let block = Block::bordered()
+                    .title(format!(" Error: {} ", err_output.status_code.unwrap_or(0)))
+                    .border_style(Style::default().fg(Red));
+                let mut output_par = Paragraph::new(err_output.lines.join("\n"))
+                    .scroll((0, self.offset.x))
+                    .block(block);
 
-        let range: Range<usize> = if height >= self.output.len() as u16 {
-            0..self.output.len()
+                if self.wrap {
+                    output_par = output_par.wrap(Wrap::default())
+                };
+                frame.render_widget(output_par, errors_area);
+            }
+        }
+
+        let output = self.main_output();
+
+        let height = output_content_area.height.min(output.len() as u16);
+
+        let range: Range<usize> = if height >= output.len() as u16 {
+            0..output.len()
         } else {
-            let from = (self.offset.y as usize).min(self.output.len());
-            let to = (self.offset.y as usize + height as usize).min(self.output.len());
+            let from = (self.offset.y as usize).min(output.len());
+            let to = (self.offset.y as usize + height as usize).min(output.len());
             from..to
         };
 
@@ -289,12 +449,13 @@ impl App {
             .map(|i| format!("{: >pad$}", i + 1, pad = line_nums_width))
             .collect::<Vec<String>>();
         let lines_par = Paragraph::new(line_nums.join("\n")).style(theme.line_nums);
-        if self.output.ok {
+        if output.ok {
             frame.render_widget(lines_par, line_nums_area);
         }
 
-        let mut output_par =
-            Paragraph::new(self.output.lines[range].join("\n")).scroll((0, self.offset.x));
+        let mut output_par = Paragraph::new(output.lines[range].join("\n"))
+            .scroll((0, self.offset.x))
+            .block(Block::default());
 
         if self.wrap {
             output_par = output_par.wrap(Wrap::default())
@@ -306,44 +467,73 @@ impl App {
         state = state.position(self.offset.y.into());
         frame.render_stateful_widget(scroll_bar, vscroll_area, &mut state);
 
-        let status_text = if self.output.ok {
-            " OK ".white().on_green()
-        } else {
-            match self.output.status_code {
-                None => {
-                    " ERR ".white().on_red()
-                }
-                Some(code) => {
-                    format!(" ERR({code}) ").white().on_red()
+        let status_text = match self.error_display_mode {
+            ErrorDisplayMode::Inline => {
+                if self.main_output().ok {
+                    " OK ".white().on_green()
+                } else {
+                    match self.main_output().status_code {
+                        None => " ERR ".white().on_red(),
+                        Some(code) => format!(" ERR({code}) ").white().on_red(),
+                    }
                 }
             }
+            ErrorDisplayMode::Pane => Span::from(""),
         };
 
-        let [hints_area, exit_code_area, lines_area] = Layout::default()
+        let [_, exit_code_area, hints_area, lines_area, _] = Layout::default()
             .direction(Direction::Horizontal)
             .constraints(vec![
-                Constraint::Fill(1),
+                Constraint::Length(1),
                 Constraint::Length(status_text.width() as u16 + 1),
+                Constraint::Fill(1),
                 Constraint::Length(self.output.len().to_string().len() as u16 + 3),
+                Constraint::Length(1),
             ])
             .areas(status_area);
 
-        let hints = " F1 Help | ^C Quit | Enter Run";
-        frame.render_widget(hints.dim(), hints_area);
+        frame.render_widget(self.hints_widget(), hints_area);
 
-        frame.render_widget(status_text, exit_code_area);
+        match self.error_display_mode {
+            ErrorDisplayMode::Pane => (),
+            ErrorDisplayMode::Inline => frame.render_widget(status_text, exit_code_area),
+        }
 
         frame.render_widget(
-            format!("L:{} ", self.output.len())
+            format!("L:{}", self.output.len())
                 .bold()
                 .into_right_aligned_line(),
             lines_area,
         );
 
-        #[rustfmt::skip]
+        self.render_help(frame);
+        self.render_live_confirm(frame);
+    }
+
+    fn render_live_confirm(&mut self, frame: &mut Frame) {
+        if self.confirming_live.is_some() {
+            let body = Text::from(vec![
+                Line::from("").centered(),
+                Line::from("   Warning: This might be dangerous!   ")
+                    .centered()
+                    .bold(),
+                Line::from("").centered(),
+                Line::from("   Commands will be executed automatically as you type.   ").centered(),
+                Line::from("").centered(),
+                Line::from("[Y]es / [N]o").centered(),
+                Line::from("").centered(),
+            ]);
+            let popup = Popup::new(body)
+                .title(" Confirm entering LIVE mode ")
+                .style(Style::new().white().on_yellow());
+            frame.render_widget(popup, frame.area());
+        }
+    }
+
+    fn render_help(&mut self, frame: &mut Frame) {
+        if self.help {
+            #[rustfmt::skip]
         let lines = Text::from(vec![
-            Line::from(format!("{:09} - Exit", "ctrl+c")),
-            Line::from(""),
             Line::from(format!("{:09} - Execute full command", self.kb_config.execute_full.first().unwrap().to_string())),
             Line::from(format!("{:09} - Execute until cursor", self.kb_config.execute_until_current.first().unwrap().to_string())),
             Line::from(format!("{:09} - Execute before cursor", self.kb_config.execute_until_prev.first().unwrap().to_string())),
@@ -358,7 +548,6 @@ impl App {
             Line::from(format!("{:09} - Scroll up", self.kb_config.scroll_up.first().unwrap().to_string())),
             Line::from(format!("{:09} - Scroll down", self.kb_config.scroll_down.first().unwrap().to_string())),
             Line::from(format!("{:09} - Scroll page up", self.kb_config.scroll_up_page.first().unwrap().to_string())),
-            Line::from(format!("{:09} - Scroll down", self.kb_config.scroll_down.first().unwrap().to_string())),
             Line::from(format!("{:09} - Scroll page down", self.kb_config.scroll_down_page.first().unwrap().to_string())),
             Line::from(""),
             Line::from(format!("{:09} - Scroll right", self.kb_config.scroll_right.first().unwrap().to_string())),
@@ -367,11 +556,66 @@ impl App {
             Line::from(format!("{:09} - Wrap output lines", self.kb_config.toggle_wrap.first().unwrap().to_string())),
         ]);
 
-        if self.help {
             let popup = Popup::new(lines)
                 .title(" Keys ")
                 .style(Style::new().white().on_blue());
             frame.render_widget(popup, frame.area());
+        }
+    }
+
+    fn hints_widget(&self) -> Line<'_> {
+        let mut spans: Vec<Span> = vec![];
+
+        spans.push(" ".into());
+        spans.push("^C".bold());
+        spans.push(" Quit ".into());
+        spans.push("Enter".bold());
+        spans.push(" Execute ".into());
+        spans.push("F1".bold());
+        spans.push(" Help ".into());
+        spans.push("F2".bold());
+        spans.push(" Errors:".into());
+
+        match self.error_display_mode {
+            ErrorDisplayMode::Pane => {
+                spans.push("Pane".white().on_dark_gray());
+                spans.push("/Inline".into());
+            }
+            ErrorDisplayMode::Inline => {
+                spans.push("Pane/".into());
+                spans.push("Inline".white().on_dark_gray());
+            }
+        };
+
+        spans.push(" ".into());
+        spans.push("F11 ".bold());
+        match self.input_mode {
+            InputMode::Normal | InputMode::LiveFull => {
+                spans.push("Live UC".into());
+            }
+            InputMode::LiveUntilCursor => {
+                spans.push("Live UC".on_yellow());
+            }
+        }
+
+        spans.push(" ".into());
+        spans.push("F12 ".bold());
+        match self.input_mode {
+            InputMode::Normal | InputMode::LiveUntilCursor => {
+                spans.push("Live".into());
+            }
+            InputMode::LiveFull => {
+                spans.push("Live".on_yellow());
+            }
+        }
+
+        Line::from_iter(spans).centered().dim()
+    }
+
+    fn main_output(&self) -> &Output {
+        match self.error_display_mode {
+            ErrorDisplayMode::Inline => self.error_output_opt.as_ref().unwrap_or(&self.output),
+            ErrorDisplayMode::Pane => &self.output,
         }
     }
 }
@@ -446,7 +690,10 @@ fn handle_command_task(
                     action_tx.send(CommandCompleted(Output::err(&str, output.status.code())))?;
                 }
             } else {
-                action_tx.send(CommandCompleted(Output::err("Failed to execute command", None)))?;
+                action_tx.send(CommandCompleted(Output::err(
+                    "Failed to execute command",
+                    None,
+                )))?;
             }
         }
     }
@@ -486,10 +733,14 @@ fn read_stdin_task(file_opt: Option<String>, tx: Sender<Action>) -> Result<(), B
     }
 }
 
-fn reset_highlight_task(rx: Receiver<()>, tx: Sender<Action>) -> Result<(), Box<dyn Error>> {
+fn reset_highlight_task(
+    rx: Receiver<()>,
+    tx: Sender<Action>,
+    duration_ms: u64,
+) -> Result<(), Box<dyn Error>> {
     loop {
         if let Ok(_) = rx.recv() {
-            thread::sleep(Duration::from_millis(250));
+            thread::sleep(Duration::from_millis(duration_ms));
             tx.send(ResetHighlight)?
         }
     }
@@ -500,6 +751,7 @@ enum Action {
     CommandCompleted(Output),
     StdinRead(String),
     ResetHighlight,
+    Debounced,
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]
@@ -508,4 +760,162 @@ pub enum CommandLinePlacement {
     #[default]
     Top,
     Bottom,
+}
+
+#[derive(Clone)]
+enum InputMode {
+    Normal,
+    LiveFull,
+    LiveUntilCursor,
+}
+
+enum ErrorDisplayMode {
+    Inline,
+    Pane,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crossterm::event::Event::Key;
+    use crossterm::event::{KeyEvent, KeyEventKind, KeyEventState};
+    use insta::assert_snapshot;
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
+
+    struct TestTerminal(Terminal<TestBackend>);
+
+    impl Default for TestTerminal {
+        fn default() -> Self {
+            TestTerminal(Terminal::new(TestBackend::new(100, 30)).unwrap())
+        }
+    }
+
+    impl Default for App {
+        fn default() -> Self {
+            let (_, action_rx) = std::sync::mpsc::channel::<Action>();
+            let (command_tx, _) = std::sync::mpsc::channel::<(String, String)>();
+            let (highlight_reset_tx, _) = std::sync::mpsc::channel::<()>();
+            let (debouncer_tx, _) = std::sync::mpsc::channel::<()>();
+
+            let theme_config = ThemeConfig::default();
+            let kb_config = KeyBindingsConfig::default();
+
+            Self {
+                rura_widget: RuraWidget {
+                    command_input: Input::from(""),
+                    highlight_until: None,
+                    theme: Theme::from_config(&theme_config),
+                    history: History::load(),
+                    key_bindings: KeyBindings::from_config(&kb_config),
+                    highlight_reset_tx,
+                },
+                stdin: "".to_string(),
+                offset: Position::default(),
+                output: Output::ok(""),
+                error_output_opt: None,
+                action_rx,
+                command_tx,
+                debouncer_tx,
+                wrap: false,
+                exit: false,
+                theme: Theme::from_config(&theme_config),
+                key_bindings: KeyBindings::from_config(&kb_config),
+                command_line_placement: CommandLinePlacement::Bottom,
+                kb_config,
+                help: false,
+                input_mode: InputMode::Normal,
+                error_display_mode: ErrorDisplayMode::Pane,
+                confirming_live: None,
+            }
+        }
+    }
+
+    #[test]
+    fn main_screen() {
+        let mut app = App::default();
+
+        let mut terminal = TestTerminal::default().0;
+        terminal
+            .draw(|frame| app.render(frame, frame.area()))
+            .unwrap();
+
+        assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn main_screen_help() {
+        let mut app = App::default();
+
+        input_key(&mut app, KeyCode::F(1), KeyModifiers::NONE);
+
+        let mut terminal = TestTerminal::default().0;
+        terminal
+            .draw(|frame| app.render(frame, frame.area()))
+            .unwrap();
+
+        assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn live_mode_confirm() {
+        let mut app = App::default();
+
+        input_key(&mut app, KeyCode::F(11), KeyModifiers::NONE);
+
+        let mut terminal = TestTerminal::default().0;
+        terminal
+            .draw(|frame| app.render(frame, frame.area()))
+            .unwrap();
+
+        assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn live_mode_full_confirm() {
+        let mut app = App::default();
+
+        input_key(&mut app, KeyCode::F(12), KeyModifiers::NONE);
+
+        let mut terminal = TestTerminal::default().0;
+        terminal
+            .draw(|frame| app.render(frame, frame.area()))
+            .unwrap();
+
+        assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn command_input() {
+        let mut app = App::default();
+
+        input_text(&mut app, "ls -la | grep a");
+
+        let mut terminal = TestTerminal::default().0;
+        terminal
+            .draw(|frame| app.render(frame, frame.area()))
+            .unwrap();
+
+        assert_snapshot!(terminal.backend());
+    }
+
+    fn input_text(app: &mut App, text: &str) {
+        for c in text.chars() {
+            app.handle_event(&Event::Key(KeyEvent {
+                code: Char(c),
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                state: KeyEventState::NONE,
+            }))
+        }
+    }
+
+    fn input_key(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
+        app.handle_event(&Key(KeyEvent {
+            code,
+            modifiers,
+            kind: KeyEventKind::Press,
+            state: KeyEventState::NONE,
+        }))
+    }
 }
