@@ -413,12 +413,12 @@ impl App {
 
         let status_text = match self.panes_mode {
             PanesMode::Single => {
-                if self.output.ok {
+                if self.main_output().ok {
                     " OK ".white().on_green()
                 } else {
-                    match self.output.status_code {
+                    match self.main_output().status_code {
                         None => " ERR ".white().on_red(),
-                        Some(code) => format!(" ERR({code}) ").white().on_red(),
+                        Some(code) => format!(" $? {code} ").white().on_red(),
                     }
                 }
             }
@@ -494,6 +494,17 @@ impl App {
                 .title(" Keys ")
                 .style(Style::new().white().on_blue());
             frame.render_widget(popup, frame.area());
+        }
+    }
+
+    fn main_output(&self) -> &Output {
+        match self.panes_mode {
+            PanesMode::Single => {
+                self.error_output_opt.as_ref().unwrap_or(&self.output)
+            }
+            PanesMode::Split => {
+                &self.output
+            }
         }
     }
 }
