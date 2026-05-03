@@ -336,12 +336,18 @@ impl App {
 
         #[rustfmt::skip]
         let lines = Text::from(vec![
-            Line::from(format!("{:08} - Execute full command", self.kb_config.execute_full.first().unwrap().to_string())),
-            Line::from(format!("{:08} - Execute until cursor", self.kb_config.execute_until_current.first().unwrap().to_string())),
-            Line::from(format!("{:08} - Execute before cursor", self.kb_config.execute_until_prev.first().unwrap().to_string())),
-            Line::from(format!("{:08} - Reset input", self.kb_config.reset_input.first().unwrap().to_string())),
-            Line::from(format!("{:08} - Go to next subcommand", self.kb_config.subcommand_next.first().unwrap().to_string())),
-            Line::from(format!("{:08} - Go to previous subcommand", self.kb_config.subcommand_prev.first().unwrap().to_string())),
+            Line::from(format!("{:09} - Exit", "ctrl+c")),
+            Line::from(""),
+            Line::from(format!("{:09} - Execute full command", self.kb_config.execute_full.first().unwrap().to_string())),
+            Line::from(format!("{:09} - Execute until cursor", self.kb_config.execute_until_current.first().unwrap().to_string())),
+            Line::from(format!("{:09} - Execute before cursor", self.kb_config.execute_until_prev.first().unwrap().to_string())),
+            Line::from(format!("{:09} - Reset input", self.kb_config.reset_input.first().unwrap().to_string())),
+            Line::from(""),
+            Line::from(format!("{:09} - Go to previous subcommand", self.kb_config.subcommand_prev.first().unwrap().to_string())),
+            Line::from(format!("{:09} - Go to next subcommand", self.kb_config.subcommand_next.first().unwrap().to_string())),
+            Line::from(""),
+            Line::from(format!("{:09} - History previous item", self.kb_config.history_prev.first().unwrap().to_string())),
+            Line::from(format!("{:09} - History next item", self.kb_config.history_next.first().unwrap().to_string())),
         ]);
 
         if self.help {
