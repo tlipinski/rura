@@ -3,7 +3,7 @@ use crate::props::APP_NAME;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
-use log::debug;
+use log::{debug, info};
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct StyleConfig {
@@ -149,7 +149,7 @@ pub fn history_path() -> Option<PathBuf> {
 
 pub fn load_config(custom_path: Option<&str>) -> Config {
     if let Some(p) = custom_path {
-        debug!("Loading config from arg {}", p);
+        info!("Loading config from arg {}", p);
         let path = PathBuf::from(p);
         if !path.exists() {
             panic!("Config file not found: {}", path.display());
@@ -159,7 +159,7 @@ pub fn load_config(custom_path: Option<&str>) -> Config {
             Err(_) => panic!("Invalid config file: {}", path.display()),
         }
     } else if let Ok(env_path) = std::env::var("RURA_CONFIG") {
-        debug!("Loading config from env {}", env_path);
+        info!("Loading config from env {}", env_path);
         let path = PathBuf::from(env_path);
         if !path.exists() {
             panic!("Config file not found: {}", path.display());
@@ -169,7 +169,7 @@ pub fn load_config(custom_path: Option<&str>) -> Config {
             Err(_) => panic!("Invalid config file: {}", path.display()),
         }
     } else {
-        debug!("Loading default config");
+        info!("Loading default config");
         match config_path() {
             Some(path) => {
                 if !path.exists() {
