@@ -8,7 +8,6 @@ use crate::theme::Theme;
 use crate::uicmd::{KeyBindings, UiCmd, to_ui_command};
 use crossterm::event::{KeyCode, KeyModifiers};
 use crossterm::tty::IsTty;
-use itertools::Itertools;
 use log::debug;
 use ratatui::crossterm::event;
 use ratatui::crossterm::event::Event;
@@ -20,7 +19,7 @@ use ratatui::text::{Line, Text};
 use ratatui::widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation};
 use ratatui::widgets::{ScrollbarState, Wrap};
 use ratatui::{DefaultTerminal, Frame};
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::error::Error;
 use std::io::{Read, Write, stdin};
@@ -310,7 +309,14 @@ impl App {
         let status_text = if self.output.ok {
             " OK ".white().on_green()
         } else {
-            " ERR ".white().on_red()
+            match self.output.status_code {
+                None => {
+                    " ERR ".white().on_red()
+                }
+                Some(code) => {
+                    format!(" ERR({code}) ").white().on_red()
+                }
+            }
         };
 
         let [hints_area, exit_code_area, lines_area] = Layout::default()
@@ -373,6 +379,7 @@ impl App {
 #[derive(PartialEq, Eq)]
 struct Output {
     lines: Vec<String>,
+    status_code: Option<i32>,
     ok: bool,
 }
 
@@ -380,13 +387,15 @@ impl Output {
     fn ok(str: &str) -> Self {
         Self {
             lines: Self::lines(str),
+            status_code: Some(0),
             ok: true,
         }
     }
 
-    fn err(str: &str) -> Self {
+    fn err(str: &str, status_code: Option<i32>) -> Self {
         Self {
             lines: Self::lines(str),
+            status_code,
             ok: false,
         }
     }
@@ -434,10 +443,10 @@ fn handle_command_task(
                 } else {
                     let stderr = output.stderr.as_slice();
                     let str = String::from_utf8_lossy(stderr);
-                    action_tx.send(CommandCompleted(Output::err(&str)))?;
+                    action_tx.send(CommandCompleted(Output::err(&str, output.status.code())))?;
                 }
             } else {
-                action_tx.send(CommandCompleted(Output::err("Failed to execute command")))?;
+                action_tx.send(CommandCompleted(Output::err("Failed to execute command", None)))?;
             }
         }
     }
