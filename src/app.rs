@@ -89,6 +89,7 @@ impl App {
                 history: History::load(),
                 key_bindings: KeyBindings::from_config(&kb_config),
                 highlight_reset_tx,
+                completion_state: None,
             },
             stdin: "".to_string(),
             offset: Position::default(),

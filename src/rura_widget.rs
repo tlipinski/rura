@@ -1,3 +1,4 @@
+use crate::completion::{get_completions, CompletionType};
 use crate::history::History;
 use crate::rura::{ExecuteType, Part, Rura};
 use crate::theme::Theme;
@@ -22,6 +23,14 @@ pub struct RuraWidget {
     pub key_bindings: KeyBindings,
     pub history: History,
     pub highlight_reset_tx: Sender<()>,
+    pub completion_state: Option<CompletionState>,
+}
+
+pub struct CompletionState {
+    pub word: String,
+    pub start: usize,
+    pub completions: Vec<String>,
+    pub index: usize,
 }
 
 impl Widget for &RuraWidget {
@@ -70,10 +79,12 @@ impl RuraWidget {
 
                 match to_ui_command(key_bindings, code, mods) {
                     None => {
+                        self.completion_state = None;
                         self.command_input.handle_event(event);
                     }
                     Some(a) => match a {
                         UiCmd::SubcommandNext => {
+                            self.completion_state = None;
                             if let Ok(r) = Rura::new(
                                 self.command_input.value(),
                                 self.command_input.visual_cursor(),
@@ -84,6 +95,7 @@ impl RuraWidget {
                             }
                         }
                         UiCmd::SubcommandPrev => {
+                            self.completion_state = None;
                             if let Ok(r) = Rura::new(
                                 self.command_input.value(),
                                 self.command_input.visual_cursor(),
@@ -94,10 +106,58 @@ impl RuraWidget {
                             }
                         }
                         UiCmd::HistoryPrev => {
+                            self.completion_state = None;
                             self.command_input = Input::from(self.history.previous(self.command_input.value()));
                         }
                         UiCmd::HistoryNext => {
+                            self.completion_state = None;
                             self.command_input = Input::from(self.history.next(self.command_input.value()));
+                        }
+                        UiCmd::Complete => {
+                            if let Ok(r) = Rura::new(
+                                self.command_input.value(),
+                                self.command_input.visual_cursor(),
+                            ) {
+                                let (word, start, is_cmd) = r.word_at_cursor();
+
+                                if let Some(ref mut state) = self.completion_state {
+                                    if state.start == start && word.starts_with(&state.word) {
+                                        state.index = (state.index + 1) % state.completions.len();
+                                        let completion = &state.completions[state.index];
+                                        let mut val = self.command_input.value().to_string();
+                                        val.replace_range(
+                                            start..self.command_input.visual_cursor(),
+                                            completion,
+                                        );
+                                        let new_cursor = start + completion.len();
+                                        self.command_input = Input::from(val);
+                                        self.command_input.handle(InputRequest::SetCursor(new_cursor));
+                                        return;
+                                    }
+                                }
+
+                                let kind = if is_cmd {
+                                    CompletionType::Command
+                                } else {
+                                    CompletionType::File
+                                };
+                                let completions = get_completions(&word, kind);
+                                if !completions.is_empty() {
+                                    let completion = &completions[0];
+                                    let mut val = self.command_input.value().to_string();
+                                    val.replace_range(start..start + word.len(), completion);
+                                    let new_cursor = start + completion.len();
+                                    self.command_input = Input::from(val);
+                                    self.command_input.handle(InputRequest::SetCursor(new_cursor));
+
+                                    self.completion_state = Some(CompletionState {
+                                        word: word.to_string(),
+                                        start,
+                                        completions,
+                                        index: 0,
+                                    });
+                                }
+                            }
                         }
                         _ => {}
                     },

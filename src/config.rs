@@ -93,6 +93,7 @@ pub struct KeyBindingsConfig {
     pub history_next: Vec<String>,
     pub subcommand_next: Vec<String>,
     pub subcommand_prev: Vec<String>,
+    pub complete: Vec<String>,
 }
 
 impl Default for KeyBindingsConfig {
@@ -112,8 +113,9 @@ impl Default for KeyBindingsConfig {
             toggle_wrap: vec!["alt+w".into()],
             history_prev: vec!["ctrl+p".into()],
             history_next: vec!["ctrl+n".into()],
-            subcommand_next: vec!["tab".into()],
+            subcommand_next: vec!["alt+tab".into()],
             subcommand_prev: vec!["shift+tab".into(), "shift+backtab".into(), "backtab".into()],
+            complete: vec!["tab".into()],
         }
     }
 }

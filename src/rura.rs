@@ -176,6 +176,31 @@ impl Rura {
         None
     }
 
+    pub fn word_at_cursor(&self) -> (String, usize, bool) {
+        let mut sum = 0;
+        for (index, parts) in self.subcommands.iter().enumerate() {
+            let mut sub_sum = 0;
+            for part in parts {
+                let content = part.content();
+                let part_len = content.len();
+                if self.cursor >= sum + sub_sum && self.cursor <= sum + sub_sum + part_len {
+                    let local_cursor = self.cursor - (sum + sub_sum);
+                    let before_cursor = &content[..local_cursor];
+                    
+                    let word_start = before_cursor.rfind(|c: char| c.is_whitespace() || c == '|').map(|i| i + 1).unwrap_or(0);
+                    let word = &before_cursor[word_start..];
+                    
+                    let subcommand_prefix = parts.iter().flat_map(|p| p.content().chars()).take(sub_sum + word_start).collect::<String>();
+                    let is_cmd = subcommand_prefix.trim().is_empty();
+
+                    return (word.to_string(), sum + sub_sum + word_start, is_cmd);
+                }
+                sub_sum += part_len;
+            }
+            sum += sub_sum + 1; // Pipe character
+        }
+        ("".to_string(), self.cursor, true)
+    }
 }
 
 pub enum ExecuteType {

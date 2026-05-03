@@ -1,4 +1,5 @@
 mod app;
+mod completion;
 mod config;
 mod history;
 mod props;
