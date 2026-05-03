@@ -198,6 +198,10 @@ impl App {
                             self.live_mode = LiveMode::Off;
                         }
                     },
+                    (KeyCode::F(2), KeyModifiers::NONE) => match self.panes_mode {
+                        PanesMode::Single => self.panes_mode = PanesMode::Split,
+                        PanesMode::Split => self.panes_mode = PanesMode::Single,
+                    },
                     (KeyCode::Char(_) | KeyCode::Backspace, KeyModifiers::NONE) => {
                         self.rura_widget.handle_event(event);
                         match self.live_mode {
@@ -363,8 +367,9 @@ impl App {
             let block = Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Red));
-            let mut output_par =
-                Paragraph::new(err_output.lines.join("\n")).scroll((0, self.offset.x)).block(block);
+            let mut output_par = Paragraph::new(err_output.lines.join("\n"))
+                .scroll((0, self.offset.x))
+                .block(block);
 
             if self.wrap {
                 output_par = output_par.wrap(Wrap::default())
@@ -438,7 +443,10 @@ impl App {
 
         frame.render_widget(live_status, live_area);
 
-        frame.render_widget(status_text, exit_code_area);
+        match self.panes_mode {
+            PanesMode::Split => (),
+            PanesMode::Single => frame.render_widget(status_text, exit_code_area),
+        }
 
         frame.render_widget(
             format!("L:{} ", self.output.len())
