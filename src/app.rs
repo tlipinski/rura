@@ -365,6 +365,7 @@ impl App {
 
         if let Some(err_output) = &self.error_output_opt {
             let block = Block::default()
+                .title(format!(" $?: {} ", err_output.status_code.unwrap_or(0)))
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Red));
             let mut output_par = Paragraph::new(err_output.lines.join("\n"))
