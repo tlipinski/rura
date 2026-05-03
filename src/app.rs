@@ -53,6 +53,7 @@ pub struct App {
     input_mode: InputMode,
     debouncer_tx: Sender<()>,
     error_display_mode: ErrorDisplayMode,
+    confirm_live: Option<InputMode>
 }
 
 impl App {
@@ -124,6 +125,7 @@ impl App {
             input_mode: InputMode::Normal,
             debouncer_tx,
             error_display_mode: ErrorDisplayMode::Pane,
+            confirm_live: None
         }
     }
 
@@ -193,7 +195,8 @@ impl App {
                     },
                     (KeyCode::F(11), KeyModifiers::NONE) => match self.input_mode {
                         InputMode::Normal => {
-                            self.input_mode = InputMode::LiveUntilCursor;
+                            // self.input_mode = InputMode::LiveUntilCursor;
+                            self.confirm_live = Some(InputMode::LiveUntilCursor);
                         }
                         InputMode::LiveFull => {
                             self.input_mode = InputMode::LiveUntilCursor;
@@ -204,7 +207,8 @@ impl App {
                     },
                     (KeyCode::F(12), KeyModifiers::NONE) => match self.input_mode {
                         InputMode::Normal => {
-                            self.input_mode = InputMode::LiveFull;
+                            // self.input_mode = InputMode::LiveFull;
+                            self.confirm_live = Some(InputMode::LiveFull);
                         }
                         InputMode::LiveFull => {
                             self.input_mode = InputMode::Normal;
@@ -538,6 +542,21 @@ impl App {
             let popup = Popup::new(lines)
                 .title(" Keys ")
                 .style(Style::new().white().on_blue());
+            frame.render_widget(popup, frame.area());
+        }
+
+        if self.confirm_live.is_some() {
+
+            let body = Text::from(vec![
+                Line::from("").centered(),
+                Line::from("   Confirm entering LIVE mode.   ").centered(),
+                Line::from("").centered(),
+                Line::from("[Y]es / [N]o").centered(),
+                Line::from("").centered(),
+            ]);
+            let popup = Popup::new(body)
+                .title(" LIVE mode ")
+                .style(Style::new().white().on_yellow());
             frame.render_widget(popup, frame.area());
         }
     }
