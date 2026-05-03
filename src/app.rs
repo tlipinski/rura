@@ -244,21 +244,23 @@ impl App {
                         }
                     },
                     (Char(_) | KeyCode::Backspace, KeyModifiers::NONE) => {
-                        self.rura_widget.handle_event(event);
-                        match self.input_mode {
-                            InputMode::Normal => {}
-                            InputMode::LiveFull | InputMode::LiveUntilCursor => {
-                                self.debouncer_tx.send(()).unwrap();
+                        if self.rura_widget.handle_event(event) {
+                            match self.input_mode {
+                                InputMode::Normal => {}
+                                InputMode::LiveFull | InputMode::LiveUntilCursor => {
+                                    self.debouncer_tx.send(()).unwrap();
+                                }
                             }
                         }
                     }
                     _ => match to_ui_command(key_bindings, code, mods) {
                         None => {
-                            self.rura_widget.handle_event(event);
-                            match self.input_mode {
-                                InputMode::Normal => {}
-                                InputMode::LiveFull | InputMode::LiveUntilCursor => {
-                                    self.debouncer_tx.send(()).unwrap();
+                            if self.rura_widget.handle_event(event) {
+                                match self.input_mode {
+                                    InputMode::Normal => {}
+                                    InputMode::LiveFull | InputMode::LiveUntilCursor => {
+                                        self.debouncer_tx.send(()).unwrap();
+                                    }
                                 }
                             }
                         }
@@ -316,7 +318,7 @@ impl App {
                                     self.rura_widget.handle_event(event);
                                 }
                             }
-                            _ => {
+                            UiCmd::SubcommandNext | UiCmd::SubcommandPrev => {
                                 self.rura_widget.handle_event(event);
                             }
                         },

@@ -61,7 +61,7 @@ impl RuraWidget {
         (cursor % width, cursor / width)
     }
 
-    pub fn handle_event(&mut self, event: &Event) {
+    pub fn handle_event(&mut self, event: &Event) -> bool {
         match event {
             Event::Key(key_event) => {
                 let code = key_event.code;
@@ -70,7 +70,11 @@ impl RuraWidget {
 
                 match to_ui_command(key_bindings, code, mods) {
                     None => {
-                        self.command_input.handle_event(event);
+                        if let Some(change) = self.command_input.handle_event(event) {
+                            change.value
+                        } else {
+                            false
+                        }
                     }
                     Some(a) => match a {
                         UiCmd::SubcommandNext => {
@@ -82,6 +86,7 @@ impl RuraWidget {
                                     self.command_input.handle(InputRequest::SetCursor(cursor));
                                 }
                             }
+                            false
                         }
                         UiCmd::SubcommandPrev => {
                             if let Ok(r) = Rura::new(
@@ -92,20 +97,25 @@ impl RuraWidget {
                                     self.command_input.handle(InputRequest::SetCursor(cursor));
                                 }
                             }
+                            false
                         }
                         UiCmd::HistoryPrev => {
                             self.command_input =
                                 Input::from(self.history.previous(self.command_input.value()));
+
+                            false
                         }
                         UiCmd::HistoryNext => {
                             self.command_input =
                                 Input::from(self.history.next(self.command_input.value()));
+
+                            false
                         }
-                        _ => {}
+                        _ => false,
                     },
                 }
             }
-            _ => {}
+            _ => false,
         }
     }
 

@@ -1,5 +1,4 @@
 use crate::config::history_path;
-use log::debug;
 use std::collections::VecDeque;
 use std::io::Write;
 
@@ -17,7 +16,6 @@ impl History {
             if let Ok(content) = std::fs::read_to_string(path) {
                 for line in content.lines() {
                     if !line.is_empty() {
-                        debug!("line: {}", line);
                         history.push_front(line.to_string());
                     }
                 }
