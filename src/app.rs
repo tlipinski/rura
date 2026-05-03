@@ -324,7 +324,7 @@ impl App {
                         .direction(Direction::Vertical)
                         .constraints(vec![
                             Constraint::Length(self.rura_widget.height(inner_area.width) + 2),
-                            Constraint::Length(error_output_lines as u16),
+                            Constraint::Length(error_output_lines.min(10) as u16),
                             Constraint::Fill(1),
                             Constraint::Length(1),
                         ])
@@ -337,7 +337,7 @@ impl App {
                         .direction(Direction::Vertical)
                         .constraints(vec![
                             Constraint::Fill(1),
-                            Constraint::Length(error_output_lines as u16),
+                            Constraint::Length(error_output_lines.min(10) as u16),
                             Constraint::Length(self.rura_widget.height(inner_area.width) + 2),
                             Constraint::Length(1),
                         ])
