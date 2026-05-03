@@ -479,9 +479,11 @@ impl App {
 
             let mut spans: Vec<Span> = vec![];
 
-            spans.push(" ^C Quit".into());
-            spans.push(" | ".into());
-            spans.push("F2 Errors:".into());
+            spans.push(" ".into());
+            spans.push("^C".bold());
+            spans.push(" Quit ".into());
+            spans.push("F2".bold());
+            spans.push(" Errors:".into());
 
             match self.error_display_mode {
                 ErrorDisplayMode::Pane => {
@@ -494,9 +496,8 @@ impl App {
                 }
             };
 
-            spans.push(" | ".into());
-
-            spans.push("F11 ".into());
+            spans.push(" ".into());
+            spans.push("F11 ".bold());
             match self.input_mode {
                 InputMode::Normal | InputMode::LiveFull => {
                     spans.push("Live UC".into());
@@ -506,8 +507,8 @@ impl App {
                 }
             }
 
-            spans.push(" | ".into());
-            spans.push("F12 ".into());
+            spans.push(" ".into());
+            spans.push("F12 ".bold());
             match self.input_mode {
                 InputMode::Normal | InputMode::LiveUntilCursor => {
                     spans.push("Live".into());
