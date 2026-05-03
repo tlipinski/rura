@@ -50,7 +50,7 @@ pub struct App {
     command_line_placement: CommandLinePlacement,
     kb_config: KeyBindingsConfig,
     help: bool,
-    live_mode: LiveMode,
+    mode: Mode,
     debouncer_tx: Sender<()>,
     panes_mode: PanesMode,
 }
@@ -121,7 +121,7 @@ impl App {
             command_line_placement,
             kb_config,
             help: false,
-            live_mode: LiveMode::Off,
+            mode: Mode::Normal,
             debouncer_tx,
             panes_mode: PanesMode::Split,
         }
@@ -148,13 +148,13 @@ impl App {
                 self.output = Output::ok(&self.stdin);
             }
             Debounced => {
-                match self.live_mode {
-                    LiveMode::Off => {
+                match self.mode {
+                    Mode::Normal => {
                         // Should not happen in normal mode
                         // Probably user turned off live before debouncer responded
                     }
-                    LiveMode::Full => self.handle_execute(ExecuteType::FullLive),
-                    LiveMode::UntilCurrent => self.handle_execute(ExecuteType::UntilCurrentLive),
+                    Mode::LiveFull => self.handle_execute(ExecuteType::FullLive),
+                    Mode::LiveUntilCursor => self.handle_execute(ExecuteType::UntilCurrentLive),
                 }
             }
         }
@@ -187,26 +187,26 @@ impl App {
                     (KeyCode::F(1), KeyModifiers::NONE) => {
                         self.help = !self.help;
                     }
-                    (KeyCode::F(11), KeyModifiers::NONE) => match self.live_mode {
-                        LiveMode::Off => {
-                            self.live_mode = LiveMode::UntilCurrent;
+                    (KeyCode::F(11), KeyModifiers::NONE) => match self.mode {
+                        Mode::Normal => {
+                            self.mode = Mode::LiveUntilCursor;
                         }
-                        LiveMode::Full => {
-                            self.live_mode = LiveMode::UntilCurrent;
+                        Mode::LiveFull => {
+                            self.mode = Mode::LiveUntilCursor;
                         }
-                        LiveMode::UntilCurrent => {
-                            self.live_mode = LiveMode::Off;
+                        Mode::LiveUntilCursor => {
+                            self.mode = Mode::Normal;
                         }
                     },
-                    (KeyCode::F(12), KeyModifiers::NONE) => match self.live_mode {
-                        LiveMode::Off => {
-                            self.live_mode = LiveMode::Full;
+                    (KeyCode::F(12), KeyModifiers::NONE) => match self.mode {
+                        Mode::Normal => {
+                            self.mode = Mode::LiveFull;
                         }
-                        LiveMode::Full => {
-                            self.live_mode = LiveMode::Off;
+                        Mode::LiveFull => {
+                            self.mode = Mode::Normal;
                         }
-                        LiveMode::UntilCurrent => {
-                            self.live_mode = LiveMode::Full;
+                        Mode::LiveUntilCursor => {
+                            self.mode = Mode::LiveFull;
                         }
                     },
                     (KeyCode::F(2), KeyModifiers::NONE) => match self.panes_mode {
@@ -215,14 +215,9 @@ impl App {
                     },
                     (KeyCode::Char(_) | KeyCode::Backspace, KeyModifiers::NONE) => {
                         self.rura_widget.handle_event(event);
-                        match self.live_mode {
-                            LiveMode::Off => {}
-                            LiveMode::Full => {
-                                // self.handle_execute(ExecuteType::FullLive);
-                                self.debouncer_tx.send(()).unwrap();
-                            }
-                            LiveMode::UntilCurrent => {
-                                // self.handle_execute(ExecuteType::UntilCurrentLive);
+                        match self.mode {
+                            Mode::Normal => {}
+                            Mode::LiveFull | Mode::LiveUntilCursor => {
                                 self.debouncer_tx.send(()).unwrap();
                             }
                         }
@@ -275,13 +270,13 @@ impl App {
                             }
                             UiCmd::HistoryNext => {
                                 // disable history for live mode
-                                if !self.live_mode.is_live() {
+                                if !self.mode.is_live() {
                                     self.rura_widget.handle_event(event);
                                 }
                             }
                             UiCmd::HistoryPrev => {
                                 // disable history for live mode
-                                if !self.live_mode.is_live() {
+                                if !self.mode.is_live() {
                                     self.rura_widget.handle_event(event);
                                 }
                             }
@@ -362,7 +357,7 @@ impl App {
             ])
             .areas(output_area);
 
-        let command_input_block = if matches!(self.live_mode, LiveMode::Off) {
+        let command_input_block = if matches!(self.mode, Mode::Normal) {
             Block::bordered()
         } else {
             Block::bordered()
@@ -446,10 +441,10 @@ impl App {
         };
 
         let live_status = {
-            match self.live_mode {
-                LiveMode::Off => "".white(),
-                LiveMode::Full => " LIVE ".on_yellow(),
-                LiveMode::UntilCurrent => " LIVE UC ".on_yellow(),
+            match self.mode {
+                Mode::Normal => "".white(),
+                Mode::LiveFull => " LIVE ".on_yellow(),
+                Mode::LiveUntilCursor => " LIVE UC ".on_yellow(),
             }
         };
 
@@ -661,15 +656,15 @@ pub enum CommandLinePlacement {
     Bottom,
 }
 
-enum LiveMode {
-    Off,
-    Full,
-    UntilCurrent,
+enum Mode {
+    Normal,
+    LiveFull,
+    LiveUntilCursor,
 }
 
-impl LiveMode {
+impl Mode {
     pub fn is_live(&self) -> bool {
-        matches!(self, LiveMode::Full | LiveMode::UntilCurrent)
+        matches!(self, Mode::LiveFull | Mode::LiveUntilCursor)
     }
 }
 
