@@ -61,7 +61,7 @@ impl RuraWidget {
         (cursor % width, cursor / width)
     }
 
-    pub fn handle_event(&mut self, event: &Event, live: bool) {
+    pub fn handle_event(&mut self, event: &Event) {
         match event {
             Event::Key(key_event) => {
                 let code = key_event.code;
@@ -94,16 +94,12 @@ impl RuraWidget {
                             }
                         }
                         UiCmd::HistoryPrev => {
-                            if !live {
-                                self.command_input =
-                                    Input::from(self.history.previous(self.command_input.value()));
-                            }
+                            self.command_input =
+                                Input::from(self.history.previous(self.command_input.value()));
                         }
                         UiCmd::HistoryNext => {
-                            if !live {
-                                self.command_input =
-                                    Input::from(self.history.next(self.command_input.value()));
-                            }
+                            self.command_input =
+                                Input::from(self.history.next(self.command_input.value()));
                         }
                         _ => {}
                     },

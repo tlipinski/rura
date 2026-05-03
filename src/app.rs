@@ -15,7 +15,7 @@ use ratatui::layout::{Constraint, Direction, Layout, Margin, Rect};
 use ratatui::prelude::Position;
 use ratatui::prelude::Stylize;
 use ratatui::style::Color::Yellow;
-use ratatui::style::{Color, Style};
+use ratatui::style::Style;
 use ratatui::text::{Line, Text};
 use ratatui::widgets::{Block, BorderType, Paragraph, Scrollbar, ScrollbarOrientation};
 use ratatui::widgets::{ScrollbarState, Wrap};
@@ -165,7 +165,7 @@ impl App {
                         }
                     },
                     (KeyCode::Char(_) | KeyCode::Backspace, KeyModifiers::NONE) => {
-                        self.rura_widget.handle_event(event, self.live_mode.is_live());
+                        self.rura_widget.handle_event(event);
                         match self.live_mode {
                             LiveMode::Off => {}
                             LiveMode::Full => {
@@ -178,7 +178,7 @@ impl App {
                     }
                     _ => match to_ui_command(key_bindings, code, mods) {
                         None => {
-                            self.rura_widget.handle_event(event, self.live_mode.is_live());
+                            self.rura_widget.handle_event(event);
                         }
                         Some(a) => match a {
                             UiCmd::Quit => {
@@ -221,8 +221,18 @@ impl App {
                             UiCmd::ToggleWrap => {
                                 self.wrap = !self.wrap;
                             }
+                            UiCmd::HistoryNext => {
+                                if !self.live_mode.is_live() {
+                                    self.rura_widget.handle_event(event);
+                                }
+                            }
+                            UiCmd::HistoryPrev => {
+                                if !self.live_mode.is_live() {
+                                    self.rura_widget.handle_event(event);
+                                }
+                            }
                             _ => {
-                                self.rura_widget.handle_event(event, self.live_mode.is_live());
+                                self.rura_widget.handle_event(event);
                             }
                         },
                     },
@@ -347,9 +357,9 @@ impl App {
 
         let live_status = {
             match self.live_mode {
-                LiveMode::Off => {"".white()}
-                LiveMode::Full => {" LIVE ".on_yellow()}
-                LiveMode::UntilCurrent => {" LIVE UC ".on_yellow()}
+                LiveMode::Off => "".white(),
+                LiveMode::Full => " LIVE ".on_yellow(),
+                LiveMode::UntilCurrent => " LIVE UC ".on_yellow(),
             }
         };
 
