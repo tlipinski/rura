@@ -14,6 +14,7 @@ use ratatui::crossterm::event::Event;
 use ratatui::layout::{Constraint, Direction, Layout, Margin, Rect};
 use ratatui::prelude::Position;
 use ratatui::prelude::Stylize;
+use ratatui::style::Color::Yellow;
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Text};
 use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Scrollbar, ScrollbarOrientation};
@@ -28,7 +29,6 @@ use std::process::{Command, Stdio};
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 use std::time::Duration;
-use ratatui::style::Color::Yellow;
 use tui_input::Input;
 use tui_popup::Popup;
 
@@ -46,7 +46,7 @@ pub struct App {
     command_line_placement: CommandLinePlacement,
     kb_config: KeyBindingsConfig,
     help: bool,
-    live: bool,
+    live_mode: LiveMode,
 }
 
 impl App {
@@ -91,7 +91,7 @@ impl App {
                 history: History::load(),
                 key_bindings: KeyBindings::from_config(&kb_config),
                 highlight_reset_tx,
-                live: true,
+                live: false,
             },
             stdin: "".to_string(),
             offset: Position::default(),
@@ -105,7 +105,7 @@ impl App {
             command_line_placement,
             kb_config,
             help: false,
-            live: true,
+            live_mode: LiveMode::Off,
         }
     }
 
@@ -154,15 +154,31 @@ impl App {
                     (KeyCode::F(1), KeyModifiers::NONE) => {
                         self.help = !self.help;
                     }
-                    (KeyCode::F(12), KeyModifiers::NONE) => {
-                        self.live = !self.live;
-                        self.rura_widget.live = self.live;
-                    }
+                    (KeyCode::F(12), KeyModifiers::NONE) => match self.live_mode {
+                        LiveMode::Off => {
+                            self.live_mode = LiveMode::Full;
+                            self.rura_widget.live = true;
+                        }
+                        LiveMode::Full => {
+                            self.live_mode = LiveMode::UntilCurrent;
+                            self.rura_widget.live = false;
+                        }
+                        LiveMode::UntilCurrent => {
+                            self.live_mode = LiveMode::Off;
+                            self.rura_widget.live = false;
+                        }
+                    },
                     _ => match to_ui_command(key_bindings, code, mods) {
                         None => {
                             self.rura_widget.handle_event(event);
-                            if self.live {
-                                self.handle_execute(ExecuteType::Full);
+                            match self.live_mode {
+                                LiveMode::Off => {}
+                                LiveMode::Full => {
+                                    self.handle_execute(ExecuteType::Full);
+                                }
+                                LiveMode::UntilCurrent => {
+                                    self.handle_execute(ExecuteType::UntilCurrent);
+                                }
                             }
                         }
                         Some(a) => match a {
@@ -271,10 +287,12 @@ impl App {
             ])
             .areas(output_area);
 
-        let command_input_block = if self.live {
-            Block::bordered().border_style(Style::default().fg(Yellow)).border_type(BorderType::Double)
+        let command_input_block = if matches!(self.live_mode, LiveMode::Off) {
+            Block::bordered()
         } else {
             Block::bordered()
+                .border_style(Style::default().fg(Yellow))
+                .border_type(BorderType::Double)
         };
 
         let inner_rect = command_input_area.inner(margin);
@@ -328,11 +346,19 @@ impl App {
             }
         };
 
+        let live_status = {
+            match self.live_mode {
+                LiveMode::Off => {"".white()}
+                LiveMode::Full => {" LIVE ".on_yellow()}
+                LiveMode::UntilCurrent => {" LIVE (until current) ".on_yellow()}
+            }
+        };
+
         let [hints_area, live_area, exit_code_area, lines_area] = Layout::default()
             .direction(Direction::Horizontal)
             .constraints(vec![
                 Constraint::Fill(1),
-                Constraint::Length(if self.live { 7 } else { 0 }),
+                Constraint::Length(live_status.width() as u16 + 1),
                 Constraint::Length(status_text.width() as u16 + 1),
                 Constraint::Length(self.output.len().to_string().len() as u16 + 3),
             ])
@@ -341,10 +367,7 @@ impl App {
         let hints = " F1 Help | ^C Quit | Enter Run";
         frame.render_widget(hints.dim(), hints_area);
 
-        if self.live {
-            let live = " LIVE ".white().on_yellow();
-            frame.render_widget(live, live_area);
-        }
+        frame.render_widget(live_status, live_area);
 
         frame.render_widget(status_text, exit_code_area);
 
@@ -526,4 +549,10 @@ pub enum CommandLinePlacement {
     #[default]
     Top,
     Bottom,
+}
+
+enum LiveMode {
+    Off,
+    Full,
+    UntilCurrent,
 }
