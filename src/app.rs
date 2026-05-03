@@ -54,7 +54,7 @@ pub struct App {
     input_mode: InputMode,
     debouncer_tx: Sender<()>,
     error_display_mode: ErrorDisplayMode,
-    confirm_live: Option<InputMode>
+    confirming_live: Option<InputMode>
 }
 
 impl App {
@@ -116,6 +116,7 @@ impl App {
             error_output_opt: None,
             action_rx,
             command_tx,
+            debouncer_tx,
             wrap: false,
             exit: false,
             theme: Theme::from_config(theme_config),
@@ -124,9 +125,8 @@ impl App {
             kb_config,
             help: false,
             input_mode: InputMode::Normal,
-            debouncer_tx,
             error_display_mode: ErrorDisplayMode::Pane,
-            confirm_live: None
+            confirming_live: None
         }
     }
 
@@ -183,14 +183,14 @@ impl App {
                 let mods = key_event.modifiers;
                 let key_bindings = &self.key_bindings;
 
-                if let Some(confirm_live) = self.confirm_live.clone() {
+                if let Some(confirming_live) = self.confirming_live.clone() {
                     match (code, mods) {
                         (KeyCode::Esc | Char('n'), KeyModifiers::NONE) => {
-                            self.confirm_live = None
+                            self.confirming_live = None
                         }
                         (Char('y'), KeyModifiers::NONE) => {
-                            self.confirm_live = None;
-                            self.input_mode = confirm_live;
+                            self.confirming_live = None;
+                            self.input_mode = confirming_live;
                         }
                         _ => {}
                     }
@@ -211,7 +211,7 @@ impl App {
                     (KeyCode::F(11), KeyModifiers::NONE) => match self.input_mode {
                         InputMode::Normal => {
                             // self.input_mode = InputMode::LiveUntilCursor;
-                            self.confirm_live = Some(InputMode::LiveUntilCursor);
+                            self.confirming_live = Some(InputMode::LiveUntilCursor);
                         }
                         InputMode::LiveFull => {
                             self.input_mode = InputMode::LiveUntilCursor;
@@ -223,7 +223,7 @@ impl App {
                     (KeyCode::F(12), KeyModifiers::NONE) => match self.input_mode {
                         InputMode::Normal => {
                             // self.input_mode = InputMode::LiveFull;
-                            self.confirm_live = Some(InputMode::LiveFull);
+                            self.confirming_live = Some(InputMode::LiveFull);
                         }
                         InputMode::LiveFull => {
                             self.input_mode = InputMode::Normal;
@@ -560,8 +560,7 @@ impl App {
             frame.render_widget(popup, frame.area());
         }
 
-        if self.confirm_live.is_some() {
-
+        if self.confirming_live.is_some() {
             let body = Text::from(vec![
                 Line::from("").centered(),
                 Line::from("   Confirm entering LIVE mode.   ").centered(),
