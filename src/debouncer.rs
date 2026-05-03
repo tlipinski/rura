@@ -1,7 +1,7 @@
+use log::{debug, error};
 use std::error::Error;
 use std::sync::mpsc::{Receiver, TryRecvError};
 use std::thread::sleep;
-use log::{debug, error, info};
 use std::time::Duration;
 
 pub fn debouncer_task<F>(
@@ -32,7 +32,7 @@ where
         }
 
         if last.is_some() {
-            info!("Debounced");
+            debug!("Debounced");
             on_debounce();
         }
     }

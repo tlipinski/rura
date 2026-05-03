@@ -15,12 +15,12 @@ use ratatui::crossterm::event;
 use ratatui::crossterm::event::Event;
 use ratatui::layout::{Constraint, Direction, Layout, Margin, Rect};
 use ratatui::prelude::Color::Red;
-use ratatui::prelude::{Position, Span};
 use ratatui::prelude::Stylize;
+use ratatui::prelude::{Position, Span};
 use ratatui::style::Color::Yellow;
 use ratatui::style::Style;
 use ratatui::text::{Line, Text};
-use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Scrollbar, ScrollbarOrientation};
+use ratatui::widgets::{Block, BorderType, Paragraph, Scrollbar, ScrollbarOrientation};
 use ratatui::widgets::{ScrollbarState, Wrap};
 use ratatui::{DefaultTerminal, Frame};
 use serde::{Deserialize, Serialize};
@@ -364,9 +364,8 @@ impl App {
         frame.set_cursor_position((command_input_area.x + 1 + x, command_input_area.y + 1 + y));
 
         if let Some(err_output) = &self.error_output_opt {
-            let block = Block::default()
+            let block = Block::bordered()
                 .title(format!(" $?: {} ", err_output.status_code.unwrap_or(0)))
-                .borders(Borders::ALL)
                 .border_style(Style::default().fg(Red));
             let mut output_par = Paragraph::new(err_output.lines.join("\n"))
                 .scroll((0, self.offset.x))
