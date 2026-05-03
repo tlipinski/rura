@@ -1,23 +1,26 @@
 use crate::Args;
 use crate::app::Action::{CommandCompleted, ResetHighlight, StdinRead, UserInput};
 use crate::config::{KeyBindingsConfig, ThemeConfig, history_path};
+use crate::debouncer::debouncer_task;
 use crate::history::History;
 use crate::rura::ExecuteType;
 use crate::rura_widget::RuraWidget;
 use crate::theme::Theme;
 use crate::uicmd::{KeyBindings, UiCmd, to_ui_command};
+use Action::Debounced;
 use crossterm::event::{KeyCode, KeyModifiers};
 use crossterm::tty::IsTty;
 use log::debug;
 use ratatui::crossterm::event;
 use ratatui::crossterm::event::Event;
 use ratatui::layout::{Constraint, Direction, Layout, Margin, Rect};
+use ratatui::prelude::Color::Red;
 use ratatui::prelude::Position;
 use ratatui::prelude::Stylize;
 use ratatui::style::Color::Yellow;
 use ratatui::style::Style;
 use ratatui::text::{Line, Text};
-use ratatui::widgets::{Block, BorderType, Paragraph, Scrollbar, ScrollbarOrientation};
+use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Scrollbar, ScrollbarOrientation};
 use ratatui::widgets::{ScrollbarState, Wrap};
 use ratatui::{DefaultTerminal, Frame};
 use serde::{Deserialize, Serialize};
@@ -31,8 +34,6 @@ use std::thread;
 use std::time::Duration;
 use tui_input::Input;
 use tui_popup::Popup;
-use Action::Debounced;
-use crate::debouncer::debouncer_task;
 
 pub struct App {
     rura_widget: RuraWidget,
@@ -79,15 +80,11 @@ impl App {
         thread::spawn(move || reset_highlight_task(highlight_reset_rx, s4).unwrap());
 
         thread::spawn(move || {
-            debouncer_task(
-                debouncer_rx,
-                Duration::from_millis(500),
-                move || {
-                    action_tx
-                        .send(Debounced)
-                        .expect("Sending to channel failed");
-                },
-            )
+            debouncer_task(debouncer_rx, Duration::from_millis(500), move || {
+                action_tx
+                    .send(Debounced)
+                    .expect("Sending to channel failed");
+            })
             .unwrap()
         });
 
@@ -114,7 +111,7 @@ impl App {
             stdin: "".to_string(),
             offset: Position::default(),
             output: Output::ok(""),
-            error_output_opt: Some(Output::err("err", Some(-1))),
+            error_output_opt: None,
             action_rx,
             command_tx,
             wrap: false,
@@ -149,19 +146,15 @@ impl App {
             StdinRead(stdin) => {
                 self.stdin = stdin;
                 self.output = Output::ok(&self.stdin);
-            },
+            }
             Debounced => {
                 match self.live_mode {
                     LiveMode::Off => {
                         // Should not happen in live mode
                         // Probably user turned off live before debouncer responded
                     }
-                    LiveMode::Full => {
-                        self.handle_execute(ExecuteType::FullLive)
-                    }
-                    LiveMode::UntilCurrent => {
-                        self.handle_execute(ExecuteType::UntilCurrentLive)
-                    }
+                    LiveMode::Full => self.handle_execute(ExecuteType::FullLive),
+                    LiveMode::UntilCurrent => self.handle_execute(ExecuteType::UntilCurrentLive),
                 }
             }
         }
@@ -304,34 +297,41 @@ impl App {
 
         let inner_area = area.inner(margin);
 
-        let (command_input_area, output_area, errors_area, status_area) = match self.command_line_placement {
-            CommandLinePlacement::Top => {
-                let layout = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints(vec![
-                        Constraint::Length(self.rura_widget.height(inner_area.width) + 2),
-                        Constraint::Fill(3),
-                        Constraint::Fill(1),
-                        Constraint::Length(1),
-                    ])
-                    .split(area);
+        let error_output_lines = self
+            .error_output_opt
+            .as_ref()
+            .map(|e| e.lines.len() + 2)
+            .unwrap_or(0);
 
-                (layout[0], layout[1], layout[2], layout[3])
-            }
-            CommandLinePlacement::Bottom => {
-                let layout = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints(vec![
-                        Constraint::Fill(3),
-                        Constraint::Fill(1),
-                        Constraint::Length(self.rura_widget.height(inner_area.width) + 2),
-                        Constraint::Length(1),
-                    ])
-                    .split(area);
+        let (command_input_area, output_area, errors_area, status_area) =
+            match self.command_line_placement {
+                CommandLinePlacement::Top => {
+                    let layout = Layout::default()
+                        .direction(Direction::Vertical)
+                        .constraints(vec![
+                            Constraint::Length(self.rura_widget.height(inner_area.width) + 2),
+                            Constraint::Length(error_output_lines as u16),
+                            Constraint::Fill(1),
+                            Constraint::Length(1),
+                        ])
+                        .split(area);
 
-                (layout[1], layout[0], layout[3], layout[2])
-            }
-        };
+                    (layout[0], layout[2], layout[1], layout[3])
+                }
+                CommandLinePlacement::Bottom => {
+                    let layout = Layout::default()
+                        .direction(Direction::Vertical)
+                        .constraints(vec![
+                            Constraint::Fill(3),
+                            Constraint::Fill(1),
+                            Constraint::Length(self.rura_widget.height(inner_area.width) + 2),
+                            Constraint::Length(1),
+                        ])
+                        .split(area);
+
+                    (layout[1], layout[0], layout[3], layout[2])
+                }
+            };
 
         let line_nums_width = self.output.len().to_string().len();
         let [line_nums_area, output_content_area, vscroll_area] = Layout::default()
@@ -360,8 +360,11 @@ impl App {
         frame.set_cursor_position((command_input_area.x + 1 + x, command_input_area.y + 1 + y));
 
         if let Some(err_output) = &self.error_output_opt {
+            let block = Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Red));
             let mut output_par =
-                Paragraph::new(err_output.lines.join("\n")).scroll((0, self.offset.x));
+                Paragraph::new(err_output.lines.join("\n")).scroll((0, self.offset.x)).block(block);
 
             if self.wrap {
                 output_par = output_par.wrap(Wrap::default())
@@ -607,7 +610,7 @@ enum Action {
     CommandCompleted(Output),
     StdinRead(String),
     ResetHighlight,
-    Debounced
+    Debounced,
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]
