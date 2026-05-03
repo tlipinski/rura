@@ -1,11 +1,12 @@
+use crate::Args;
 use crate::app::Action::{CommandCompleted, ResetHighlight, StdinRead, UserInput};
-use crate::config::{history_path, KeyBindingsConfig, ThemeConfig};
+use crate::config::{KeyBindingsConfig, ThemeConfig, history_path};
 use crate::history::History;
 use crate::rura::ExecuteType;
 use crate::rura_widget::RuraWidget;
 use crate::theme::Theme;
-use crate::uicmd::{to_ui_command, KeyBindings, UiCmd};
-use crate::Args;
+use crate::uicmd::{KeyBindings, UiCmd, to_ui_command};
+use crossterm::event::{KeyCode, KeyModifiers};
 use crossterm::tty::IsTty;
 use log::debug;
 use ratatui::crossterm::event;
@@ -13,19 +14,22 @@ use ratatui::crossterm::event::Event;
 use ratatui::layout::{Constraint, Direction, Layout, Margin, Rect};
 use ratatui::prelude::Position;
 use ratatui::prelude::Stylize;
+use ratatui::style::Style;
+use ratatui::text::{Line, Text};
 use ratatui::widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation};
 use ratatui::widgets::{ScrollbarState, Wrap};
-use ratatui::{DefaultTerminal, Frame, };
-use serde::{Deserialize, Deserializer, Serialize};
+use ratatui::{DefaultTerminal, Frame};
+use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::error::Error;
-use std::io::{stdin, Read, Write};
+use std::io::{Read, Write, stdin};
 use std::ops::Range;
 use std::process::{Command, Stdio};
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 use std::time::Duration;
 use tui_input::Input;
+use tui_popup::Popup;
 
 pub struct App {
     rura_widget: RuraWidget,
@@ -39,13 +43,15 @@ pub struct App {
     theme: Theme,
     key_bindings: KeyBindings,
     command_line_placement: CommandLinePlacement,
+    kb_config: KeyBindingsConfig,
+    help: bool,
 }
 
 impl App {
     pub fn new(
         args: Args,
         theme_config: &ThemeConfig,
-        kb_config: &KeyBindingsConfig,
+        kb_config: KeyBindingsConfig,
         command_line_placement: CommandLinePlacement,
     ) -> Self {
         let (action_tx, action_rx) = std::sync::mpsc::channel::<Action>();
@@ -81,7 +87,7 @@ impl App {
                 highlight_until: None,
                 theme: Theme::from_config(theme_config),
                 history: History::load(),
-                key_bindings: KeyBindings::from_config(kb_config),
+                key_bindings: KeyBindings::from_config(&kb_config),
                 highlight_reset_tx,
             },
             stdin: "".to_string(),
@@ -92,8 +98,10 @@ impl App {
             wrap: false,
             exit: false,
             theme: Theme::from_config(theme_config),
-            key_bindings: KeyBindings::from_config(kb_config),
+            key_bindings: KeyBindings::from_config(&kb_config),
             command_line_placement: command_line_placement,
+            kb_config: kb_config,
+            help: false,
         }
     }
 
@@ -134,6 +142,16 @@ impl App {
                 let code = key_event.code;
                 let mods = key_event.modifiers;
                 let key_bindings = &self.key_bindings;
+
+                match (code, mods) {
+                    (KeyCode::Esc, KeyModifiers::NONE) => {
+                        self.help = false;
+                    }
+                    (KeyCode::F(1), KeyModifiers::NONE) => {
+                        self.help = !self.help;
+                    }
+                    _ => {}
+                }
 
                 match to_ui_command(key_bindings, code, mods) {
                     None => {
@@ -288,18 +306,80 @@ impl App {
         state = state.position(self.offset.y.into());
         frame.render_stateful_widget(scroll_bar, vscroll_area, &mut state);
 
+        let status_text = if self.output.ok {
+            " OK ".white().on_green()
+        } else {
+            match self.output.status_code {
+                None => {
+                    " ERR ".white().on_red()
+                }
+                Some(code) => {
+                    format!(" ERR({code}) ").white().on_red()
+                }
+            }
+        };
+
+        let [hints_area, exit_code_area, lines_area] = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints(vec![
+                Constraint::Fill(1),
+                Constraint::Length(status_text.width() as u16 + 1),
+                Constraint::Length(self.output.len().to_string().len() as u16 + 3),
+            ])
+            .areas(status_area);
+
+        let hints = " F1 Help | ^C Quit | Enter Run";
+        frame.render_widget(hints.dim(), hints_area);
+
+        frame.render_widget(status_text, exit_code_area);
+
         frame.render_widget(
-            format!("Lines: {} ", self.output.len())
+            format!("L:{} ", self.output.len())
                 .bold()
                 .into_right_aligned_line(),
-            status_area,
-        )
+            lines_area,
+        );
+
+        #[rustfmt::skip]
+        let lines = Text::from(vec![
+            Line::from(format!("{:09} - Exit", "ctrl+c")),
+            Line::from(""),
+            Line::from(format!("{:09} - Execute full command", self.kb_config.execute_full.first().unwrap().to_string())),
+            Line::from(format!("{:09} - Execute until cursor", self.kb_config.execute_until_current.first().unwrap().to_string())),
+            Line::from(format!("{:09} - Execute before cursor", self.kb_config.execute_until_prev.first().unwrap().to_string())),
+            Line::from(format!("{:09} - Reset input", self.kb_config.reset_input.first().unwrap().to_string())),
+            Line::from(""),
+            Line::from(format!("{:09} - Go to previous subcommand", self.kb_config.subcommand_prev.first().unwrap().to_string())),
+            Line::from(format!("{:09} - Go to next subcommand", self.kb_config.subcommand_next.first().unwrap().to_string())),
+            Line::from(""),
+            Line::from(format!("{:09} - History previous item", self.kb_config.history_prev.first().unwrap().to_string())),
+            Line::from(format!("{:09} - History next item", self.kb_config.history_next.first().unwrap().to_string())),
+            Line::from(""),
+            Line::from(format!("{:09} - Scroll up", self.kb_config.scroll_up.first().unwrap().to_string())),
+            Line::from(format!("{:09} - Scroll down", self.kb_config.scroll_down.first().unwrap().to_string())),
+            Line::from(format!("{:09} - Scroll page up", self.kb_config.scroll_up_page.first().unwrap().to_string())),
+            Line::from(format!("{:09} - Scroll down", self.kb_config.scroll_down.first().unwrap().to_string())),
+            Line::from(format!("{:09} - Scroll page down", self.kb_config.scroll_down_page.first().unwrap().to_string())),
+            Line::from(""),
+            Line::from(format!("{:09} - Scroll right", self.kb_config.scroll_right.first().unwrap().to_string())),
+            Line::from(format!("{:09} - Scroll left", self.kb_config.scroll_left.first().unwrap().to_string())),
+            Line::from(""),
+            Line::from(format!("{:09} - Wrap output lines", self.kb_config.toggle_wrap.first().unwrap().to_string())),
+        ]);
+
+        if self.help {
+            let popup = Popup::new(lines)
+                .title(" Keys ")
+                .style(Style::new().white().on_blue());
+            frame.render_widget(popup, frame.area());
+        }
     }
 }
 
 #[derive(PartialEq, Eq)]
 struct Output {
     lines: Vec<String>,
+    status_code: Option<i32>,
     ok: bool,
 }
 
@@ -307,13 +387,15 @@ impl Output {
     fn ok(str: &str) -> Self {
         Self {
             lines: Self::lines(str),
+            status_code: Some(0),
             ok: true,
         }
     }
 
-    fn err(str: &str) -> Self {
+    fn err(str: &str, status_code: Option<i32>) -> Self {
         Self {
             lines: Self::lines(str),
+            status_code,
             ok: false,
         }
     }
@@ -361,10 +443,10 @@ fn handle_command_task(
                 } else {
                     let stderr = output.stderr.as_slice();
                     let str = String::from_utf8_lossy(stderr);
-                    action_tx.send(CommandCompleted(Output::err(&str)))?;
+                    action_tx.send(CommandCompleted(Output::err(&str, output.status.code())))?;
                 }
             } else {
-                action_tx.send(CommandCompleted(Output::err("Failed to execute command")))?;
+                action_tx.send(CommandCompleted(Output::err("Failed to execute command", None)))?;
             }
         }
     }

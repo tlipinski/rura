@@ -113,7 +113,7 @@ impl Default for KeyBindingsConfig {
             history_prev: vec!["ctrl+p".into()],
             history_next: vec!["ctrl+n".into()],
             subcommand_next: vec!["tab".into()],
-            subcommand_prev: vec!["shift+backtab".into(), "shift+tab".into(), "backtab".into()],
+            subcommand_prev: vec!["shift+tab".into(), "shift+backtab".into(), "backtab".into()],
         }
     }
 }
