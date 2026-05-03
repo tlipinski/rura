@@ -3,6 +3,7 @@ use crate::props::APP_NAME;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use log::debug;
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct StyleConfig {
@@ -147,33 +148,46 @@ pub fn history_path() -> Option<PathBuf> {
 }
 
 pub fn load_config(custom_path: Option<&str>) -> Config {
-    let path = if let Some(p) = custom_path {
-        PathBuf::from(p)
+    if let Some(p) = custom_path {
+        debug!("Loading config from arg {}", p);
+        let path = PathBuf::from(p);
+        if !path.exists() {
+            panic!("Config file not found: {}", path.display());
+        }
+        match fs::read_to_string(&path) {
+            Ok(content) => toml::from_str(&content).unwrap_or_default(),
+            Err(_) => panic!("Invalid config file: {}", path.display()),
+        }
     } else if let Ok(env_path) = std::env::var("RURA_CONFIG") {
-        PathBuf::from(env_path)
+        debug!("Loading config from env {}", env_path);
+        let path = PathBuf::from(env_path);
+        if !path.exists() {
+            panic!("Config file not found: {}", path.display());
+        }
+        match fs::read_to_string(&path) {
+            Ok(content) => toml::from_str(&content).unwrap_or_default(),
+            Err(_) => panic!("Invalid config file: {}", path.display()),
+        }
     } else {
+        debug!("Loading default config");
         match config_path() {
-            Some(path) => path,
+            Some(path) => {
+                if !path.exists() {
+                    if let Some(parent) = path.parent() {
+                        let _ = fs::create_dir_all(parent);
+                    }
+                    let default = Config::default();
+                    if let Ok(content) = toml::to_string_pretty(&default) {
+                        let _ = fs::write(&path, content);
+                    }
+                    return default;
+                }
+                match fs::read_to_string(&path) {
+                    Ok(content) => toml::from_str(&content).unwrap_or_default(),
+                    Err(_) => panic!("Invalid config file: {}", path.display()),
+                }
+            }
             None => return Config::default(),
         }
-    };
-
-    if !path.exists() {
-        if custom_path.is_some() || std::env::var("RURA_CONFIG").is_ok() {
-            return Config::default();
-        }
-        if let Some(parent) = path.parent() {
-            let _ = fs::create_dir_all(parent);
-        }
-        let default = Config::default();
-        if let Ok(content) = toml::to_string_pretty(&default) {
-            let _ = fs::write(&path, content);
-        }
-        return default;
-    }
-
-    match fs::read_to_string(&path) {
-        Ok(content) => toml::from_str(&content).unwrap_or_default(),
-        Err(_) => Config::default(),
     }
 }
