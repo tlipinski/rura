@@ -38,8 +38,9 @@ fn main() {
         exit(0)
     }
 
-    let config = load_config();
+    let config = load_config(args.config.as_deref());
 
+    info!("Loaded config: {config:?}");
     info!("{args:?}");
 
     match run(args, config) {
@@ -59,6 +60,8 @@ struct Args {
     file: Option<String>,
     #[arg(short, long)]
     command: Option<String>,
+    #[arg(short = 'C', long)]
+    config: Option<String>,
     #[arg(short, long)]
     last: bool,
 }

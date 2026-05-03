@@ -146,12 +146,21 @@ pub fn history_path() -> Option<PathBuf> {
     dirs::data_dir().map(|d| d.join(APP_NAME).join("history.txt"))
 }
 
-pub fn load_config() -> Config {
-    let Some(path) = config_path() else {
-        return Config::default();
+pub fn load_config(custom_path: Option<&str>) -> Config {
+    let path = match custom_path {
+        Some(p) => PathBuf::from(p),
+        None => {
+            let Some(path) = config_path() else {
+                return Config::default();
+            };
+            path
+        }
     };
 
     if !path.exists() {
+        if custom_path.is_some() {
+            return Config::default();
+        }
         if let Some(parent) = path.parent() {
             let _ = fs::create_dir_all(parent);
         }
