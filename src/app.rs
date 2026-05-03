@@ -303,7 +303,7 @@ impl App {
             ])
             .split(status_area);
 
-        let hints = " ^C Quit | Enter Run | Tab Next | Alt+\\ Until | Alt+Shift+\\ Until Prev ";
+        let hints = " ^C Quit | Enter Run | Alt+\\ Until | Alt+Shift+\\ Until Prev | Tab Next";
         frame.render_widget(hints.dim(), status_layout[0]);
 
         frame.render_widget(status_text, status_layout[1]);
