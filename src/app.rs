@@ -332,14 +332,14 @@ impl App {
                     let layout = Layout::default()
                         .direction(Direction::Vertical)
                         .constraints(vec![
-                            Constraint::Fill(3),
                             Constraint::Fill(1),
+                            Constraint::Length(error_output_lines as u16),
                             Constraint::Length(self.rura_widget.height(inner_area.width) + 2),
                             Constraint::Length(1),
                         ])
                         .split(area);
 
-                    (layout[1], layout[0], layout[3], layout[2])
+                    (layout[2], layout[0], layout[1], layout[3])
                 }
             };
 
