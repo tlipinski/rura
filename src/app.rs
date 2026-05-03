@@ -363,27 +363,31 @@ impl App {
         let (x, y) = self.rura_widget.cursor(inner_rect.width);
         frame.set_cursor_position((command_input_area.x + 1 + x, command_input_area.y + 1 + y));
 
-        if let Some(err_output) = &self.error_output_opt {
-            let block = Block::bordered()
-                .title(format!(" $?: {} ", err_output.status_code.unwrap_or(0)))
-                .border_style(Style::default().fg(Red));
-            let mut output_par = Paragraph::new(err_output.lines.join("\n"))
-                .scroll((0, self.offset.x))
-                .block(block);
+        if matches!(self.panes_mode, PanesMode::Split) {
+            if let Some(err_output) = &self.error_output_opt {
+                let block = Block::bordered()
+                    .title(format!(" $?: {} ", err_output.status_code.unwrap_or(0)))
+                    .border_style(Style::default().fg(Red));
+                let mut output_par = Paragraph::new(err_output.lines.join("\n"))
+                    .scroll((0, self.offset.x))
+                    .block(block);
 
-            if self.wrap {
-                output_par = output_par.wrap(Wrap::default())
-            };
-            frame.render_widget(output_par, errors_area);
+                if self.wrap {
+                    output_par = output_par.wrap(Wrap::default())
+                };
+                frame.render_widget(output_par, errors_area);
+            }
         }
 
-        let height = output_content_area.height.min(self.output.len() as u16);
+        let output = self.main_output();
 
-        let range: Range<usize> = if height >= self.output.len() as u16 {
-            0..self.output.len()
+        let height = output_content_area.height.min(output.len() as u16);
+
+        let range: Range<usize> = if height >= output.len() as u16 {
+            0..output.len()
         } else {
-            let from = (self.offset.y as usize).min(self.output.len());
-            let to = (self.offset.y as usize + height as usize).min(self.output.len());
+            let from = (self.offset.y as usize).min(output.len());
+            let to = (self.offset.y as usize + height as usize).min(output.len());
             from..to
         };
 
@@ -394,12 +398,12 @@ impl App {
             .map(|i| format!("{: >pad$}", i + 1, pad = line_nums_width))
             .collect::<Vec<String>>();
         let lines_par = Paragraph::new(line_nums.join("\n")).style(theme.line_nums);
-        if self.output.ok {
+        if output.ok {
             frame.render_widget(lines_par, line_nums_area);
         }
 
         let mut output_par =
-            Paragraph::new(self.output.lines[range].join("\n")).scroll((0, self.offset.x));
+            Paragraph::new(output.lines[range].join("\n")).scroll((0, self.offset.x));
 
         if self.wrap {
             output_par = output_par.wrap(Wrap::default())
@@ -422,9 +426,7 @@ impl App {
                     }
                 }
             }
-            PanesMode::Split => {
-                Span::from("")
-            }
+            PanesMode::Split => Span::from(""),
         };
 
         let live_status = {
@@ -499,12 +501,8 @@ impl App {
 
     fn main_output(&self) -> &Output {
         match self.panes_mode {
-            PanesMode::Single => {
-                self.error_output_opt.as_ref().unwrap_or(&self.output)
-            }
-            PanesMode::Split => {
-                &self.output
-            }
+            PanesMode::Single => self.error_output_opt.as_ref().unwrap_or(&self.output),
+            PanesMode::Split => &self.output,
         }
     }
 }
