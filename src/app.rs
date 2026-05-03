@@ -493,7 +493,33 @@ impl App {
             lines_area,
         );
 
-        #[rustfmt::skip]
+        self.render_help(frame);
+        self.render_live_confirm(frame);
+    }
+
+    fn render_live_confirm(&mut self, frame: &mut Frame) {
+        if self.confirming_live.is_some() {
+            let body = Text::from(vec![
+                Line::from("").centered(),
+                Line::from("   Warning: This might be dangerous!   ")
+                    .centered()
+                    .bold(),
+                Line::from("").centered(),
+                Line::from("   Commands will be executed automatically as you type.   ").centered(),
+                Line::from("").centered(),
+                Line::from("[Y]es / [N]o").centered(),
+                Line::from("").centered(),
+            ]);
+            let popup = Popup::new(body)
+                .title(" Confirm entering LIVE mode ")
+                .style(Style::new().white().on_yellow());
+            frame.render_widget(popup, frame.area());
+        }
+    }
+
+    fn render_help(&mut self, frame: &mut Frame) {
+        if self.help {
+            #[rustfmt::skip]
         let lines = Text::from(vec![
             Line::from(format!("{:09} - Exit", "ctrl+c")),
             Line::from(""),
@@ -520,33 +546,14 @@ impl App {
             Line::from(format!("{:09} - Wrap output lines", self.kb_config.toggle_wrap.first().unwrap().to_string())),
         ]);
 
-        if self.help {
             let popup = Popup::new(lines)
                 .title(" Keys ")
                 .style(Style::new().white().on_blue());
             frame.render_widget(popup, frame.area());
         }
-
-        if self.confirming_live.is_some() {
-            let body = Text::from(vec![
-                Line::from("").centered(),
-                Line::from("   Warning: This might be dangerous!   ")
-                    .centered()
-                    .bold(),
-                Line::from("").centered(),
-                Line::from("   Commands will be executed automatically as you type.   ").centered(),
-                Line::from("").centered(),
-                Line::from("[Y]es / [N]o").centered(),
-                Line::from("").centered(),
-            ]);
-            let popup = Popup::new(body)
-                .title(" Confirm entering LIVE mode ")
-                .style(Style::new().white().on_yellow());
-            frame.render_widget(popup, frame.area());
-        }
     }
 
-    fn hints_widget(&mut self) -> Line {
+    fn hints_widget(&self) -> Line<'_> {
         let mut spans: Vec<Span> = vec![];
 
         spans.push(" ".into());
@@ -747,4 +754,68 @@ enum InputMode {
 enum ErrorDisplayMode {
     Inline,
     Pane,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Config;
+    use crate::osb::subtitles::{Attributes, FeatureDetails, Subtitle, Uploader};
+    use crate::osb::user_info::User;
+    use crate::ui::actions::Action::UserLoggedIn;
+    use crossterm::event::Event::Key;
+    use crossterm::event::KeyCode::Tab;
+    use crossterm::event::{KeyEvent, KeyEventKind, KeyEventState};
+    use insta::assert_snapshot;
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
+    use std::sync::mpsc::channel;
+
+    struct TestTerminal(Terminal<TestBackend>);
+
+    impl Default for TestTerminal {
+        fn default() -> Self {
+            TestTerminal(Terminal::new(TestBackend::new(100, 20)).unwrap())
+        }
+    }
+
+    impl Default for App {
+        fn default() -> Self {
+            let (action_tx, action_rx) = std::sync::mpsc::channel::<Action>();
+            let (command_tx, command_rx) = std::sync::mpsc::channel::<(String, String)>();
+            let (highlight_reset_tx, highlight_reset_rx) = std::sync::mpsc::channel::<()>();
+            let (debouncer_tx, debouncer_rx) = std::sync::mpsc::channel::<()>();
+
+            let theme_config = ThemeConfig::default();
+            let kb_config = KeyBindingsConfig::default();
+
+            Self {
+                rura_widget: RuraWidget {
+                    command_input: Input::from(""),
+                    highlight_until: None,
+                    theme: Theme::from_config(&theme_config),
+                    history: History::load(),
+                    key_bindings: KeyBindings::from_config(&kb_config),
+                    highlight_reset_tx,
+                },
+                stdin: "".to_string(),
+                offset: Position::default(),
+                output: Output::ok(""),
+                error_output_opt: None,
+                action_rx,
+                command_tx,
+                debouncer_tx,
+                wrap: false,
+                exit: false,
+                theme: Theme::from_config(&theme_config),
+                key_bindings: KeyBindings::from_config(&kb_config),
+                command_line_placement: CommandLinePlacement::Bottom,
+                kb_config,
+                help: false,
+                input_mode: InputMode::Normal,
+                error_display_mode: ErrorDisplayMode::Pane,
+                confirming_live: None,
+            }
+        }
+    }
 }
