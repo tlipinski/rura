@@ -759,32 +759,26 @@ enum ErrorDisplayMode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::Config;
-    use crate::osb::subtitles::{Attributes, FeatureDetails, Subtitle, Uploader};
-    use crate::osb::user_info::User;
-    use crate::ui::actions::Action::UserLoggedIn;
     use crossterm::event::Event::Key;
-    use crossterm::event::KeyCode::Tab;
     use crossterm::event::{KeyEvent, KeyEventKind, KeyEventState};
     use insta::assert_snapshot;
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
-    use std::sync::mpsc::channel;
 
     struct TestTerminal(Terminal<TestBackend>);
 
     impl Default for TestTerminal {
         fn default() -> Self {
-            TestTerminal(Terminal::new(TestBackend::new(100, 20)).unwrap())
+            TestTerminal(Terminal::new(TestBackend::new(100, 30)).unwrap())
         }
     }
 
     impl Default for App {
         fn default() -> Self {
             let (action_tx, action_rx) = std::sync::mpsc::channel::<Action>();
-            let (command_tx, command_rx) = std::sync::mpsc::channel::<(String, String)>();
-            let (highlight_reset_tx, highlight_reset_rx) = std::sync::mpsc::channel::<()>();
-            let (debouncer_tx, debouncer_rx) = std::sync::mpsc::channel::<()>();
+            let (command_tx, _) = std::sync::mpsc::channel::<(String, String)>();
+            let (highlight_reset_tx, _) = std::sync::mpsc::channel::<()>();
+            let (debouncer_tx, _) = std::sync::mpsc::channel::<()>();
 
             let theme_config = ThemeConfig::default();
             let kb_config = KeyBindingsConfig::default();
@@ -817,5 +811,93 @@ mod tests {
                 confirming_live: None,
             }
         }
+    }
+
+    #[test]
+    fn main_screen() {
+        let mut app = App::default();
+
+        let mut terminal = TestTerminal::default().0;
+        terminal
+            .draw(|frame| app.render(frame, frame.area()))
+            .unwrap();
+
+        assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn main_screen_help() {
+        let mut app = App::default();
+
+        input_key(&mut app, KeyCode::F(1), KeyModifiers::NONE);
+
+        let mut terminal = TestTerminal::default().0;
+        terminal
+            .draw(|frame| app.render(frame, frame.area()))
+            .unwrap();
+
+        assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn live_mode_confirm() {
+        let mut app = App::default();
+
+        input_key(&mut app, KeyCode::F(11), KeyModifiers::NONE);
+
+        let mut terminal = TestTerminal::default().0;
+        terminal
+            .draw(|frame| app.render(frame, frame.area()))
+            .unwrap();
+
+        assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn live_mode_full_confirm() {
+        let mut app = App::default();
+
+        input_key(&mut app, KeyCode::F(12), KeyModifiers::NONE);
+
+        let mut terminal = TestTerminal::default().0;
+        terminal
+            .draw(|frame| app.render(frame, frame.area()))
+            .unwrap();
+
+        assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn command_input() {
+        let mut app = App::default();
+
+        input_text(&mut app, "ls -la | grep a");
+
+        let mut terminal = TestTerminal::default().0;
+        terminal
+            .draw(|frame| app.render(frame, frame.area()))
+            .unwrap();
+
+        assert_snapshot!(terminal.backend());
+    }
+
+    fn input_text(app: &mut App, text: &str) {
+        for c in text.chars() {
+            app.handle_event(&Event::Key(KeyEvent {
+                code: Char(c),
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                state: KeyEventState::NONE,
+            }))
+        }
+    }
+
+    fn input_key(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
+        app.handle_event(&Key(KeyEvent {
+            code,
+            modifiers,
+            kind: KeyEventKind::Press,
+            state: KeyEventState::NONE,
+        }))
     }
 }
