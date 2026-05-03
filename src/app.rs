@@ -534,8 +534,6 @@ impl App {
         if self.help {
             #[rustfmt::skip]
         let lines = Text::from(vec![
-            Line::from(format!("{:09} - Exit", "ctrl+c")),
-            Line::from(""),
             Line::from(format!("{:09} - Execute full command", self.kb_config.execute_full.first().unwrap().to_string())),
             Line::from(format!("{:09} - Execute until cursor", self.kb_config.execute_until_current.first().unwrap().to_string())),
             Line::from(format!("{:09} - Execute before cursor", self.kb_config.execute_until_prev.first().unwrap().to_string())),
@@ -571,6 +569,8 @@ impl App {
         spans.push(" ".into());
         spans.push("^C".bold());
         spans.push(" Quit ".into());
+        spans.push("Enter".bold());
+        spans.push(" Execute ".into());
         spans.push("F1".bold());
         spans.push(" Help ".into());
         spans.push("F2".bold());
