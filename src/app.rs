@@ -348,6 +348,17 @@ impl App {
             Line::from(""),
             Line::from(format!("{:09} - History previous item", self.kb_config.history_prev.first().unwrap().to_string())),
             Line::from(format!("{:09} - History next item", self.kb_config.history_next.first().unwrap().to_string())),
+            Line::from(""),
+            Line::from(format!("{:09} - Scroll up", self.kb_config.scroll_up.first().unwrap().to_string())),
+            Line::from(format!("{:09} - Scroll down", self.kb_config.scroll_down.first().unwrap().to_string())),
+            Line::from(format!("{:09} - Scroll page up", self.kb_config.scroll_up_page.first().unwrap().to_string())),
+            Line::from(format!("{:09} - Scroll down", self.kb_config.scroll_down.first().unwrap().to_string())),
+            Line::from(format!("{:09} - Scroll page down", self.kb_config.scroll_down_page.first().unwrap().to_string())),
+            Line::from(""),
+            Line::from(format!("{:09} - Scroll right", self.kb_config.scroll_right.first().unwrap().to_string())),
+            Line::from(format!("{:09} - Scroll left", self.kb_config.scroll_left.first().unwrap().to_string())),
+            Line::from(""),
+            Line::from(format!("{:09} - Wrap output lines", self.kb_config.toggle_wrap.first().unwrap().to_string())),
         ]);
 
         if self.help {
