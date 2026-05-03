@@ -72,6 +72,7 @@ fn run(args: Args, config: config::Config) -> Result<(), Box<dyn Error>> {
         &config.theme,
         config.keybindings,
         config.command_line_placement,
+        config.highlight_duration_ms,
     );
     let last_command = app.run(&mut terminal)?;
 

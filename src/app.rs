@@ -63,6 +63,7 @@ impl App {
         theme_config: &ThemeConfig,
         kb_config: KeyBindingsConfig,
         command_line_placement: CommandLinePlacement,
+        highlight_duration_ms: u64,
     ) -> Self {
         let (action_tx, action_rx) = std::sync::mpsc::channel::<Action>();
         let (command_tx, command_rx) = std::sync::mpsc::channel::<(String, String)>();
@@ -79,7 +80,9 @@ impl App {
         thread::spawn(move || read_stdin_task(args.file, s3).unwrap());
 
         let s4 = action_tx.clone();
-        thread::spawn(move || reset_highlight_task(highlight_reset_rx, s4).unwrap());
+        thread::spawn(move || {
+            reset_highlight_task(highlight_reset_rx, s4, highlight_duration_ms).unwrap()
+        });
 
         thread::spawn(move || {
             debouncer_task(debouncer_rx, Duration::from_millis(500), move || {
@@ -729,10 +732,14 @@ fn read_stdin_task(file_opt: Option<String>, tx: Sender<Action>) -> Result<(), B
     }
 }
 
-fn reset_highlight_task(rx: Receiver<()>, tx: Sender<Action>) -> Result<(), Box<dyn Error>> {
+fn reset_highlight_task(
+    rx: Receiver<()>,
+    tx: Sender<Action>,
+    duration_ms: u64,
+) -> Result<(), Box<dyn Error>> {
     loop {
         if let Ok(_) = rx.recv() {
-            thread::sleep(Duration::from_millis(250));
+            thread::sleep(Duration::from_millis(duration_ms));
             tx.send(ResetHighlight)?
         }
     }

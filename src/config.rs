@@ -118,12 +118,24 @@ impl Default for KeyBindingsConfig {
     }
 }
 
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(default)]
 pub struct Config {
     pub theme: ThemeConfig,
     pub keybindings: KeyBindingsConfig,
     pub command_line_placement: CommandLinePlacement,
+    pub highlight_duration_ms: u64,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Config {
+            theme: ThemeConfig::default(),
+            keybindings: KeyBindingsConfig::default(),
+            command_line_placement: CommandLinePlacement::default(),
+            highlight_duration_ms: 250,
+        }
+    }
 }
 
 pub fn config_path() -> Option<PathBuf> {
