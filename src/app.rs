@@ -15,7 +15,7 @@ use ratatui::crossterm::event;
 use ratatui::crossterm::event::Event;
 use ratatui::layout::{Constraint, Direction, Layout, Margin, Rect};
 use ratatui::prelude::Color::Red;
-use ratatui::prelude::Position;
+use ratatui::prelude::{Position, Span};
 use ratatui::prelude::Stylize;
 use ratatui::style::Color::Yellow;
 use ratatui::style::Style;
@@ -411,12 +411,19 @@ impl App {
         state = state.position(self.offset.y.into());
         frame.render_stateful_widget(scroll_bar, vscroll_area, &mut state);
 
-        let status_text = if self.output.ok {
-            " OK ".white().on_green()
-        } else {
-            match self.output.status_code {
-                None => " ERR ".white().on_red(),
-                Some(code) => format!(" ERR({code}) ").white().on_red(),
+        let status_text = match self.panes_mode {
+            PanesMode::Single => {
+                if self.output.ok {
+                    " OK ".white().on_green()
+                } else {
+                    match self.output.status_code {
+                        None => " ERR ".white().on_red(),
+                        Some(code) => format!(" ERR({code}) ").white().on_red(),
+                    }
+                }
+            }
+            PanesMode::Split => {
+                Span::from("")
             }
         };
 
