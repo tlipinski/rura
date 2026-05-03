@@ -79,7 +79,7 @@ impl App {
         thread::spawn(move || {
             debouncer_task(
                 debouncer_rx,
-                Duration::from_millis(1000),
+                Duration::from_millis(500),
                 move || {
                     action_tx
                         .send(Debounced)
