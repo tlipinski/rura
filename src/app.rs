@@ -222,11 +222,13 @@ impl App {
                                 self.wrap = !self.wrap;
                             }
                             UiCmd::HistoryNext => {
+                                // disable history for live mode
                                 if !self.live_mode.is_live() {
                                     self.rura_widget.handle_event(event);
                                 }
                             }
                             UiCmd::HistoryPrev => {
+                                // disable history for live mode
                                 if !self.live_mode.is_live() {
                                     self.rura_widget.handle_event(event);
                                 }
