@@ -250,6 +250,7 @@ impl App {
                                     self.offset.y = 0;
                                 }
                                 self.output = new_output;
+                                self.error_output_opt = None
                             }
                             UiCmd::ScrollDown => {
                                 self.offset.y = self.offset.y.saturating_add(1);
@@ -314,14 +315,11 @@ impl App {
 
         let error_output_lines = match self.panes_mode {
             PanesMode::Single => 0,
-            PanesMode::Split => {
-                self
-                    .error_output_opt
-                    .as_ref()
-                    .map(|e| e.lines.len() + 2)
-                    .unwrap_or(0)
-            }
-
+            PanesMode::Split => self
+                .error_output_opt
+                .as_ref()
+                .map(|e| e.lines.len() + 2)
+                .unwrap_or(0),
         };
 
         let (command_input_area, output_area, errors_area, status_area) =
@@ -419,8 +417,9 @@ impl App {
             frame.render_widget(lines_par, line_nums_area);
         }
 
-        let mut output_par =
-            Paragraph::new(output.lines[range].join("\n")).scroll((0, self.offset.x));
+        let mut output_par = Paragraph::new(output.lines[range].join("\n"))
+            .scroll((0, self.offset.x))
+            .block(Block::default());
 
         if self.wrap {
             output_par = output_par.wrap(Wrap::default())
