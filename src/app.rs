@@ -243,7 +243,7 @@ impl App {
                             self.input_mode = InputMode::LiveFull;
                         }
                     },
-                    (KeyCode::Char(_) | KeyCode::Backspace, KeyModifiers::NONE) => {
+                    (Char(_) | KeyCode::Backspace, KeyModifiers::NONE) => {
                         self.rura_widget.handle_event(event);
                         match self.input_mode {
                             InputMode::Normal => {}
@@ -255,6 +255,12 @@ impl App {
                     _ => match to_ui_command(key_bindings, code, mods) {
                         None => {
                             self.rura_widget.handle_event(event);
+                            match self.input_mode {
+                                InputMode::Normal => {}
+                                InputMode::LiveFull | InputMode::LiveUntilCursor => {
+                                    self.debouncer_tx.send(()).unwrap();
+                                }
+                            }
                         }
                         Some(a) => match a {
                             UiCmd::Quit => {
