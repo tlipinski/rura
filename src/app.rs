@@ -50,9 +50,9 @@ pub struct App {
     command_line_placement: CommandLinePlacement,
     kb_config: KeyBindingsConfig,
     help: bool,
-    mode: Mode,
+    input_mode: InputMode,
     debouncer_tx: Sender<()>,
-    output_display: OutputDisplay,
+    error_display_mode: ErrorDisplayMode,
 }
 
 impl App {
@@ -121,9 +121,9 @@ impl App {
             command_line_placement,
             kb_config,
             help: false,
-            mode: Mode::Normal,
+            input_mode: InputMode::Normal,
             debouncer_tx,
-            output_display: OutputDisplay::SplitErrorPane,
+            error_display_mode: ErrorDisplayMode::Pane,
         }
     }
 
@@ -148,13 +148,13 @@ impl App {
                 self.output = Output::ok(&self.stdin);
             }
             Debounced => {
-                match self.mode {
-                    Mode::Normal => {
+                match self.input_mode {
+                    InputMode::Normal => {
                         // Should not happen in normal mode
                         // Probably user turned off live before debouncer responded
                     }
-                    Mode::LiveFull => self.handle_execute(ExecuteType::FullLive),
-                    Mode::LiveUntilCursor => self.handle_execute(ExecuteType::UntilCurrentLive),
+                    InputMode::LiveFull => self.handle_execute(ExecuteType::FullLive),
+                    InputMode::LiveUntilCursor => self.handle_execute(ExecuteType::UntilCurrentLive),
                 }
             }
         }
@@ -187,37 +187,37 @@ impl App {
                     (KeyCode::F(1), KeyModifiers::NONE) => {
                         self.help = !self.help;
                     }
-                    (KeyCode::F(2), KeyModifiers::NONE) => match self.output_display {
-                        OutputDisplay::SingleOutput => self.output_display = OutputDisplay::SplitErrorPane,
-                        OutputDisplay::SplitErrorPane => self.output_display = OutputDisplay::SingleOutput,
+                    (KeyCode::F(2), KeyModifiers::NONE) => match self.error_display_mode {
+                        ErrorDisplayMode::Inline => self.error_display_mode = ErrorDisplayMode::Pane,
+                        ErrorDisplayMode::Pane => self.error_display_mode = ErrorDisplayMode::Inline,
                     },
-                    (KeyCode::F(11), KeyModifiers::NONE) => match self.mode {
-                        Mode::Normal => {
-                            self.mode = Mode::LiveUntilCursor;
+                    (KeyCode::F(11), KeyModifiers::NONE) => match self.input_mode {
+                        InputMode::Normal => {
+                            self.input_mode = InputMode::LiveUntilCursor;
                         }
-                        Mode::LiveFull => {
-                            self.mode = Mode::LiveUntilCursor;
+                        InputMode::LiveFull => {
+                            self.input_mode = InputMode::LiveUntilCursor;
                         }
-                        Mode::LiveUntilCursor => {
-                            self.mode = Mode::Normal;
+                        InputMode::LiveUntilCursor => {
+                            self.input_mode = InputMode::Normal;
                         }
                     },
-                    (KeyCode::F(12), KeyModifiers::NONE) => match self.mode {
-                        Mode::Normal => {
-                            self.mode = Mode::LiveFull;
+                    (KeyCode::F(12), KeyModifiers::NONE) => match self.input_mode {
+                        InputMode::Normal => {
+                            self.input_mode = InputMode::LiveFull;
                         }
-                        Mode::LiveFull => {
-                            self.mode = Mode::Normal;
+                        InputMode::LiveFull => {
+                            self.input_mode = InputMode::Normal;
                         }
-                        Mode::LiveUntilCursor => {
-                            self.mode = Mode::LiveFull;
+                        InputMode::LiveUntilCursor => {
+                            self.input_mode = InputMode::LiveFull;
                         }
                     },
                     (KeyCode::Char(_) | KeyCode::Backspace, KeyModifiers::NONE) => {
                         self.rura_widget.handle_event(event);
-                        match self.mode {
-                            Mode::Normal => {}
-                            Mode::LiveFull | Mode::LiveUntilCursor => {
+                        match self.input_mode {
+                            InputMode::Normal => {}
+                            InputMode::LiveFull | InputMode::LiveUntilCursor => {
                                 self.debouncer_tx.send(()).unwrap();
                             }
                         }
@@ -270,13 +270,13 @@ impl App {
                             }
                             UiCmd::HistoryNext => {
                                 // disable history for live mode
-                                if matches!(self.mode, Mode::Normal) {
+                                if matches!(self.input_mode, InputMode::Normal) {
                                     self.rura_widget.handle_event(event);
                                 }
                             }
                             UiCmd::HistoryPrev => {
                                 // disable history for live mode
-                                if matches!(self.mode, Mode::Normal) {
+                                if matches!(self.input_mode, InputMode::Normal) {
                                     self.rura_widget.handle_event(event);
                                 }
                             }
@@ -308,9 +308,9 @@ impl App {
 
         let inner_area = area.inner(margin);
 
-        let error_output_lines = match self.output_display {
-            OutputDisplay::SingleOutput => 0,
-            OutputDisplay::SplitErrorPane => self
+        let error_output_lines = match self.error_display_mode {
+            ErrorDisplayMode::Inline => 0,
+            ErrorDisplayMode::Pane => self
                 .error_output_opt
                 .as_ref()
                 .map(|e| e.lines.len() + 2)
@@ -357,7 +357,7 @@ impl App {
             ])
             .areas(output_area);
 
-        let command_input_block = if matches!(self.mode, Mode::Normal) {
+        let command_input_block = if matches!(self.input_mode, InputMode::Normal) {
             Block::bordered()
         } else {
             Block::bordered()
@@ -373,7 +373,7 @@ impl App {
         let (x, y) = self.rura_widget.cursor(inner_rect.width);
         frame.set_cursor_position((command_input_area.x + 1 + x, command_input_area.y + 1 + y));
 
-        if matches!(self.output_display, OutputDisplay::SplitErrorPane) {
+        if matches!(self.error_display_mode, ErrorDisplayMode::Pane) {
             if let Some(err_output) = &self.error_output_opt {
                 let block = Block::bordered()
                     .title(format!(" Error: {} ", err_output.status_code.unwrap_or(0)))
@@ -426,8 +426,8 @@ impl App {
         state = state.position(self.offset.y.into());
         frame.render_stateful_widget(scroll_bar, vscroll_area, &mut state);
 
-        let status_text = match self.output_display {
-            OutputDisplay::SingleOutput => {
+        let status_text = match self.error_display_mode {
+            ErrorDisplayMode::Inline => {
                 if self.main_output().ok {
                     " OK ".white().on_green()
                 } else {
@@ -437,35 +437,67 @@ impl App {
                     }
                 }
             }
-            OutputDisplay::SplitErrorPane => Span::from(""),
+            ErrorDisplayMode::Pane => Span::from(""),
         };
 
-        let live_status = {
-            match self.mode {
-                Mode::Normal => "".white(),
-                Mode::LiveFull => " LIVE ".on_yellow(),
-                Mode::LiveUntilCursor => " LIVE UC ".on_yellow(),
-            }
-        };
-
-        let [hints_area, live_area, exit_code_area, lines_area] = Layout::default()
+        let [hints_area, exit_code_area, lines_area] = Layout::default()
             .direction(Direction::Horizontal)
             .constraints(vec![
                 Constraint::Fill(1),
-                Constraint::Length(live_status.width() as u16 + 1),
                 Constraint::Length(status_text.width() as u16 + 1),
                 Constraint::Length(self.output.len().to_string().len() as u16 + 3),
             ])
             .areas(status_area);
 
-        let hints = " ^C Quit | F1 Help | F2 Output mode | F11 Live UC | F12 Live";
-        frame.render_widget(hints.dim(), hints_area);
+        let hints = {
 
-        frame.render_widget(live_status, live_area);
+            let mut spans: Vec<Span> = vec![];
 
-        match self.output_display {
-            OutputDisplay::SplitErrorPane => (),
-            OutputDisplay::SingleOutput => frame.render_widget(status_text, exit_code_area),
+            spans.push(" ^C Quit".into());
+            spans.push(" | ".into());
+            spans.push("F2 Err:".into());
+
+            match self.error_display_mode {
+                ErrorDisplayMode::Pane => {
+                    spans.push("Pane".white().on_dark_gray());
+                    spans.push("/Inline".into());
+                }
+                ErrorDisplayMode::Inline => {
+                    spans.push("Pane/".into());
+                    spans.push("Inline".white().on_dark_gray());
+                }
+            };
+
+            spans.push(" | ".into());
+
+            spans.push("F11 ".into());
+            match self.input_mode {
+                InputMode::Normal | InputMode::LiveFull => {
+                    spans.push("Live UC".into());
+                }
+                InputMode::LiveUntilCursor => {
+                    spans.push("Live UC".on_yellow());
+                }
+            }
+
+            spans.push(" | ".into());
+            spans.push("F12 ".into());
+            match self.input_mode {
+                InputMode::Normal | InputMode::LiveUntilCursor => {
+                    spans.push("Live".into());
+                }
+                InputMode::LiveFull => {
+                    spans.push("Live".on_yellow());
+                }
+            }
+
+            Line::from_iter(spans).centered()
+        };
+        frame.render_widget(hints, hints_area);
+
+        match self.error_display_mode {
+            ErrorDisplayMode::Pane => (),
+            ErrorDisplayMode::Inline => frame.render_widget(status_text, exit_code_area),
         }
 
         frame.render_widget(
@@ -511,9 +543,9 @@ impl App {
     }
 
     fn main_output(&self) -> &Output {
-        match self.output_display {
-            OutputDisplay::SingleOutput => self.error_output_opt.as_ref().unwrap_or(&self.output),
-            OutputDisplay::SplitErrorPane => &self.output,
+        match self.error_display_mode {
+            ErrorDisplayMode::Inline => self.error_output_opt.as_ref().unwrap_or(&self.output),
+            ErrorDisplayMode::Pane => &self.output,
         }
     }
 }
@@ -656,13 +688,13 @@ pub enum CommandLinePlacement {
     Bottom,
 }
 
-enum Mode {
+enum InputMode {
     Normal,
     LiveFull,
     LiveUntilCursor,
 }
 
-enum OutputDisplay {
-    SingleOutput,
-    SplitErrorPane,
+enum ErrorDisplayMode {
+    Inline,
+    Pane,
 }
