@@ -38,6 +38,7 @@ pub struct App {
     rura_widget: RuraWidget,
     stdin: String,
     output: Output,
+    error_output_opt: Option<Output>,
     offset: Position,
     wrap: bool,
     exit: bool,
@@ -49,7 +50,8 @@ pub struct App {
     kb_config: KeyBindingsConfig,
     help: bool,
     live_mode: LiveMode,
-    debouncer_tx: Sender<()>
+    debouncer_tx: Sender<()>,
+    panes_mode: PanesMode,
 }
 
 impl App {
@@ -112,6 +114,7 @@ impl App {
             stdin: "".to_string(),
             offset: Position::default(),
             output: Output::ok(""),
+            error_output_opt: Some(Output::err("err", Some(-1))),
             action_rx,
             command_tx,
             wrap: false,
@@ -122,7 +125,8 @@ impl App {
             kb_config,
             help: false,
             live_mode: LiveMode::Off,
-            debouncer_tx
+            debouncer_tx,
+            panes_mode: PanesMode::Split,
         }
     }
 
@@ -168,7 +172,12 @@ impl App {
             self.offset.y = 0;
         }
 
-        self.output = output;
+        if output.ok {
+            self.output = output;
+            self.error_output_opt = None;
+        } else {
+            self.error_output_opt = Some(output);
+        }
     }
 
     pub fn handle_event(&mut self, event: &Event) {
@@ -295,30 +304,32 @@ impl App {
 
         let inner_area = area.inner(margin);
 
-        let (command_input_area, output_area, status_area) = match self.command_line_placement {
+        let (command_input_area, output_area, errors_area, status_area) = match self.command_line_placement {
             CommandLinePlacement::Top => {
                 let layout = Layout::default()
                     .direction(Direction::Vertical)
                     .constraints(vec![
                         Constraint::Length(self.rura_widget.height(inner_area.width) + 2),
+                        Constraint::Fill(3),
                         Constraint::Fill(1),
                         Constraint::Length(1),
                     ])
                     .split(area);
 
-                (layout[0], layout[1], layout[2])
+                (layout[0], layout[1], layout[2], layout[3])
             }
             CommandLinePlacement::Bottom => {
                 let layout = Layout::default()
                     .direction(Direction::Vertical)
                     .constraints(vec![
+                        Constraint::Fill(3),
                         Constraint::Fill(1),
                         Constraint::Length(self.rura_widget.height(inner_area.width) + 2),
                         Constraint::Length(1),
                     ])
                     .split(area);
 
-                (layout[1], layout[0], layout[2])
+                (layout[1], layout[0], layout[3], layout[2])
             }
         };
 
@@ -347,6 +358,16 @@ impl App {
 
         let (x, y) = self.rura_widget.cursor(inner_rect.width);
         frame.set_cursor_position((command_input_area.x + 1 + x, command_input_area.y + 1 + y));
+
+        if let Some(err_output) = &self.error_output_opt {
+            let mut output_par =
+                Paragraph::new(err_output.lines.join("\n")).scroll((0, self.offset.x));
+
+            if self.wrap {
+                output_par = output_par.wrap(Wrap::default())
+            };
+            frame.render_widget(output_par, errors_area);
+        }
 
         let height = output_content_area.height.min(self.output.len() as u16);
 
@@ -607,4 +628,9 @@ impl LiveMode {
     pub fn is_live(&self) -> bool {
         matches!(self, LiveMode::Full | LiveMode::UntilCurrent)
     }
+}
+
+enum PanesMode {
+    Single,
+    Split,
 }
