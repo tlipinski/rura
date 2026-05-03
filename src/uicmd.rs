@@ -23,7 +23,7 @@ pub enum UiCmd {
 }
 
 pub struct KeyBindings {
-    bindings: HashMap<UiCmd, Vec<(KeyCode, KeyModifiers)>>,
+    pub bindings: HashMap<UiCmd, Vec<(KeyCode, KeyModifiers)>>,
 }
 
 impl KeyBindings {
