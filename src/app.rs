@@ -349,7 +349,7 @@ impl App {
             match self.live_mode {
                 LiveMode::Off => {"".white()}
                 LiveMode::Full => {" LIVE ".on_yellow()}
-                LiveMode::UntilCurrent => {" LIVE (until current) ".on_yellow()}
+                LiveMode::UntilCurrent => {" LIVE UC ".on_yellow()}
             }
         };
 

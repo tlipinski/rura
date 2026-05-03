@@ -94,13 +94,13 @@ impl RuraWidget {
                             }
                         }
                         UiCmd::HistoryPrev => {
-                            if live {
+                            if !live {
                                 self.command_input =
                                     Input::from(self.history.previous(self.command_input.value()));
                             }
                         }
                         UiCmd::HistoryNext => {
-                            if live {
+                            if !live {
                                 self.command_input =
                                     Input::from(self.history.next(self.command_input.value()));
                             }
