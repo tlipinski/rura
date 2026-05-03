@@ -187,15 +187,26 @@ impl App {
                     (KeyCode::F(1), KeyModifiers::NONE) => {
                         self.help = !self.help;
                     }
-                    (KeyCode::F(12), KeyModifiers::NONE) => match self.live_mode {
+                    (KeyCode::F(11), KeyModifiers::NONE) => match self.live_mode {
                         LiveMode::Off => {
-                            self.live_mode = LiveMode::Full;
+                            self.live_mode = LiveMode::UntilCurrent;
                         }
                         LiveMode::Full => {
                             self.live_mode = LiveMode::UntilCurrent;
                         }
                         LiveMode::UntilCurrent => {
                             self.live_mode = LiveMode::Off;
+                        }
+                    },
+                    (KeyCode::F(12), KeyModifiers::NONE) => match self.live_mode {
+                        LiveMode::Off => {
+                            self.live_mode = LiveMode::Full;
+                        }
+                        LiveMode::Full => {
+                            self.live_mode = LiveMode::Off;
+                        }
+                        LiveMode::UntilCurrent => {
+                            self.live_mode = LiveMode::Full;
                         }
                     },
                     (KeyCode::F(2), KeyModifiers::NONE) => match self.panes_mode {
