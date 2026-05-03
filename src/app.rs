@@ -6,13 +6,17 @@ use crate::rura::ExecuteType;
 use crate::rura_widget::RuraWidget;
 use crate::theme::Theme;
 use crate::uicmd::{KeyBindings, UiCmd, to_ui_command};
+use crossterm::event::{KeyCode, KeyModifiers};
 use crossterm::tty::IsTty;
+use itertools::Itertools;
 use log::debug;
 use ratatui::crossterm::event;
 use ratatui::crossterm::event::Event;
 use ratatui::layout::{Constraint, Direction, Layout, Margin, Rect};
 use ratatui::prelude::Position;
 use ratatui::prelude::Stylize;
+use ratatui::style::Style;
+use ratatui::text::{Line, Text};
 use ratatui::widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation};
 use ratatui::widgets::{ScrollbarState, Wrap};
 use ratatui::{DefaultTerminal, Frame};
@@ -26,6 +30,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 use std::time::Duration;
 use tui_input::Input;
+use tui_popup::Popup;
 
 pub struct App {
     rura_widget: RuraWidget,
@@ -39,13 +44,15 @@ pub struct App {
     theme: Theme,
     key_bindings: KeyBindings,
     command_line_placement: CommandLinePlacement,
+    kb_config: KeyBindingsConfig,
+    help: bool,
 }
 
 impl App {
     pub fn new(
         args: Args,
         theme_config: &ThemeConfig,
-        kb_config: &KeyBindingsConfig,
+        kb_config: KeyBindingsConfig,
         command_line_placement: CommandLinePlacement,
     ) -> Self {
         let (action_tx, action_rx) = std::sync::mpsc::channel::<Action>();
@@ -81,7 +88,7 @@ impl App {
                 highlight_until: None,
                 theme: Theme::from_config(theme_config),
                 history: History::load(),
-                key_bindings: KeyBindings::from_config(kb_config),
+                key_bindings: KeyBindings::from_config(&kb_config),
                 highlight_reset_tx,
             },
             stdin: "".to_string(),
@@ -92,8 +99,10 @@ impl App {
             wrap: false,
             exit: false,
             theme: Theme::from_config(theme_config),
-            key_bindings: KeyBindings::from_config(kb_config),
+            key_bindings: KeyBindings::from_config(&kb_config),
             command_line_placement: command_line_placement,
+            kb_config: kb_config,
+            help: false,
         }
     }
 
@@ -134,6 +143,16 @@ impl App {
                 let code = key_event.code;
                 let mods = key_event.modifiers;
                 let key_bindings = &self.key_bindings;
+
+                match (code, mods) {
+                    (KeyCode::Esc, KeyModifiers::NONE) => {
+                        self.help = false;
+                    }
+                    (KeyCode::F(1), KeyModifiers::NONE) => {
+                        self.help = !self.help;
+                    }
+                    _ => {}
+                }
 
                 match to_ui_command(key_bindings, code, mods) {
                     None => {
@@ -313,7 +332,24 @@ impl App {
                 .bold()
                 .into_right_aligned_line(),
             lines_area,
-        )
+        );
+
+        #[rustfmt::skip]
+        let lines = Text::from(vec![
+            Line::from(format!("{:08} - Execute full command", self.kb_config.execute_full.first().unwrap().to_string())),
+            Line::from(format!("{:08} - Execute until cursor", self.kb_config.execute_until_current.first().unwrap().to_string())),
+            Line::from(format!("{:08} - Execute before cursor", self.kb_config.execute_until_prev.first().unwrap().to_string())),
+            Line::from(format!("{:08} - Reset input", self.kb_config.reset_input.first().unwrap().to_string())),
+            Line::from(format!("{:08} - Go to next subcommand", self.kb_config.subcommand_next.first().unwrap().to_string())),
+            Line::from(format!("{:08} - Go to previous subcommand", self.kb_config.subcommand_prev.first().unwrap().to_string())),
+        ]);
+
+        if self.help {
+            let popup = Popup::new(lines)
+                .title(" Keys ")
+                .style(Style::new().white().on_blue());
+            frame.render_widget(popup, frame.area());
+        }
     }
 }
 
