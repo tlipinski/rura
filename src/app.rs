@@ -52,7 +52,7 @@ pub struct App {
     help: bool,
     mode: Mode,
     debouncer_tx: Sender<()>,
-    panes_mode: PanesMode,
+    output_display: OutputDisplay,
 }
 
 impl App {
@@ -123,7 +123,7 @@ impl App {
             help: false,
             mode: Mode::Normal,
             debouncer_tx,
-            panes_mode: PanesMode::Split,
+            output_display: OutputDisplay::SplitErrorPane,
         }
     }
 
@@ -209,9 +209,9 @@ impl App {
                             self.mode = Mode::LiveFull;
                         }
                     },
-                    (KeyCode::F(2), KeyModifiers::NONE) => match self.panes_mode {
-                        PanesMode::Single => self.panes_mode = PanesMode::Split,
-                        PanesMode::Split => self.panes_mode = PanesMode::Single,
+                    (KeyCode::F(2), KeyModifiers::NONE) => match self.output_display {
+                        OutputDisplay::SingleOutput => self.output_display = OutputDisplay::SplitErrorPane,
+                        OutputDisplay::SplitErrorPane => self.output_display = OutputDisplay::SingleOutput,
                     },
                     (KeyCode::Char(_) | KeyCode::Backspace, KeyModifiers::NONE) => {
                         self.rura_widget.handle_event(event);
@@ -308,9 +308,9 @@ impl App {
 
         let inner_area = area.inner(margin);
 
-        let error_output_lines = match self.panes_mode {
-            PanesMode::Single => 0,
-            PanesMode::Split => self
+        let error_output_lines = match self.output_display {
+            OutputDisplay::SingleOutput => 0,
+            OutputDisplay::SplitErrorPane => self
                 .error_output_opt
                 .as_ref()
                 .map(|e| e.lines.len() + 2)
@@ -373,7 +373,7 @@ impl App {
         let (x, y) = self.rura_widget.cursor(inner_rect.width);
         frame.set_cursor_position((command_input_area.x + 1 + x, command_input_area.y + 1 + y));
 
-        if matches!(self.panes_mode, PanesMode::Split) {
+        if matches!(self.output_display, OutputDisplay::SplitErrorPane) {
             if let Some(err_output) = &self.error_output_opt {
                 let block = Block::bordered()
                     .title(format!(" Error: {} ", err_output.status_code.unwrap_or(0)))
@@ -426,8 +426,8 @@ impl App {
         state = state.position(self.offset.y.into());
         frame.render_stateful_widget(scroll_bar, vscroll_area, &mut state);
 
-        let status_text = match self.panes_mode {
-            PanesMode::Single => {
+        let status_text = match self.output_display {
+            OutputDisplay::SingleOutput => {
                 if self.main_output().ok {
                     " OK ".white().on_green()
                 } else {
@@ -437,7 +437,7 @@ impl App {
                     }
                 }
             }
-            PanesMode::Split => Span::from(""),
+            OutputDisplay::SplitErrorPane => Span::from(""),
         };
 
         let live_status = {
@@ -463,9 +463,9 @@ impl App {
 
         frame.render_widget(live_status, live_area);
 
-        match self.panes_mode {
-            PanesMode::Split => (),
-            PanesMode::Single => frame.render_widget(status_text, exit_code_area),
+        match self.output_display {
+            OutputDisplay::SplitErrorPane => (),
+            OutputDisplay::SingleOutput => frame.render_widget(status_text, exit_code_area),
         }
 
         frame.render_widget(
@@ -511,9 +511,9 @@ impl App {
     }
 
     fn main_output(&self) -> &Output {
-        match self.panes_mode {
-            PanesMode::Single => self.error_output_opt.as_ref().unwrap_or(&self.output),
-            PanesMode::Split => &self.output,
+        match self.output_display {
+            OutputDisplay::SingleOutput => self.error_output_opt.as_ref().unwrap_or(&self.output),
+            OutputDisplay::SplitErrorPane => &self.output,
         }
     }
 }
@@ -662,7 +662,7 @@ enum Mode {
     LiveUntilCursor,
 }
 
-enum PanesMode {
-    Single,
-    Split,
+enum OutputDisplay {
+    SingleOutput,
+    SplitErrorPane,
 }
