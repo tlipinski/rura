@@ -161,6 +161,9 @@ impl App {
                     _ => match to_ui_command(key_bindings, code, mods) {
                         None => {
                             self.rura_widget.handle_event(event);
+                            if self.live {
+                                self.handle_execute(ExecuteType::Full);
+                            }
                         }
                         Some(a) => match a {
                             UiCmd::Quit => {
