@@ -270,13 +270,13 @@ impl App {
                             }
                             UiCmd::HistoryNext => {
                                 // disable history for live mode
-                                if !self.mode.is_live() {
+                                if matches!(self.mode, Mode::Normal) {
                                     self.rura_widget.handle_event(event);
                                 }
                             }
                             UiCmd::HistoryPrev => {
                                 // disable history for live mode
-                                if !self.mode.is_live() {
+                                if matches!(self.mode, Mode::Normal) {
                                     self.rura_widget.handle_event(event);
                                 }
                             }
@@ -660,12 +660,6 @@ enum Mode {
     Normal,
     LiveFull,
     LiveUntilCursor,
-}
-
-impl Mode {
-    pub fn is_live(&self) -> bool {
-        matches!(self, Mode::LiveFull | Mode::LiveUntilCursor)
-    }
 }
 
 enum PanesMode {
