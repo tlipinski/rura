@@ -6,6 +6,7 @@ mod rura;
 mod rura_widget;
 mod uicmd;
 mod theme;
+mod debouncer;
 
 use crate::app::App;
 use crate::config::load_config;
