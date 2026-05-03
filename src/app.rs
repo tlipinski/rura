@@ -32,6 +32,7 @@ use std::process::{Command, Stdio};
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 use std::time::Duration;
+use crossterm::event::KeyCode::Char;
 use tui_input::Input;
 use tui_popup::Popup;
 
@@ -181,6 +182,20 @@ impl App {
                 let code = key_event.code;
                 let mods = key_event.modifiers;
                 let key_bindings = &self.key_bindings;
+
+                if let Some(confirm_live) = self.confirm_live.clone() {
+                    match (code, mods) {
+                        (KeyCode::Esc | Char('n'), KeyModifiers::NONE) => {
+                            self.confirm_live = None
+                        }
+                        (Char('y'), KeyModifiers::NONE) => {
+                            self.confirm_live = None;
+                            self.input_mode = confirm_live;
+                        }
+                        _ => {}
+                    }
+                    return
+                }
 
                 match (code, mods) {
                     (KeyCode::Esc, KeyModifiers::NONE) => {
@@ -707,6 +722,7 @@ pub enum CommandLinePlacement {
     Bottom,
 }
 
+#[derive(Clone)]
 enum InputMode {
     Normal,
     LiveFull,
