@@ -1,11 +1,11 @@
+use crate::Args;
 use crate::app::Action::{CommandCompleted, ResetHighlight, StdinRead, UserInput};
-use crate::config::{history_path, KeyBindingsConfig, ThemeConfig};
+use crate::config::{KeyBindingsConfig, ThemeConfig, history_path};
 use crate::history::History;
 use crate::rura::ExecuteType;
 use crate::rura_widget::RuraWidget;
 use crate::theme::Theme;
-use crate::uicmd::{to_ui_command, KeyBindings, UiCmd};
-use crate::Args;
+use crate::uicmd::{KeyBindings, UiCmd, to_ui_command};
 use crossterm::tty::IsTty;
 use log::debug;
 use ratatui::crossterm::event;
@@ -15,11 +15,11 @@ use ratatui::prelude::Position;
 use ratatui::prelude::Stylize;
 use ratatui::widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation};
 use ratatui::widgets::{ScrollbarState, Wrap};
-use ratatui::{DefaultTerminal, Frame, };
+use ratatui::{DefaultTerminal, Frame};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::VecDeque;
 use std::error::Error;
-use std::io::{stdin, Read, Write};
+use std::io::{Read, Write, stdin};
 use std::ops::Range;
 use std::process::{Command, Stdio};
 use std::sync::mpsc::{Receiver, Sender};
@@ -288,11 +288,31 @@ impl App {
         state = state.position(self.offset.y.into());
         frame.render_stateful_widget(scroll_bar, vscroll_area, &mut state);
 
+        let status_text = if self.output.ok {
+            " OK ".white().on_green()
+        } else {
+            " ERR ".white().on_red()
+        };
+
+        let status_layout = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints(vec![
+                Constraint::Fill(1),
+                Constraint::Length(status_text.width() as u16 + 1),
+                Constraint::Length(self.output.len().to_string().len() as u16 + 3),
+            ])
+            .split(status_area);
+
+        let hints = " ^C Quit | Enter Run | Tab Next | Alt+\\ Until | Alt+Shift+\\ Until Prev ";
+        frame.render_widget(hints.dim(), status_layout[0]);
+
+        frame.render_widget(status_text, status_layout[1]);
+
         frame.render_widget(
-            format!("Lines: {} ", self.output.len())
+            format!("L:{} ", self.output.len())
                 .bold()
                 .into_right_aligned_line(),
-            status_area,
+            status_layout[2],
         )
     }
 }
