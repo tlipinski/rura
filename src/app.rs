@@ -479,51 +479,7 @@ impl App {
             ])
             .areas(status_area);
 
-        let hints = {
-            let mut spans: Vec<Span> = vec![];
-
-            spans.push(" ".into());
-            spans.push("^C".bold());
-            spans.push(" Quit ".into());
-            spans.push("F2".bold());
-            spans.push(" Errors:".into());
-
-            match self.error_display_mode {
-                ErrorDisplayMode::Pane => {
-                    spans.push("Pane".white().on_dark_gray());
-                    spans.push("/Inline".into());
-                }
-                ErrorDisplayMode::Inline => {
-                    spans.push("Pane/".into());
-                    spans.push("Inline".white().on_dark_gray());
-                }
-            };
-
-            spans.push(" ".into());
-            spans.push("F11 ".bold());
-            match self.input_mode {
-                InputMode::Normal | InputMode::LiveFull => {
-                    spans.push("Live UC".into());
-                }
-                InputMode::LiveUntilCursor => {
-                    spans.push("Live UC".on_yellow());
-                }
-            }
-
-            spans.push(" ".into());
-            spans.push("F12 ".bold());
-            match self.input_mode {
-                InputMode::Normal | InputMode::LiveUntilCursor => {
-                    spans.push("Live".into());
-                }
-                InputMode::LiveFull => {
-                    spans.push("Live".on_yellow());
-                }
-            }
-
-            Line::from_iter(spans).centered()
-        };
-        frame.render_widget(hints.dim(), hints_area);
+        frame.render_widget(self.hints_widget(), hints_area);
 
         match self.error_display_mode {
             ErrorDisplayMode::Pane => (),
@@ -588,6 +544,51 @@ impl App {
                 .style(Style::new().white().on_yellow());
             frame.render_widget(popup, frame.area());
         }
+    }
+
+    fn hints_widget(&mut self) -> Line {
+        let mut spans: Vec<Span> = vec![];
+
+        spans.push(" ".into());
+        spans.push("^C".bold());
+        spans.push(" Quit ".into());
+        spans.push("F2".bold());
+        spans.push(" Errors:".into());
+
+        match self.error_display_mode {
+            ErrorDisplayMode::Pane => {
+                spans.push("Pane".white().on_dark_gray());
+                spans.push("/Inline".into());
+            }
+            ErrorDisplayMode::Inline => {
+                spans.push("Pane/".into());
+                spans.push("Inline".white().on_dark_gray());
+            }
+        };
+
+        spans.push(" ".into());
+        spans.push("F11 ".bold());
+        match self.input_mode {
+            InputMode::Normal | InputMode::LiveFull => {
+                spans.push("Live UC".into());
+            }
+            InputMode::LiveUntilCursor => {
+                spans.push("Live UC".on_yellow());
+            }
+        }
+
+        spans.push(" ".into());
+        spans.push("F12 ".bold());
+        match self.input_mode {
+            InputMode::Normal | InputMode::LiveUntilCursor => {
+                spans.push("Live".into());
+            }
+            InputMode::LiveFull => {
+                spans.push("Live".on_yellow());
+            }
+        }
+
+        Line::from_iter(spans).centered().dim()
     }
 
     fn main_output(&self) -> &Output {
