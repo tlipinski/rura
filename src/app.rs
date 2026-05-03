@@ -168,18 +168,21 @@ impl App {
                             self.rura_widget.live = false;
                         }
                     },
+                    (KeyCode::Char(_) | KeyCode::Backspace, KeyModifiers::NONE) => {
+                        self.rura_widget.handle_event(event);
+                        match self.live_mode {
+                            LiveMode::Off => {}
+                            LiveMode::Full => {
+                                self.handle_execute(ExecuteType::Full);
+                            }
+                            LiveMode::UntilCurrent => {
+                                self.handle_execute(ExecuteType::UntilCurrent);
+                            }
+                        }
+                    }
                     _ => match to_ui_command(key_bindings, code, mods) {
                         None => {
                             self.rura_widget.handle_event(event);
-                            match self.live_mode {
-                                LiveMode::Off => {}
-                                LiveMode::Full => {
-                                    self.handle_execute(ExecuteType::Full);
-                                }
-                                LiveMode::UntilCurrent => {
-                                    self.handle_execute(ExecuteType::UntilCurrent);
-                                }
-                            }
                         }
                         Some(a) => match a {
                             UiCmd::Quit => {
