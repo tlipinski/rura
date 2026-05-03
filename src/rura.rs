@@ -3,6 +3,7 @@ use crate::rura::State::{
     Backslash, Comment, Delimiter, DoubleQuoted, DoubleQuotedBackslash, Pipe, SingleQuoted,
     Unquoted, UnquotedBackslash,
 };
+use itertools::Itertools;
 use std::{fmt, mem};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -376,7 +377,20 @@ fn split_command(s: &str) -> Result<Vec<Vec<Part>>, ParseError> {
         }
     }
 
-    Ok(commands)
+    if commands.iter().any(|parts| {
+        // fail if empty subcommands exist
+        parts
+            .iter()
+            .map(|part| part.content())
+            .join("")
+            .trim()
+            .is_empty()
+    }) {
+        Err(ParseError)
+    } else {
+        Ok(commands)
+    }
+
 }
 
 enum State {
@@ -423,22 +437,22 @@ mod tests {
         assert_eq!(rura.command(&UntilCurrent), Some(("a".into(), 0)));
         assert_eq!(rura.command(&UntilCurrentPrev), None);
 
-        let rura = Rura::new("a|&b|c", 1).unwrap();
+        let rura = Rura::new("a|b|c", 1).unwrap();
         assert_eq!(rura.command(&Full), Some(("a|b|c".into(), 2)));
         assert_eq!(rura.command(&UntilCurrent), Some(("a".into(), 0)));
         assert_eq!(rura.command(&UntilCurrentPrev), None);
 
-        let rura = Rura::new("a|&b|c", 2).unwrap();
+        let rura = Rura::new("a|b|c", 2).unwrap();
         assert_eq!(rura.command(&Full), Some(("a|b|c".into(), 2)));
         assert_eq!(rura.command(&UntilCurrent), Some(("a|b".into(), 1)));
         assert_eq!(rura.command(&UntilCurrentPrev), Some(("a".into(), 0)));
 
-        let rura = Rura::new("a|&b|c", 3).unwrap();
+        let rura = Rura::new("a|b|c", 3).unwrap();
         assert_eq!(rura.command(&Full), Some(("a|b|c".into(), 2)));
         assert_eq!(rura.command(&UntilCurrent), Some(("a|b".into(), 1)));
         assert_eq!(rura.command(&UntilCurrentPrev), Some(("a".into(), 0)));
 
-        let rura = Rura::new("a|&b|c", 4).unwrap();
+        let rura = Rura::new("a|b|c", 4).unwrap();
         assert_eq!(rura.command(&Full), Some(("a|b|c".into(), 2)));
         assert_eq!(rura.command(&UntilCurrent), Some(("a|b|c".into(), 2)));
         assert_eq!(rura.command(&UntilCurrentPrev), Some(("a|b".into(), 1)));
@@ -530,8 +544,16 @@ mod tests {
     }
 
     #[test]
-    fn test_split_pipe_in_wrong_place() {
-        let cmd = " | some_cmd \n| ls ";
+    fn test_empty_subcommands() {
+        let cmd = " | cmd";
+        let split = split_command(cmd);
+        assert_eq!(split, Err(ParseError));
+
+        let cmd = "cmd | | a";
+        let split = split_command(cmd);
+        assert_eq!(split, Err(ParseError));
+
+        let cmd = "cmd | ";
         let split = split_command(cmd);
         assert_eq!(split, Err(ParseError));
     }
