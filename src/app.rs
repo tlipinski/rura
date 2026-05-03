@@ -470,12 +470,14 @@ impl App {
             ErrorDisplayMode::Pane => Span::from(""),
         };
 
-        let [hints_area, exit_code_area, lines_area] = Layout::default()
+        let [_, exit_code_area, hints_area, lines_area, _] = Layout::default()
             .direction(Direction::Horizontal)
             .constraints(vec![
-                Constraint::Fill(1),
+                Constraint::Length(1),
                 Constraint::Length(status_text.width() as u16 + 1),
+                Constraint::Fill(1),
                 Constraint::Length(self.output.len().to_string().len() as u16 + 3),
+                Constraint::Length(1),
             ])
             .areas(status_area);
 
@@ -487,7 +489,7 @@ impl App {
         }
 
         frame.render_widget(
-            format!("L:{} ", self.output.len())
+            format!("L:{}", self.output.len())
                 .bold()
                 .into_right_aligned_line(),
             lines_area,
