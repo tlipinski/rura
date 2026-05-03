@@ -1,24 +1,25 @@
-use crate::Args;
 use crate::app::Action::{CommandCompleted, ResetHighlight, StdinRead, UserInput};
-use crate::config::{KeyBindingsConfig, ThemeConfig, history_path};
+use crate::config::{history_path, KeyBindingsConfig, ThemeConfig};
 use crate::history::History;
 use crate::rura::ExecuteType;
 use crate::rura_widget::RuraWidget;
 use crate::theme::Theme;
-use crate::uicmd::{KeyBindings, UiCmd, to_ui_command};
+use crate::uicmd::{to_ui_command, KeyBindings, UiCmd};
+use crate::Args;
 use crossterm::tty::IsTty;
 use log::debug;
 use ratatui::crossterm::event;
 use ratatui::crossterm::event::Event;
 use ratatui::layout::{Constraint, Direction, Layout, Margin, Rect};
+use ratatui::prelude::Position;
 use ratatui::prelude::Stylize;
-use ratatui::prelude::{Position};
 use ratatui::widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation};
 use ratatui::widgets::{ScrollbarState, Wrap};
-use ratatui::{DefaultTerminal, Frame};
+use ratatui::{DefaultTerminal, Frame, };
+use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::VecDeque;
 use std::error::Error;
-use std::io::{Read, Write, stdin};
+use std::io::{stdin, Read, Write};
 use std::ops::Range;
 use std::process::{Command, Stdio};
 use std::sync::mpsc::{Receiver, Sender};
@@ -37,10 +38,16 @@ pub struct App {
     command_tx: Sender<(String, String)>,
     theme: Theme,
     key_bindings: KeyBindings,
+    command_line_placement: CommandLinePlacement,
 }
 
 impl App {
-    pub fn new(args: Args, theme_config: &ThemeConfig, kb_config: &KeyBindingsConfig) -> Self {
+    pub fn new(
+        args: Args,
+        theme_config: &ThemeConfig,
+        kb_config: &KeyBindingsConfig,
+        command_line_placement: CommandLinePlacement,
+    ) -> Self {
         let (action_tx, action_rx) = std::sync::mpsc::channel::<Action>();
         let (command_tx, command_rx) = std::sync::mpsc::channel::<(String, String)>();
         let (highlight_reset_tx, highlight_reset_rx) = std::sync::mpsc::channel::<()>();
@@ -86,6 +93,7 @@ impl App {
             exit: false,
             theme: Theme::from_config(theme_config),
             key_bindings: KeyBindings::from_config(kb_config),
+            command_line_placement: command_line_placement,
         }
     }
 
@@ -199,14 +207,32 @@ impl App {
 
         let inner_area = area.inner(margin);
 
-        let [command_input_area, output_area, status_area] = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints(vec![
-                Constraint::Length(self.rura_widget.height(inner_area.width) + 2),
-                Constraint::Fill(1),
-                Constraint::Length(1),
-            ])
-            .areas(area);
+        let (command_input_area, output_area, status_area) = match self.command_line_placement {
+            CommandLinePlacement::Top => {
+                let layout = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints(vec![
+                        Constraint::Length(self.rura_widget.height(inner_area.width) + 2),
+                        Constraint::Fill(1),
+                        Constraint::Length(1),
+                    ])
+                    .split(area);
+
+                (layout[0], layout[1], layout[2])
+            }
+            CommandLinePlacement::Bottom => {
+                let layout = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints(vec![
+                        Constraint::Fill(1),
+                        Constraint::Length(self.rura_widget.height(inner_area.width) + 2),
+                        Constraint::Length(1),
+                    ])
+                    .split(area);
+
+                (layout[1], layout[0], layout[2])
+            }
+        };
 
         let line_nums_width = self.output.len().to_string().len();
         let [line_nums_area, output_content_area, vscroll_area] = Layout::default()
@@ -226,7 +252,7 @@ impl App {
         frame.render_widget(&self.rura_widget, command_input_area.inner(margin));
 
         let (x, y) = self.rura_widget.cursor(inner_rect.width);
-        frame.set_cursor_position((area.x + 1 + x, area.y + 1 + y));
+        frame.set_cursor_position((command_input_area.x + 1 + x, command_input_area.y + 1 + y));
 
         let height = output_content_area.height.min(self.output.len() as u16);
 
@@ -392,4 +418,12 @@ enum Action {
     CommandCompleted(Output),
     StdinRead(String),
     ResetHighlight,
+}
+
+#[derive(Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CommandLinePlacement {
+    #[default]
+    Top,
+    Bottom,
 }

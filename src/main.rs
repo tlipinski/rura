@@ -66,7 +66,7 @@ fn run(args: Args, config: config::Config) -> Result<(), Box<dyn Error>> {
     info!("Starting TUI");
     let mut terminal = ratatui::init();
 
-    let app = App::new(args, &config.theme, &config.keybindings);
+    let app = App::new(args, &config.theme, &config.keybindings, config.command_line_placement);
     let last_command = app.run(&mut terminal)?;
 
     info!("Restoring terminal");

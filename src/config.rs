@@ -2,6 +2,7 @@ use crate::props::APP_NAME;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use crate::app::CommandLinePlacement;
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct StyleConfig {
@@ -122,6 +123,7 @@ impl Default for KeyBindingsConfig {
 pub struct Config {
     pub theme: ThemeConfig,
     pub keybindings: KeyBindingsConfig,
+    pub command_line_placement: CommandLinePlacement,
 }
 
 pub fn config_path() -> Option<PathBuf> {
