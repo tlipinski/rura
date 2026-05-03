@@ -419,29 +419,29 @@ mod tests {
     #[test]
     fn commands() {
         let rura = Rura::new("a|b|c", 0).unwrap();
-        assert_eq!(rura.command(Full), Some(("a|b|c".into(), 2)));
-        assert_eq!(rura.command(UntilCurrent), Some(("a".into(), 0)));
-        assert_eq!(rura.command(UntilCurrentPrev), None);
+        assert_eq!(rura.command(&Full), Some(("a|b|c".into(), 2)));
+        assert_eq!(rura.command(&UntilCurrent), Some(("a".into(), 0)));
+        assert_eq!(rura.command(&UntilCurrentPrev), None);
 
-        let rura = Rura::new("a|b|c", 1).unwrap();
-        assert_eq!(rura.command(Full), Some(("a|b|c".into(), 2)));
-        assert_eq!(rura.command(UntilCurrent), Some(("a".into(), 0)));
-        assert_eq!(rura.command(UntilCurrentPrev), None);
+        let rura = Rura::new("a|&b|c", 1).unwrap();
+        assert_eq!(rura.command(&Full), Some(("a|b|c".into(), 2)));
+        assert_eq!(rura.command(&UntilCurrent), Some(("a".into(), 0)));
+        assert_eq!(rura.command(&UntilCurrentPrev), None);
 
-        let rura = Rura::new("a|b|c", 2).unwrap();
-        assert_eq!(rura.command(Full), Some(("a|b|c".into(), 2)));
-        assert_eq!(rura.command(UntilCurrent), Some(("a|b".into(), 1)));
-        assert_eq!(rura.command(UntilCurrentPrev), Some(("a".into(), 0)));
+        let rura = Rura::new("a|&b|c", 2).unwrap();
+        assert_eq!(rura.command(&Full), Some(("a|b|c".into(), 2)));
+        assert_eq!(rura.command(&UntilCurrent), Some(("a|b".into(), 1)));
+        assert_eq!(rura.command(&UntilCurrentPrev), Some(("a".into(), 0)));
 
-        let rura = Rura::new("a|b|c", 3).unwrap();
-        assert_eq!(rura.command(Full), Some(("a|b|c".into(), 2)));
-        assert_eq!(rura.command(UntilCurrent), Some(("a|b".into(), 1)));
-        assert_eq!(rura.command(UntilCurrentPrev), Some(("a".into(), 0)));
+        let rura = Rura::new("a|&b|c", 3).unwrap();
+        assert_eq!(rura.command(&Full), Some(("a|b|c".into(), 2)));
+        assert_eq!(rura.command(&UntilCurrent), Some(("a|b".into(), 1)));
+        assert_eq!(rura.command(&UntilCurrentPrev), Some(("a".into(), 0)));
 
-        let rura = Rura::new("a|b|c", 4).unwrap();
-        assert_eq!(rura.command(Full), Some(("a|b|c".into(), 2)));
-        assert_eq!(rura.command(UntilCurrent), Some(("a|b|c".into(), 2)));
-        assert_eq!(rura.command(UntilCurrentPrev), Some(("a|b".into(), 1)));
+        let rura = Rura::new("a|&b|c", 4).unwrap();
+        assert_eq!(rura.command(&Full), Some(("a|b|c".into(), 2)));
+        assert_eq!(rura.command(&UntilCurrent), Some(("a|b|c".into(), 2)));
+        assert_eq!(rura.command(&UntilCurrentPrev), Some(("a|b".into(), 1)));
     }
 
     #[test]
