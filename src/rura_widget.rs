@@ -113,7 +113,7 @@ impl RuraWidget {
         }
     }
 
-    pub fn execute(&mut self, execute_type: ExecuteType, live: bool) -> Option<String> {
+    pub fn execute(&mut self, execute_type: ExecuteType) -> Option<String> {
         if self.command_input.value().is_empty() {
             return Some(String::new()); // todo replace with enum?
         }
@@ -121,10 +121,13 @@ impl RuraWidget {
             self.command_input.value(),
             self.command_input.visual_cursor(),
         ) {
-            Ok(r) => match r.command(execute_type) {
+            Ok(r) => match r.command(&execute_type) {
                 None => Some(String::new()),
                 Some((cmd, cmd_index)) => {
-                    if !live {
+                    if !matches!(
+                        execute_type,
+                        ExecuteType::FullLive | ExecuteType::UntilCurrentLive
+                    ) {
                         self.highlight_until = Some(cmd_index);
                         self.highlight_reset_tx.send(()).unwrap();
                         self.history.push(self.command_input.value());

@@ -17,7 +17,7 @@ use ratatui::prelude::Stylize;
 use ratatui::style::Color::Yellow;
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Text};
-use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Scrollbar, ScrollbarOrientation};
+use ratatui::widgets::{Block, BorderType, Paragraph, Scrollbar, ScrollbarOrientation};
 use ratatui::widgets::{ScrollbarState, Wrap};
 use ratatui::{DefaultTerminal, Frame};
 use serde::{Deserialize, Serialize};
@@ -169,10 +169,10 @@ impl App {
                         match self.live_mode {
                             LiveMode::Off => {}
                             LiveMode::Full => {
-                                self.handle_execute(ExecuteType::Full, true);
+                                self.handle_execute(ExecuteType::FullLive);
                             }
                             LiveMode::UntilCurrent => {
-                                self.handle_execute(ExecuteType::UntilCurrent, true);
+                                self.handle_execute(ExecuteType::UntilCurrentLive);
                             }
                         }
                     }
@@ -185,13 +185,13 @@ impl App {
                                 self.exit = true;
                             }
                             UiCmd::ExecuteFull => {
-                                self.handle_execute(ExecuteType::Full, false);
+                                self.handle_execute(ExecuteType::Full);
                             }
                             UiCmd::ExecuteUntilCurrent => {
-                                self.handle_execute(ExecuteType::UntilCurrent, false)
+                                self.handle_execute(ExecuteType::UntilCurrent)
                             }
                             UiCmd::ExecuteUntilPrev => {
-                                self.handle_execute(ExecuteType::UntilCurrentPrev, false)
+                                self.handle_execute(ExecuteType::UntilCurrentPrev)
                             }
                             UiCmd::ResetInput => {
                                 let new_output = Output::ok(&self.stdin);
@@ -232,9 +232,9 @@ impl App {
         }
     }
 
-    fn handle_execute(&mut self, kind: ExecuteType, live: bool) {
-        match self.rura_widget.execute(kind, live) {
-            Some(c) if c.is_empty() => {
+    fn handle_execute(&mut self, kind: ExecuteType) {
+        match self.rura_widget.execute(kind) {
+            Some(command) if command.is_empty() => {
                 self.output = Output::ok(&self.stdin);
             }
             Some(c) => self.command_tx.send((c, self.stdin.clone())).unwrap(),

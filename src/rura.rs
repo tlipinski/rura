@@ -1,4 +1,4 @@
-use crate::rura::ExecuteType::{Full, UntilCurrent, UntilCurrentPrev};
+use crate::rura::ExecuteType::{Full, FullLive, UntilCurrent, UntilCurrentLive, UntilCurrentPrev};
 use crate::rura::State::{
     Backslash, Comment, Delimiter, DoubleQuoted, DoubleQuotedBackslash, Pipe, SingleQuoted,
     Unquoted, UnquotedBackslash,
@@ -51,7 +51,7 @@ impl Rura {
         })
     }
 
-    pub fn command(&self, execute_type: ExecuteType) -> Option<(String, usize)> {
+    pub fn command(&self, execute_type: &ExecuteType) -> Option<(String, usize)> {
         let join_parts = |parts: &[Vec<Part>]| -> String {
             parts
                 .iter()
@@ -61,14 +61,14 @@ impl Rura {
         };
 
         match execute_type {
-            Full => {
+            Full | FullLive => {
                 if self.subcommands.is_empty() {
                     None
                 } else {
                     Some((join_parts(&self.subcommands), self.subcommands.len() - 1))
                 }
             }
-            UntilCurrent => {
+            UntilCurrent | UntilCurrentLive => {
                 if !self.subcommands.is_empty() {
                     Some((
                         join_parts(&self.subcommands[0..self.current + 1]),
@@ -83,7 +83,10 @@ impl Rura {
                     if self.current == 0 {
                         None
                     } else {
-                        Some((join_parts(&self.subcommands[0..self.current]), self.current - 1))
+                        Some((
+                            join_parts(&self.subcommands[0..self.current]),
+                            self.current - 1,
+                        ))
                     }
                 } else {
                     None
@@ -175,12 +178,13 @@ impl Rura {
         }
         None
     }
-
 }
 
 pub enum ExecuteType {
     Full,
+    FullLive,
     UntilCurrent,
+    UntilCurrentLive,
     UntilCurrentPrev,
 }
 
