@@ -187,6 +187,10 @@ impl App {
                     (KeyCode::F(1), KeyModifiers::NONE) => {
                         self.help = !self.help;
                     }
+                    (KeyCode::F(2), KeyModifiers::NONE) => match self.output_display {
+                        OutputDisplay::SingleOutput => self.output_display = OutputDisplay::SplitErrorPane,
+                        OutputDisplay::SplitErrorPane => self.output_display = OutputDisplay::SingleOutput,
+                    },
                     (KeyCode::F(11), KeyModifiers::NONE) => match self.mode {
                         Mode::Normal => {
                             self.mode = Mode::LiveUntilCursor;
@@ -208,10 +212,6 @@ impl App {
                         Mode::LiveUntilCursor => {
                             self.mode = Mode::LiveFull;
                         }
-                    },
-                    (KeyCode::F(2), KeyModifiers::NONE) => match self.output_display {
-                        OutputDisplay::SingleOutput => self.output_display = OutputDisplay::SplitErrorPane,
-                        OutputDisplay::SplitErrorPane => self.output_display = OutputDisplay::SingleOutput,
                     },
                     (KeyCode::Char(_) | KeyCode::Backspace, KeyModifiers::NONE) => {
                         self.rura_widget.handle_event(event);
