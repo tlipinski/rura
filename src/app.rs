@@ -161,7 +161,7 @@ impl App {
                         }
                         LiveMode::Full => {
                             self.live_mode = LiveMode::UntilCurrent;
-                            self.rura_widget.live = false;
+                            self.rura_widget.live = true;
                         }
                         LiveMode::UntilCurrent => {
                             self.live_mode = LiveMode::Off;
