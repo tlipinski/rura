@@ -14,9 +14,9 @@ use ratatui::crossterm::event::Event;
 use ratatui::layout::{Constraint, Direction, Layout, Margin, Rect};
 use ratatui::prelude::Position;
 use ratatui::prelude::Stylize;
-use ratatui::style::Style;
+use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Text};
-use ratatui::widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation};
+use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Scrollbar, ScrollbarOrientation};
 use ratatui::widgets::{ScrollbarState, Wrap};
 use ratatui::{DefaultTerminal, Frame};
 use serde::{Deserialize, Serialize};
@@ -28,6 +28,7 @@ use std::process::{Command, Stdio};
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 use std::time::Duration;
+use ratatui::style::Color::Yellow;
 use tui_input::Input;
 use tui_popup::Popup;
 
@@ -90,6 +91,7 @@ impl App {
                 history: History::load(),
                 key_bindings: KeyBindings::from_config(&kb_config),
                 highlight_reset_tx,
+                live: true,
             },
             stdin: "".to_string(),
             offset: Position::default(),
@@ -154,58 +156,57 @@ impl App {
                     }
                     (KeyCode::F(12), KeyModifiers::NONE) => {
                         self.live = !self.live;
+                        self.rura_widget.live = self.live;
                     }
-                    _ => {}
-                }
-
-                match to_ui_command(key_bindings, code, mods) {
-                    None => {
-                        self.rura_widget.handle_event(event);
-                    }
-                    Some(a) => match a {
-                        UiCmd::Quit => {
-                            self.exit = true;
-                        }
-                        UiCmd::ExecuteFull => {
-                            self.handle_execute(ExecuteType::Full);
-                        }
-                        UiCmd::ExecuteUntilCurrent => {
-                            self.handle_execute(ExecuteType::UntilCurrent)
-                        }
-                        UiCmd::ExecuteUntilPrev => {
-                            self.handle_execute(ExecuteType::UntilCurrentPrev)
-                        }
-                        UiCmd::ResetInput => {
-                            let new_output = Output::ok(&self.stdin);
-                            if self.output.len() != new_output.len() {
-                                self.offset.y = 0;
-                            }
-                            self.output = new_output;
-                        }
-                        UiCmd::ScrollDown => {
-                            self.offset.y = self.offset.y.saturating_add(1);
-                        }
-                        UiCmd::ScrollDownPage => {
-                            self.offset.y = self.offset.y.saturating_add(10);
-                        }
-                        UiCmd::ScrollUp => {
-                            self.offset.y = self.offset.y.saturating_sub(1);
-                        }
-                        UiCmd::ScrollUpPage => {
-                            self.offset.y = self.offset.y.saturating_sub(10);
-                        }
-                        UiCmd::ScrollLeft => {
-                            self.offset.x = self.offset.x.saturating_sub(1);
-                        }
-                        UiCmd::ScrollRight => {
-                            self.offset.x = self.offset.x.saturating_add(1);
-                        }
-                        UiCmd::ToggleWrap => {
-                            self.wrap = !self.wrap;
-                        }
-                        _ => {
+                    _ => match to_ui_command(key_bindings, code, mods) {
+                        None => {
                             self.rura_widget.handle_event(event);
                         }
+                        Some(a) => match a {
+                            UiCmd::Quit => {
+                                self.exit = true;
+                            }
+                            UiCmd::ExecuteFull => {
+                                self.handle_execute(ExecuteType::Full);
+                            }
+                            UiCmd::ExecuteUntilCurrent => {
+                                self.handle_execute(ExecuteType::UntilCurrent)
+                            }
+                            UiCmd::ExecuteUntilPrev => {
+                                self.handle_execute(ExecuteType::UntilCurrentPrev)
+                            }
+                            UiCmd::ResetInput => {
+                                let new_output = Output::ok(&self.stdin);
+                                if self.output.len() != new_output.len() {
+                                    self.offset.y = 0;
+                                }
+                                self.output = new_output;
+                            }
+                            UiCmd::ScrollDown => {
+                                self.offset.y = self.offset.y.saturating_add(1);
+                            }
+                            UiCmd::ScrollDownPage => {
+                                self.offset.y = self.offset.y.saturating_add(10);
+                            }
+                            UiCmd::ScrollUp => {
+                                self.offset.y = self.offset.y.saturating_sub(1);
+                            }
+                            UiCmd::ScrollUpPage => {
+                                self.offset.y = self.offset.y.saturating_sub(10);
+                            }
+                            UiCmd::ScrollLeft => {
+                                self.offset.x = self.offset.x.saturating_sub(1);
+                            }
+                            UiCmd::ScrollRight => {
+                                self.offset.x = self.offset.x.saturating_add(1);
+                            }
+                            UiCmd::ToggleWrap => {
+                                self.wrap = !self.wrap;
+                            }
+                            _ => {
+                                self.rura_widget.handle_event(event);
+                            }
+                        },
                     },
                 }
             }
@@ -267,7 +268,11 @@ impl App {
             ])
             .areas(output_area);
 
-        let command_input_block = Block::bordered();
+        let command_input_block = if self.live {
+            Block::bordered().border_style(Style::default().fg(Yellow)).border_type(BorderType::Double)
+        } else {
+            Block::bordered()
+        };
 
         let inner_rect = command_input_area.inner(margin);
 

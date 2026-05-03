@@ -22,6 +22,7 @@ pub struct RuraWidget {
     pub key_bindings: KeyBindings,
     pub history: History,
     pub highlight_reset_tx: Sender<()>,
+    pub live: bool,
 }
 
 impl Widget for &RuraWidget {
@@ -94,10 +95,16 @@ impl RuraWidget {
                             }
                         }
                         UiCmd::HistoryPrev => {
-                            self.command_input = Input::from(self.history.previous(self.command_input.value()));
+                            if !self.live {
+                                self.command_input =
+                                    Input::from(self.history.previous(self.command_input.value()));
+                            }
                         }
                         UiCmd::HistoryNext => {
-                            self.command_input = Input::from(self.history.next(self.command_input.value()));
+                            if !self.live {
+                                self.command_input =
+                                    Input::from(self.history.next(self.command_input.value()));
+                            }
                         }
                         _ => {}
                     },
@@ -118,9 +125,11 @@ impl RuraWidget {
             Ok(r) => match r.command(execute_type) {
                 None => Some(String::new()),
                 Some((cmd, cmd_index)) => {
-                    self.highlight_until = Some(cmd_index);
-                    self.highlight_reset_tx.send(()).unwrap();
-                    self.history.push(self.command_input.value());
+                    if !self.live {
+                        self.highlight_until = Some(cmd_index);
+                        self.highlight_reset_tx.send(()).unwrap();
+                        self.history.push(self.command_input.value());
+                    }
                     Some(cmd)
                 }
             },
