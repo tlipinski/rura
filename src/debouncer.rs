@@ -4,13 +4,13 @@ use std::thread::sleep;
 use log::{error, info};
 use std::time::Duration;
 
-pub fn debouncer_task<F>(
+pub async fn debouncer_task<F>(
     rx: Receiver<()>,
     duration: Duration,
     on_debounce: F,
 ) -> Result<(), Box<dyn Error>>
 where
-    F: AsyncFn() -> (),
+    F: Fn() -> (),
 {
     'outer: loop {
         sleep(duration);

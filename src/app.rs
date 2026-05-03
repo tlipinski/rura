@@ -31,6 +31,8 @@ use std::thread;
 use std::time::Duration;
 use tui_input::Input;
 use tui_popup::Popup;
+use Action::Debounced;
+use crate::debouncer::debouncer_task;
 
 pub struct App {
     rura_widget: RuraWidget,
@@ -47,6 +49,7 @@ pub struct App {
     kb_config: KeyBindingsConfig,
     help: bool,
     live_mode: LiveMode,
+    debouncer_tx: Sender<()>
 }
 
 impl App {
@@ -59,6 +62,7 @@ impl App {
         let (action_tx, action_rx) = std::sync::mpsc::channel::<Action>();
         let (command_tx, command_rx) = std::sync::mpsc::channel::<(String, String)>();
         let (highlight_reset_tx, highlight_reset_rx) = std::sync::mpsc::channel::<()>();
+        let (debouncer_tx, debouncer_rx) = std::sync::mpsc::channel::<()>();
 
         let s1 = action_tx.clone();
         thread::spawn(move || handle_input_task(s1).unwrap());
@@ -71,6 +75,16 @@ impl App {
 
         let s4 = action_tx.clone();
         thread::spawn(move || reset_highlight_task(highlight_reset_rx, s4).unwrap());
+
+        thread::spawn(debouncer_task(
+            debouncer_rx,
+            Duration::from_millis(1000),
+            move || {
+                action_tx
+                    .send(Debounced)
+                    .expect("Sending to channel failed");
+            },
+        ));
 
         let mut history = VecDeque::new();
         if let Some(path) = history_path() {
@@ -105,6 +119,7 @@ impl App {
             kb_config,
             help: false,
             live_mode: LiveMode::Off,
+            debouncer_tx
         }
     }
 
@@ -127,6 +142,20 @@ impl App {
             StdinRead(stdin) => {
                 self.stdin = stdin;
                 self.output = Output::ok(&self.stdin);
+            },
+            Debounced => {
+                match self.live_mode {
+                    LiveMode::Off => {
+                        // Should not happen in live mode
+                        // Probably user turned off live before debouncer responded
+                    }
+                    LiveMode::Full => {
+                        self.handle_execute(ExecuteType::FullLive)
+                    }
+                    LiveMode::UntilCurrent => {
+                        self.handle_execute(ExecuteType::UntilCurrentLive)
+                    }
+                }
             }
         }
     }
@@ -552,6 +581,7 @@ enum Action {
     CommandCompleted(Output),
     StdinRead(String),
     ResetHighlight,
+    Debounced
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]
