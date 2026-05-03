@@ -1,16 +1,16 @@
 use std::error::Error;
 use std::sync::mpsc::{Receiver, TryRecvError};
 use std::thread::sleep;
-use log::{error, info};
+use log::{debug, error, info};
 use std::time::Duration;
 
-pub async fn debouncer_task<F>(
+pub fn debouncer_task<F>(
     rx: Receiver<()>,
     duration: Duration,
     on_debounce: F,
-) -> Result<(), Box<dyn Error>>
+) -> Result<(), Box<dyn Error + Send + Sync>>
 where
-    F: Fn() -> (),
+    F: Fn() -> () + Send + 'static,
 {
     'outer: loop {
         sleep(duration);

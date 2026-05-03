@@ -76,15 +76,18 @@ impl App {
         let s4 = action_tx.clone();
         thread::spawn(move || reset_highlight_task(highlight_reset_rx, s4).unwrap());
 
-        thread::spawn(debouncer_task(
-            debouncer_rx,
-            Duration::from_millis(1000),
-            move || {
-                action_tx
-                    .send(Debounced)
-                    .expect("Sending to channel failed");
-            },
-        ));
+        thread::spawn(move || {
+            debouncer_task(
+                debouncer_rx,
+                Duration::from_millis(1000),
+                move || {
+                    action_tx
+                        .send(Debounced)
+                        .expect("Sending to channel failed");
+                },
+            )
+            .unwrap()
+        });
 
         let mut history = VecDeque::new();
         if let Some(path) = history_path() {
@@ -198,10 +201,12 @@ impl App {
                         match self.live_mode {
                             LiveMode::Off => {}
                             LiveMode::Full => {
-                                self.handle_execute(ExecuteType::FullLive);
+                                // self.handle_execute(ExecuteType::FullLive);
+                                self.debouncer_tx.send(()).unwrap();
                             }
                             LiveMode::UntilCurrent => {
-                                self.handle_execute(ExecuteType::UntilCurrentLive);
+                                // self.handle_execute(ExecuteType::UntilCurrentLive);
+                                self.debouncer_tx.send(()).unwrap();
                             }
                         }
                     }
