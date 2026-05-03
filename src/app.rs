@@ -301,11 +301,17 @@ impl App {
 
         let inner_area = area.inner(margin);
 
-        let error_output_lines = self
-            .error_output_opt
-            .as_ref()
-            .map(|e| e.lines.len() + 2)
-            .unwrap_or(0);
+        let error_output_lines = match self.panes_mode {
+            PanesMode::Single => 0,
+            PanesMode::Split => {
+                self
+                    .error_output_opt
+                    .as_ref()
+                    .map(|e| e.lines.len() + 2)
+                    .unwrap_or(0)
+            }
+
+        };
 
         let (command_input_area, output_area, errors_area, status_area) =
             match self.command_line_placement {
