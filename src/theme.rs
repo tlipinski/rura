@@ -1,5 +1,5 @@
-use ratatui::prelude::{Color, Style};
 use crate::config::ThemeConfig;
+use ratatui::prelude::{Color, Style};
 
 pub struct Theme {
     pub cmd_regular: Style,
@@ -83,4 +83,3 @@ fn parse_color(s: &str) -> Option<Color> {
         s => s.parse::<u8>().ok().map(Color::Indexed),
     }
 }
-

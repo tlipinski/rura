@@ -390,7 +390,6 @@ fn split_command(s: &str) -> Result<Vec<Vec<Part>>, ParseError> {
     } else {
         Ok(commands)
     }
-
 }
 
 enum State {

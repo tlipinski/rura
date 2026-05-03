@@ -8,6 +8,7 @@ use crate::rura_widget::RuraWidget;
 use crate::theme::Theme;
 use crate::uicmd::{KeyBindings, UiCmd, to_ui_command};
 use Action::Debounced;
+use crossterm::event::KeyCode::Char;
 use crossterm::event::{KeyCode, KeyModifiers};
 use crossterm::tty::IsTty;
 use log::debug;
@@ -32,7 +33,6 @@ use std::process::{Command, Stdio};
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 use std::time::Duration;
-use crossterm::event::KeyCode::Char;
 use tui_input::Input;
 use tui_popup::Popup;
 
@@ -54,7 +54,7 @@ pub struct App {
     input_mode: InputMode,
     debouncer_tx: Sender<()>,
     error_display_mode: ErrorDisplayMode,
-    confirming_live: Option<InputMode>
+    confirming_live: Option<InputMode>,
 }
 
 impl App {
@@ -126,7 +126,7 @@ impl App {
             help: false,
             input_mode: InputMode::Normal,
             error_display_mode: ErrorDisplayMode::Pane,
-            confirming_live: None
+            confirming_live: None,
         }
     }
 
@@ -157,7 +157,9 @@ impl App {
                         // Probably user turned off live before debouncer responded
                     }
                     InputMode::LiveFull => self.handle_execute(ExecuteType::FullLive),
-                    InputMode::LiveUntilCursor => self.handle_execute(ExecuteType::UntilCurrentLive),
+                    InputMode::LiveUntilCursor => {
+                        self.handle_execute(ExecuteType::UntilCurrentLive)
+                    }
                 }
             }
         }
@@ -192,16 +194,14 @@ impl App {
                             self.confirming_live = None;
                             self.input_mode = confirming_live;
                         }
-                        _ => {
-                            match to_ui_command(key_bindings, code, mods) {
-                                Some(UiCmd::Quit) => {
-                                    self.exit = true;
-                                }
-                                _ => {}
+                        _ => match to_ui_command(key_bindings, code, mods) {
+                            Some(UiCmd::Quit) => {
+                                self.exit = true;
                             }
-                        }
+                            _ => {}
+                        },
                     }
-                    return
+                    return;
                 }
 
                 match (code, mods) {
@@ -212,8 +212,12 @@ impl App {
                         self.help = !self.help;
                     }
                     (KeyCode::F(2), KeyModifiers::NONE) => match self.error_display_mode {
-                        ErrorDisplayMode::Inline => self.error_display_mode = ErrorDisplayMode::Pane,
-                        ErrorDisplayMode::Pane => self.error_display_mode = ErrorDisplayMode::Inline,
+                        ErrorDisplayMode::Inline => {
+                            self.error_display_mode = ErrorDisplayMode::Pane
+                        }
+                        ErrorDisplayMode::Pane => {
+                            self.error_display_mode = ErrorDisplayMode::Inline
+                        }
                     },
                     (KeyCode::F(11), KeyModifiers::NONE) => match self.input_mode {
                         InputMode::Normal => {
@@ -476,7 +480,6 @@ impl App {
             .areas(status_area);
 
         let hints = {
-
             let mut spans: Vec<Span> = vec![];
 
             spans.push(" ".into());
@@ -571,7 +574,9 @@ impl App {
         if self.confirming_live.is_some() {
             let body = Text::from(vec![
                 Line::from("").centered(),
-                Line::from("   Warning: This might be dangerous!   ").centered().bold(),
+                Line::from("   Warning: This might be dangerous!   ")
+                    .centered()
+                    .bold(),
                 Line::from("").centered(),
                 Line::from("   Commands will be executed automatically as you type.   ").centered(),
                 Line::from("").centered(),

@@ -1,6 +1,6 @@
-use std::collections::HashMap;
-use crossterm::event::{KeyCode, KeyModifiers};
 use crate::config::KeyBindingsConfig;
+use crossterm::event::{KeyCode, KeyModifiers};
+use std::collections::HashMap;
 
 #[derive(PartialEq, Eq, Hash)]
 pub enum UiCmd {
@@ -52,8 +52,14 @@ impl KeyBindings {
         bindings.insert(UiCmd::ToggleWrap, parse_bindings(&config.toggle_wrap));
         bindings.insert(UiCmd::HistoryPrev, parse_bindings(&config.history_prev));
         bindings.insert(UiCmd::HistoryNext, parse_bindings(&config.history_next));
-        bindings.insert(UiCmd::SubcommandNext, parse_bindings(&config.subcommand_next));
-        bindings.insert(UiCmd::SubcommandPrev, parse_bindings(&config.subcommand_prev));
+        bindings.insert(
+            UiCmd::SubcommandNext,
+            parse_bindings(&config.subcommand_next),
+        );
+        bindings.insert(
+            UiCmd::SubcommandPrev,
+            parse_bindings(&config.subcommand_prev),
+        );
         KeyBindings { bindings }
     }
 }

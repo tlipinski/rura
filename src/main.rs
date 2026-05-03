@@ -1,15 +1,16 @@
 mod app;
 mod config;
+mod debouncer;
 mod history;
 mod props;
 mod rura;
 mod rura_widget;
-mod uicmd;
 mod theme;
-mod debouncer;
+mod uicmd;
 
 use crate::app::App;
 use crate::config::load_config;
+use crate::history::History;
 use clap::Parser;
 use env_logger::{Builder, Target};
 use log::{LevelFilter, error, info};
@@ -17,7 +18,6 @@ use props::APP_NAME;
 use std::error::Error;
 use std::fs::OpenOptions;
 use std::process::exit;
-use crate::history::History;
 
 fn main() {
     let file = OpenOptions::new()
@@ -60,14 +60,19 @@ struct Args {
     #[arg(short, long)]
     command: Option<String>,
     #[arg(short, long)]
-    last: bool
+    last: bool,
 }
 
 fn run(args: Args, config: config::Config) -> Result<(), Box<dyn Error>> {
     info!("Starting TUI");
     let mut terminal = ratatui::init();
 
-    let app = App::new(args, &config.theme, config.keybindings, config.command_line_placement);
+    let app = App::new(
+        args,
+        &config.theme,
+        config.keybindings,
+        config.command_line_placement,
+    );
     let last_command = app.run(&mut terminal)?;
 
     info!("Restoring terminal");

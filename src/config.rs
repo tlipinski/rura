@@ -1,8 +1,8 @@
+use crate::app::CommandLinePlacement;
 use crate::props::APP_NAME;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
-use crate::app::CommandLinePlacement;
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct StyleConfig {
