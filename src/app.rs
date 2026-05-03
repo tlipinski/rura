@@ -150,7 +150,7 @@ impl App {
             Debounced => {
                 match self.live_mode {
                     LiveMode::Off => {
-                        // Should not happen in live mode
+                        // Should not happen in normal mode
                         // Probably user turned off live before debouncer responded
                     }
                     LiveMode::Full => self.handle_execute(ExecuteType::FullLive),
