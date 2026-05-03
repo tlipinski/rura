@@ -388,7 +388,7 @@ impl App {
         } else {
             Block::bordered()
                 .border_style(Style::default().fg(Yellow))
-                .border_type(BorderType::Double)
+                .border_type(BorderType::Thick)
         };
 
         let inner_rect = command_input_area.inner(margin);
@@ -481,7 +481,7 @@ impl App {
 
             spans.push(" ^C Quit".into());
             spans.push(" | ".into());
-            spans.push("F2 Err:".into());
+            spans.push("F2 Errors:".into());
 
             match self.error_display_mode {
                 ErrorDisplayMode::Pane => {
