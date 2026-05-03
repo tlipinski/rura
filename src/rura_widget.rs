@@ -22,7 +22,6 @@ pub struct RuraWidget {
     pub key_bindings: KeyBindings,
     pub history: History,
     pub highlight_reset_tx: Sender<()>,
-    pub live: bool,
 }
 
 impl Widget for &RuraWidget {
@@ -62,7 +61,7 @@ impl RuraWidget {
         (cursor % width, cursor / width)
     }
 
-    pub fn handle_event(&mut self, event: &Event) {
+    pub fn handle_event(&mut self, event: &Event, live: bool) {
         match event {
             Event::Key(key_event) => {
                 let code = key_event.code;
@@ -95,13 +94,13 @@ impl RuraWidget {
                             }
                         }
                         UiCmd::HistoryPrev => {
-                            if !self.live {
+                            if live {
                                 self.command_input =
                                     Input::from(self.history.previous(self.command_input.value()));
                             }
                         }
                         UiCmd::HistoryNext => {
-                            if !self.live {
+                            if live {
                                 self.command_input =
                                     Input::from(self.history.next(self.command_input.value()));
                             }
@@ -114,7 +113,7 @@ impl RuraWidget {
         }
     }
 
-    pub fn command(&mut self, execute_type: ExecuteType) -> Option<String> {
+    pub fn command(&mut self, execute_type: ExecuteType, live: bool) -> Option<String> {
         if self.command_input.value().is_empty() {
             return Some(String::new()); // todo replace with enum?
         }
@@ -125,7 +124,7 @@ impl RuraWidget {
             Ok(r) => match r.command(execute_type) {
                 None => Some(String::new()),
                 Some((cmd, cmd_index)) => {
-                    if !self.live {
+                    if !live {
                         self.highlight_until = Some(cmd_index);
                         self.highlight_reset_tx.send(()).unwrap();
                         self.history.push(self.command_input.value());

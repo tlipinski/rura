@@ -91,7 +91,6 @@ impl App {
                 history: History::load(),
                 key_bindings: KeyBindings::from_config(&kb_config),
                 highlight_reset_tx,
-                live: false,
             },
             stdin: "".to_string(),
             offset: Position::default(),
@@ -157,45 +156,42 @@ impl App {
                     (KeyCode::F(12), KeyModifiers::NONE) => match self.live_mode {
                         LiveMode::Off => {
                             self.live_mode = LiveMode::Full;
-                            self.rura_widget.live = true;
                         }
                         LiveMode::Full => {
                             self.live_mode = LiveMode::UntilCurrent;
-                            self.rura_widget.live = true;
                         }
                         LiveMode::UntilCurrent => {
                             self.live_mode = LiveMode::Off;
-                            self.rura_widget.live = false;
                         }
                     },
                     (KeyCode::Char(_) | KeyCode::Backspace, KeyModifiers::NONE) => {
-                        self.rura_widget.handle_event(event);
+                        self.rura_widget.handle_event(event, self.live_mode.is_live());
                         match self.live_mode {
                             LiveMode::Off => {}
                             LiveMode::Full => {
-                                self.handle_execute(ExecuteType::Full);
+                                self.handle_execute(ExecuteType::Full, true);
                             }
                             LiveMode::UntilCurrent => {
-                                self.handle_execute(ExecuteType::UntilCurrent);
+                                self.handle_execute(ExecuteType::UntilCurrent, true);
                             }
                         }
                     }
                     _ => match to_ui_command(key_bindings, code, mods) {
                         None => {
-                            self.rura_widget.handle_event(event);
+                            self.rura_widget.handle_event(event, self.live_mode.is_live());
                         }
                         Some(a) => match a {
                             UiCmd::Quit => {
                                 self.exit = true;
                             }
                             UiCmd::ExecuteFull => {
-                                self.handle_execute(ExecuteType::Full);
+                                self.handle_execute(ExecuteType::Full, false);
                             }
                             UiCmd::ExecuteUntilCurrent => {
-                                self.handle_execute(ExecuteType::UntilCurrent)
+                                self.handle_execute(ExecuteType::UntilCurrent, false)
                             }
                             UiCmd::ExecuteUntilPrev => {
-                                self.handle_execute(ExecuteType::UntilCurrentPrev)
+                                self.handle_execute(ExecuteType::UntilCurrentPrev, false)
                             }
                             UiCmd::ResetInput => {
                                 let new_output = Output::ok(&self.stdin);
@@ -226,7 +222,7 @@ impl App {
                                 self.wrap = !self.wrap;
                             }
                             _ => {
-                                self.rura_widget.handle_event(event);
+                                self.rura_widget.handle_event(event, self.live_mode.is_live());
                             }
                         },
                     },
@@ -236,8 +232,8 @@ impl App {
         }
     }
 
-    fn handle_execute(&mut self, kind: ExecuteType) {
-        match self.rura_widget.command(kind) {
+    fn handle_execute(&mut self, kind: ExecuteType, live: bool) {
+        match self.rura_widget.command(kind, live) {
             Some(c) if c.is_empty() => {
                 self.output = Output::ok(&self.stdin);
             }
@@ -558,4 +554,10 @@ enum LiveMode {
     Off,
     Full,
     UntilCurrent,
+}
+
+impl LiveMode {
+    pub fn is_live(&self) -> bool {
+        matches!(self, LiveMode::Full | LiveMode::UntilCurrent)
+    }
 }
