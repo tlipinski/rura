@@ -113,7 +113,7 @@ impl RuraWidget {
         }
     }
 
-    pub fn command(&mut self, execute_type: ExecuteType, live: bool) -> Option<String> {
+    pub fn execute(&mut self, execute_type: ExecuteType, live: bool) -> Option<String> {
         if self.command_input.value().is_empty() {
             return Some(String::new()); // todo replace with enum?
         }

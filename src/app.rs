@@ -233,7 +233,7 @@ impl App {
     }
 
     fn handle_execute(&mut self, kind: ExecuteType, live: bool) {
-        match self.rura_widget.command(kind, live) {
+        match self.rura_widget.execute(kind, live) {
             Some(c) if c.is_empty() => {
                 self.output = Output::ok(&self.stdin);
             }
