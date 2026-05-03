@@ -493,7 +493,7 @@ impl App {
 
             Line::from_iter(spans).centered()
         };
-        frame.render_widget(hints, hints_area);
+        frame.render_widget(hints.dim(), hints_area);
 
         match self.error_display_mode {
             ErrorDisplayMode::Pane => (),
