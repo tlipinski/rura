@@ -33,7 +33,7 @@ fn main() {
     let args = Args::parse();
 
     if args.last {
-        println!("{}", History::load().previous());
+        println!("{}", History::load().previous(""));
         exit(0)
     }
 
