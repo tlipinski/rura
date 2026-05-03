@@ -31,4 +31,4 @@ expression: terminal.backend()
 "┌──────────────────────────────│alt+w     - Wrap output lines        │─────────────────────────────┐"
 "│                              └─────────────────────────────────────┘                             │"
 "└──────────────────────────────────────────────────────────────────────────────────────────────────┘"
-"                       ^C Quit F2 Errors:Pane/Inline F11 Live UC F12 Live                       L:0 "
+"                        ^C Quit F2 Errors:Pane/Inline F11 Live UC F12 Live                      L:0 "
