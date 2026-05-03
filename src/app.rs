@@ -328,7 +328,7 @@ impl App {
             ])
             .areas(status_area);
 
-        let hints = " ^C Quit | Enter Run | Alt+\\ Until | Alt+Shift+\\ Until Prev | Tab Next";
+        let hints = " F1 Help | ^C Quit | Enter Run";
         frame.render_widget(hints.dim(), hints_area);
 
         frame.render_widget(status_text, exit_code_area);
