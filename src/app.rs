@@ -383,7 +383,7 @@ impl App {
         if matches!(self.panes_mode, PanesMode::Split) {
             if let Some(err_output) = &self.error_output_opt {
                 let block = Block::bordered()
-                    .title(format!(" $?: {} ", err_output.status_code.unwrap_or(0)))
+                    .title(format!(" Error: {} ", err_output.status_code.unwrap_or(0)))
                     .border_style(Style::default().fg(Red));
                 let mut output_par = Paragraph::new(err_output.lines.join("\n"))
                     .scroll((0, self.offset.x))
@@ -439,7 +439,7 @@ impl App {
                 } else {
                     match self.main_output().status_code {
                         None => " ERR ".white().on_red(),
-                        Some(code) => format!(" $? {code} ").white().on_red(),
+                        Some(code) => format!(" ERR({code}) ").white().on_red(),
                     }
                 }
             }
@@ -464,7 +464,7 @@ impl App {
             ])
             .areas(status_area);
 
-        let hints = " Ctrl+C Quit | F1 Help | F11 Live until cursor | F12 Live";
+        let hints = " Ctrl+C Quit | F1 Help | F2 Single/split | F11 Live UC | F12 Live";
         frame.render_widget(hints.dim(), hints_area);
 
         frame.render_widget(live_status, live_area);
