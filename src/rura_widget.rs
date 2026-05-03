@@ -69,13 +69,11 @@ impl RuraWidget {
                 let key_bindings = &self.key_bindings;
 
                 match to_ui_command(key_bindings, code, mods) {
-                    None => {
-                        if let Some(change) = self.command_input.handle_event(event) {
-                            change.value
-                        } else {
-                            false
-                        }
-                    }
+                    None => self
+                        .command_input
+                        .handle_event(event)
+                        .map(|change| change.value)
+                        .unwrap_or(false),
                     Some(a) => match a {
                         UiCmd::SubcommandNext => {
                             if let Ok(r) = Rura::new(
