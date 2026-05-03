@@ -294,25 +294,25 @@ impl App {
             " ERR ".white().on_red()
         };
 
-        let status_layout = Layout::default()
+        let [hints_area, exit_code_area, lines_area] = Layout::default()
             .direction(Direction::Horizontal)
             .constraints(vec![
                 Constraint::Fill(1),
                 Constraint::Length(status_text.width() as u16 + 1),
                 Constraint::Length(self.output.len().to_string().len() as u16 + 3),
             ])
-            .split(status_area);
+            .areas(status_area);
 
         let hints = " ^C Quit | Enter Run | Alt+\\ Until | Alt+Shift+\\ Until Prev | Tab Next";
-        frame.render_widget(hints.dim(), status_layout[0]);
+        frame.render_widget(hints.dim(), hints_area);
 
-        frame.render_widget(status_text, status_layout[1]);
+        frame.render_widget(status_text, exit_code_area);
 
         frame.render_widget(
             format!("L:{} ", self.output.len())
                 .bold()
                 .into_right_aligned_line(),
-            status_layout[2],
+            lines_area,
         )
     }
 }
