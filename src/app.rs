@@ -464,7 +464,7 @@ impl App {
             ])
             .areas(status_area);
 
-        let hints = " Ctrl+C Quit | F1 Help | F12 Live mode";
+        let hints = " Ctrl+C Quit | F1 Help | F11 Live until cursor | F12 Live";
         frame.render_widget(hints.dim(), hints_area);
 
         frame.render_widget(live_status, live_area);
