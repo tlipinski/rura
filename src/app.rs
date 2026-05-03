@@ -45,6 +45,7 @@ pub struct App {
     command_line_placement: CommandLinePlacement,
     kb_config: KeyBindingsConfig,
     help: bool,
+    live: bool,
 }
 
 impl App {
@@ -99,9 +100,10 @@ impl App {
             exit: false,
             theme: Theme::from_config(theme_config),
             key_bindings: KeyBindings::from_config(&kb_config),
-            command_line_placement: command_line_placement,
-            kb_config: kb_config,
+            command_line_placement,
+            kb_config,
             help: false,
+            live: true,
         }
     }
 
@@ -149,6 +151,9 @@ impl App {
                     }
                     (KeyCode::F(1), KeyModifiers::NONE) => {
                         self.help = !self.help;
+                    }
+                    (KeyCode::F(12), KeyModifiers::NONE) => {
+                        self.live = !self.live;
                     }
                     _ => {}
                 }
@@ -310,19 +315,16 @@ impl App {
             " OK ".white().on_green()
         } else {
             match self.output.status_code {
-                None => {
-                    " ERR ".white().on_red()
-                }
-                Some(code) => {
-                    format!(" ERR({code}) ").white().on_red()
-                }
+                None => " ERR ".white().on_red(),
+                Some(code) => format!(" ERR({code}) ").white().on_red(),
             }
         };
 
-        let [hints_area, exit_code_area, lines_area] = Layout::default()
+        let [hints_area, live_area, exit_code_area, lines_area] = Layout::default()
             .direction(Direction::Horizontal)
             .constraints(vec![
                 Constraint::Fill(1),
+                Constraint::Length(if self.live { 7 } else { 0 }),
                 Constraint::Length(status_text.width() as u16 + 1),
                 Constraint::Length(self.output.len().to_string().len() as u16 + 3),
             ])
@@ -330,6 +332,11 @@ impl App {
 
         let hints = " F1 Help | ^C Quit | Enter Run";
         frame.render_widget(hints.dim(), hints_area);
+
+        if self.live {
+            let live = " LIVE ".white().on_yellow();
+            frame.render_widget(live, live_area);
+        }
 
         frame.render_widget(status_text, exit_code_area);
 
@@ -446,7 +453,10 @@ fn handle_command_task(
                     action_tx.send(CommandCompleted(Output::err(&str, output.status.code())))?;
                 }
             } else {
-                action_tx.send(CommandCompleted(Output::err("Failed to execute command", None)))?;
+                action_tx.send(CommandCompleted(Output::err(
+                    "Failed to execute command",
+                    None,
+                )))?;
             }
         }
     }
