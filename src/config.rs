@@ -147,18 +147,19 @@ pub fn history_path() -> Option<PathBuf> {
 }
 
 pub fn load_config(custom_path: Option<&str>) -> Config {
-    let path = match custom_path {
-        Some(p) => PathBuf::from(p),
-        None => {
-            let Some(path) = config_path() else {
-                return Config::default();
-            };
-            path
+    let path = if let Some(p) = custom_path {
+        PathBuf::from(p)
+    } else if let Ok(env_path) = std::env::var("RURA_CONFIG") {
+        PathBuf::from(env_path)
+    } else {
+        match config_path() {
+            Some(path) => path,
+            None => return Config::default(),
         }
     };
 
     if !path.exists() {
-        if custom_path.is_some() {
+        if custom_path.is_some() || std::env::var("RURA_CONFIG").is_ok() {
             return Config::default();
         }
         if let Some(parent) = path.parent() {
