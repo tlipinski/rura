@@ -458,7 +458,7 @@ impl App {
             ])
             .areas(status_area);
 
-        let hints = " ^C Quit | F1 Help | F2 Single/split | F11 Live UC | F12 Live";
+        let hints = " ^C Quit | F1 Help | F2 Output mode | F11 Live UC | F12 Live";
         frame.render_widget(hints.dim(), hints_area);
 
         frame.render_widget(live_status, live_area);
