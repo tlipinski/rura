@@ -775,7 +775,7 @@ mod tests {
 
     impl Default for App {
         fn default() -> Self {
-            let (action_tx, action_rx) = std::sync::mpsc::channel::<Action>();
+            let (_, action_rx) = std::sync::mpsc::channel::<Action>();
             let (command_tx, _) = std::sync::mpsc::channel::<(String, String)>();
             let (highlight_reset_tx, _) = std::sync::mpsc::channel::<()>();
             let (debouncer_tx, _) = std::sync::mpsc::channel::<()>();
