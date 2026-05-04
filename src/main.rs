@@ -40,7 +40,6 @@ fn main() {
 
     let config = load_config(args.config.as_deref());
 
-    info!("Loaded config: {config:?}");
     info!("{args:?}");
 
     match run(args, config) {
@@ -76,6 +75,7 @@ fn run(args: Args, config: config::Config) -> Result<(), Box<dyn Error>> {
         config.keybindings,
         config.command_line_placement,
         config.highlight_duration_ms,
+        config.debounce_duration_ms,
     );
     let last_command = app.run(&mut terminal)?;
 

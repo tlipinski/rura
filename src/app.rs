@@ -55,6 +55,7 @@ pub struct App {
     debouncer_tx: Sender<()>,
     error_display_mode: ErrorDisplayMode,
     confirming_live: Option<InputMode>,
+    output_height: u16,
 }
 
 impl App {
@@ -64,6 +65,7 @@ impl App {
         kb_config: KeyBindingsConfig,
         command_line_placement: CommandLinePlacement,
         highlight_duration_ms: u64,
+        debounce_duration_ms: u64,
     ) -> Self {
         let (action_tx, action_rx) = std::sync::mpsc::channel::<Action>();
         let (command_tx, command_rx) = std::sync::mpsc::channel::<(String, String)>();
@@ -85,11 +87,15 @@ impl App {
         });
 
         thread::spawn(move || {
-            debouncer_task(debouncer_rx, Duration::from_millis(500), move || {
-                action_tx
-                    .send(Debounced)
-                    .expect("Sending to channel failed");
-            })
+            debouncer_task(
+                debouncer_rx,
+                Duration::from_millis(debounce_duration_ms),
+                move || {
+                    action_tx
+                        .send(Debounced)
+                        .expect("Sending to channel failed");
+                },
+            )
             .unwrap()
         });
 
@@ -130,6 +136,7 @@ impl App {
             input_mode: InputMode::Normal,
             error_display_mode: ErrorDisplayMode::Pane,
             confirming_live: None,
+            output_height: 0u16,
         }
     }
 
@@ -289,10 +296,12 @@ impl App {
                                 self.error_output_opt = None
                             }
                             UiCmd::ScrollDown => {
-                                self.offset.y = self.offset.y.saturating_add(1);
+                                let max_offset = self.main_output().lines.len() as u16 - self.output_height;
+                                self.offset.y = self.offset.y.saturating_add(1).min(max_offset);
                             }
                             UiCmd::ScrollDownPage => {
-                                self.offset.y = self.offset.y.saturating_add(10);
+                                let max_offset = self.main_output().lines.len() as u16 - self.output_height;
+                                self.offset.y = self.offset.y.saturating_add(10).min(max_offset);
                             }
                             UiCmd::ScrollUp => {
                                 self.offset.y = self.offset.y.saturating_sub(1);
@@ -398,6 +407,15 @@ impl App {
             ])
             .areas(output_area);
 
+
+        self.output_height = output_content_area.height; // save this value for scroll logic
+
+        // it screen was resized (height increased) then adjust current offset
+        let current_max_y_offset = (self.main_output().lines.len() as u16).saturating_sub(output_content_area.height);
+        if self.offset.y > current_max_y_offset {
+            self.offset.y = current_max_y_offset
+        }
+
         let command_input_block = if matches!(self.input_mode, InputMode::Normal) {
             Block::bordered()
         } else {
@@ -463,7 +481,7 @@ impl App {
         frame.render_widget(output_par, output_content_area);
 
         let scroll_bar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
-        let mut state = ScrollbarState::new(self.output.len());
+        let mut state = ScrollbarState::new(self.output.len().saturating_sub(self.output_height as usize));
         state = state.position(self.offset.y.into());
         frame.render_stateful_widget(scroll_bar, vscroll_area, &mut state);
 
@@ -510,7 +528,7 @@ impl App {
         self.render_live_confirm(frame);
     }
 
-    fn render_live_confirm(&mut self, frame: &mut Frame) {
+    fn render_live_confirm(&self, frame: &mut Frame) {
         if self.confirming_live.is_some() {
             let body = Text::from(vec![
                 Line::from("").centered(),
@@ -530,7 +548,7 @@ impl App {
         }
     }
 
-    fn render_help(&mut self, frame: &mut Frame) {
+    fn render_help(&self, frame: &mut Frame) {
         if self.help {
             #[rustfmt::skip]
         let lines = Text::from(vec![
@@ -757,8 +775,8 @@ enum Action {
 #[derive(Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum CommandLinePlacement {
-    #[default]
     Top,
+    #[default]
     Bottom,
 }
 
@@ -827,6 +845,7 @@ mod tests {
                 input_mode: InputMode::Normal,
                 error_display_mode: ErrorDisplayMode::Pane,
                 confirming_live: None,
+                output_height: 0,
             }
         }
     }

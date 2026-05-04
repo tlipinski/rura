@@ -1,9 +1,9 @@
 use crate::app::CommandLinePlacement;
 use crate::props::APP_NAME;
+use log::info;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
-use log::{debug, info};
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct StyleConfig {
@@ -126,6 +126,7 @@ pub struct Config {
     pub keybindings: KeyBindingsConfig,
     pub command_line_placement: CommandLinePlacement,
     pub highlight_duration_ms: u64,
+    pub debounce_duration_ms: u64,
 }
 
 impl Default for Config {
@@ -135,6 +136,7 @@ impl Default for Config {
             keybindings: KeyBindingsConfig::default(),
             command_line_placement: CommandLinePlacement::default(),
             highlight_duration_ms: 250,
+            debounce_duration_ms: 500,
         }
     }
 }
@@ -149,7 +151,7 @@ pub fn history_path() -> Option<PathBuf> {
 
 pub fn load_config(custom_path: Option<&str>) -> Config {
     if let Some(p) = custom_path {
-        info!("Loading config from arg {}", p);
+        info!("Loading config from arg path: {}", p);
         let path = PathBuf::from(p);
         if !path.exists() {
             panic!("Config file not found: {}", path.display());
@@ -159,7 +161,7 @@ pub fn load_config(custom_path: Option<&str>) -> Config {
             Err(_) => panic!("Invalid config file: {}", path.display()),
         }
     } else if let Ok(env_path) = std::env::var("RURA_CONFIG") {
-        info!("Loading config from env {}", env_path);
+        info!("Loading config env path: {}", env_path);
         let path = PathBuf::from(env_path);
         if !path.exists() {
             panic!("Config file not found: {}", path.display());
@@ -169,7 +171,7 @@ pub fn load_config(custom_path: Option<&str>) -> Config {
             Err(_) => panic!("Invalid config file: {}", path.display()),
         }
     } else {
-        info!("Loading default config");
+        info!("Loading config from default path: {}", config_path().unwrap_or_default().to_string_lossy());
         match config_path() {
             Some(path) => {
                 if !path.exists() {
