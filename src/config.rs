@@ -58,7 +58,7 @@ impl Default for ThemeConfig {
         ThemeConfig {
             cmd_regular: StyleConfig::default(),
             cmd_regular_pipe: StyleConfig::fg("green"),
-            cmd_regular_current: StyleConfig::bg("gray"),
+            cmd_regular_current: StyleConfig::default(),
             cmd_highlight: StyleConfig::fg_bg("black", "yellow"),
             cmd_highlight_pipe: StyleConfig::bg("yellow"),
             cmd_highlight_current: StyleConfig::fg_bg("black", "yellow"),
