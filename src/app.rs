@@ -296,12 +296,12 @@ impl App {
                                 self.error_output_opt = None
                             }
                             UiCmd::ScrollDown => {
-                                let max_offset = self.main_output().lines.len() as u16 - self.output_height;
-                                self.offset.y = self.offset.y.saturating_add(1).min(max_offset);
+                                let max_offset = self.main_output().lines.len().saturating_sub(self.output_height as usize);
+                                self.offset.y = self.offset.y.saturating_add(1).min(max_offset as u16);
                             }
                             UiCmd::ScrollDownPage => {
-                                let max_offset = self.main_output().lines.len() as u16 - self.output_height;
-                                self.offset.y = self.offset.y.saturating_add(10).min(max_offset);
+                                let max_offset = self.main_output().lines.len().saturating_sub(self.output_height as usize);
+                                self.offset.y = self.offset.y.saturating_add(10).min(max_offset as u16);
                             }
                             UiCmd::ScrollUp => {
                                 self.offset.y = self.offset.y.saturating_sub(1);
