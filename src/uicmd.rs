@@ -20,6 +20,8 @@ pub enum UiCmd {
     HistoryNext,
     SubcommandNext,
     SubcommandPrev,
+    Complete,
+    CompletePrev,
 }
 
 pub struct KeyBindings {
@@ -60,6 +62,8 @@ impl KeyBindings {
             UiCmd::SubcommandPrev,
             parse_bindings(&config.subcommand_prev),
         );
+        bindings.insert(UiCmd::Complete, parse_bindings(&config.complete));
+        bindings.insert(UiCmd::CompletePrev, parse_bindings(&config.complete_prev));
         KeyBindings { bindings }
     }
 }

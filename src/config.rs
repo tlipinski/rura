@@ -94,6 +94,8 @@ pub struct KeyBindingsConfig {
     pub history_next: Vec<String>,
     pub subcommand_next: Vec<String>,
     pub subcommand_prev: Vec<String>,
+    pub complete: Vec<String>,
+    pub complete_prev: Vec<String>,
 }
 
 impl Default for KeyBindingsConfig {
@@ -108,13 +110,15 @@ impl Default for KeyBindingsConfig {
             scroll_down_page: vec!["pagedown".into(), "ctrl+d".into(), "alt+down".into()],
             scroll_up: vec!["up".into(), "alt+k".into()],
             scroll_up_page: vec!["pageup".into(), "ctrl+u".into(), "alt+up".into()],
-            scroll_left: vec!["alt+left".into(), "alt+h".into()],
-            scroll_right: vec!["alt+right".into(), "alt+l".into()],
+            scroll_left: vec!["alt+h".into()],
+            scroll_right: vec!["alt+l".into()],
             toggle_wrap: vec!["alt+w".into()],
             history_prev: vec!["ctrl+p".into()],
             history_next: vec!["ctrl+n".into()],
-            subcommand_next: vec!["tab".into()],
-            subcommand_prev: vec!["shift+tab".into(), "shift+backtab".into(), "backtab".into()],
+            subcommand_next: vec!["alt+right".into()],
+            subcommand_prev: vec!["alt+left".into()],
+            complete: vec!["tab".into()],
+            complete_prev: vec!["shift+tab".into(), "backtab".into()],
         }
     }
 }
@@ -171,7 +175,10 @@ pub fn load_config(custom_path: Option<&str>) -> Config {
             Err(_) => panic!("Invalid config file: {}", path.display()),
         }
     } else {
-        info!("Loading config from default path: {}", config_path().unwrap_or_default().to_string_lossy());
+        info!(
+            "Loading config from default path: {}",
+            config_path().unwrap_or_default().to_string_lossy()
+        );
         match config_path() {
             Some(path) => {
                 if !path.exists() {

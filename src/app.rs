@@ -118,6 +118,7 @@ impl App {
                 history: History::load(),
                 key_bindings: KeyBindings::from_config(&kb_config),
                 highlight_reset_tx,
+                completions: None,
             },
             stdin: "".to_string(),
             offset: Position::default(),
@@ -253,16 +254,6 @@ impl App {
                             self.input_mode = InputMode::LiveFull;
                         }
                     },
-                    (Char(_) | KeyCode::Backspace, KeyModifiers::NONE) => {
-                        if self.rura_widget.handle_event(event) {
-                            match self.input_mode {
-                                InputMode::Normal => {}
-                                InputMode::LiveFull | InputMode::LiveUntilCursor => {
-                                    self.debouncer_tx.send(()).unwrap();
-                                }
-                            }
-                        }
-                    }
                     _ => match to_ui_command(key_bindings, code, mods) {
                         None => {
                             if self.rura_widget.handle_event(event) {
@@ -296,12 +287,22 @@ impl App {
                                 self.error_output_opt = None
                             }
                             UiCmd::ScrollDown => {
-                                let max_offset = self.main_output().lines.len().saturating_sub(self.output_height as usize);
-                                self.offset.y = self.offset.y.saturating_add(1).min(max_offset as u16);
+                                let max_offset = self
+                                    .main_output()
+                                    .lines
+                                    .len()
+                                    .saturating_sub(self.output_height as usize);
+                                self.offset.y =
+                                    self.offset.y.saturating_add(1).min(max_offset as u16);
                             }
                             UiCmd::ScrollDownPage => {
-                                let max_offset = self.main_output().lines.len().saturating_sub(self.output_height as usize);
-                                self.offset.y = self.offset.y.saturating_add(10).min(max_offset as u16);
+                                let max_offset = self
+                                    .main_output()
+                                    .lines
+                                    .len()
+                                    .saturating_sub(self.output_height as usize);
+                                self.offset.y =
+                                    self.offset.y.saturating_add(10).min(max_offset as u16);
                             }
                             UiCmd::ScrollUp => {
                                 self.offset.y = self.offset.y.saturating_sub(1);
@@ -330,8 +331,18 @@ impl App {
                                     self.rura_widget.handle_event(event);
                                 }
                             }
-                            UiCmd::SubcommandNext | UiCmd::SubcommandPrev => {
-                                self.rura_widget.handle_event(event);
+                            UiCmd::SubcommandNext
+                            | UiCmd::SubcommandPrev
+                            | UiCmd::Complete
+                            | UiCmd::CompletePrev => {
+                                if self.rura_widget.handle_event(event) {
+                                    match self.input_mode {
+                                        InputMode::Normal => {}
+                                        InputMode::LiveFull | InputMode::LiveUntilCursor => {
+                                            self.debouncer_tx.send(()).unwrap();
+                                        }
+                                    }
+                                }
                             }
                         },
                     },
@@ -407,11 +418,11 @@ impl App {
             ])
             .areas(output_area);
 
-
         self.output_height = output_content_area.height; // save this value for scroll logic
 
         // it screen was resized (height increased) then adjust current offset
-        let current_max_y_offset = (self.main_output().lines.len() as u16).saturating_sub(output_content_area.height);
+        let current_max_y_offset =
+            (self.main_output().lines.len() as u16).saturating_sub(output_content_area.height);
         if self.offset.y > current_max_y_offset {
             self.offset.y = current_max_y_offset
         }
@@ -481,7 +492,11 @@ impl App {
         frame.render_widget(output_par, output_content_area);
 
         let scroll_bar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
-        let mut state = ScrollbarState::new(self.output.len().saturating_sub(self.output_height as usize));
+        let mut state = ScrollbarState::new(
+            self.output
+                .len()
+                .saturating_sub(self.output_height as usize),
+        );
         state = state.position(self.offset.y.into());
         frame.render_stateful_widget(scroll_bar, vscroll_area, &mut state);
 
@@ -556,6 +571,9 @@ impl App {
             Line::from(format!("{:09} - Execute until cursor", self.kb_config.execute_until_current.first().unwrap().to_string())),
             Line::from(format!("{:09} - Execute before cursor", self.kb_config.execute_until_prev.first().unwrap().to_string())),
             Line::from(format!("{:09} - Reset input", self.kb_config.reset_input.first().unwrap().to_string())),
+            Line::from(""),
+            Line::from(format!("{:09} - Complete forward", self.kb_config.complete.first().unwrap().to_string())),
+            Line::from(format!("{:09} - Complete backward", self.kb_config.complete_prev.first().unwrap().to_string())),
             Line::from(""),
             Line::from(format!("{:09} - Go to previous subcommand", self.kb_config.subcommand_prev.first().unwrap().to_string())),
             Line::from(format!("{:09} - Go to next subcommand", self.kb_config.subcommand_next.first().unwrap().to_string())),
@@ -827,6 +845,7 @@ mod tests {
                     history: History::load(),
                     key_bindings: KeyBindings::from_config(&kb_config),
                     highlight_reset_tx,
+                    completions: None,
                 },
                 stdin: "".to_string(),
                 offset: Position::default(),

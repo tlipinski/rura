@@ -9,9 +9,11 @@ your logic.
 ## Features
 
 - **Partial Pipeline Execution**: Execute only up to the current subcommand to debug complex pipes.
+- **Context-aware Completion**: Tab-complete commands and file paths using your system's bash tools.
 - **Live Execution Modes**: Real-time feedback as you type, with optional "Live Until Cursor" or "Live Full" modes.
 - **Syntax Highlighting**: Visual feedback for subcommand boundaries, quotes, and pipes.
 - **Persistent History**: Quickly access and reuse previous commands.
+- **Flexible Error Display**: Toggle between inline error messages and a dedicated error pane.
 - **Customizable**: Fully configurable key bindings, themes, and UI placement via TOML.
 
 ## Installation
@@ -58,9 +60,8 @@ rura --last
 ### Navigation & View
 
 - **Arrows** or **Alt + h/j/k/l**: Scroll the output (Left, Down, Up, Right).
-- **PageUp / PageDown**: Scroll the output by page.
+- **PageUp / PageDown** or **Alt + Up / Down**: Scroll the output by page.
 - **Ctrl + u / Ctrl + d**: Scroll up or down quickly.
-- **Alt + Home / Alt + End**: Scroll to the beginning or end of the line (horizontal).
 - **Alt + w**: Toggle line wrapping.
 - **F2**: Toggle error display mode (Inline vs Pane).
 
@@ -71,8 +72,10 @@ rura --last
 
 ### Command Input & Subcommands
 
-- **Tab**: Move cursor to the next subcommand.
-- **Shift + Tab / Backtab**: Move cursor to the previous subcommand.
+- **Tab**: Trigger forward command or file completion (requires `bash` with `compgen` available).
+- **Shift + Tab**: Trigger backward command or file completion.
+- **Alt + Right**: Move cursor to the next subcommand.
+- **Alt + Left**: Move cursor to the previous subcommand.
 - **Ctrl + p**: Previous command in history.
 - **Ctrl + n**: Next command in history.
 
@@ -83,14 +86,18 @@ rura --last
 
 ## Configuration
 
-Rura can be configured via a TOML file located at:
-- **Linux**: `~/.config/rura/config.toml`
-- **macOS**: `~/Library/Application Support/rura/config.toml`
+Rura can be configured via a TOML file. The configuration path is determined as follows:
+1. Path specified by the `--config` (or `-C`) CLI argument.
+2. Path specified by the `RURA_CONFIG` environment variable.
+3. Default path:
+    - **Linux**: `~/.config/rura/config.toml`
+    - **macOS**: `~/Library/Application Support/rura/config.toml`
 
 ### General Options
 
 - `command_line_placement`: Set to `"top"` or `"bottom"` (default) to change where the input field is rendered.
 - `highlight_duration_ms`: Duration in milliseconds for the temporary highlighting when executing commands (default: `250`).
+- `debounce_duration_ms`: Duration in milliseconds to wait before executing commands in live mode (default: `500`).
 
 ### Customizing Key Bindings
 
@@ -100,7 +107,9 @@ You can override any default key binding in the `[keybindings]` section. Multipl
 [keybindings]
 quit = ["ctrl+q", "ctrl+c"]
 execute_full = ["enter"]
-subcommand_next = ["tab", "alt+right"]
+complete = ["tab"]
+complete_prev = ["shift+tab"]
+subcommand_next = ["alt+right"]
 ```
 
 ### Customizing Theme
