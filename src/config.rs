@@ -1,4 +1,5 @@
 use crate::app::CommandLinePlacement;
+use crate::output_widget::ErrorDisplayMode;
 use crate::props::APP_NAME;
 use log::info;
 use serde::{Deserialize, Serialize};
@@ -129,6 +130,7 @@ pub struct Config {
     pub theme: ThemeConfig,
     pub keybindings: KeyBindingsConfig,
     pub command_line_placement: CommandLinePlacement,
+    pub error_display_mode: ErrorDisplayMode,
     pub highlight_duration_ms: u64,
     pub debounce_duration_ms: u64,
 }
@@ -139,6 +141,7 @@ impl Default for Config {
             theme: ThemeConfig::default(),
             keybindings: KeyBindingsConfig::default(),
             command_line_placement: CommandLinePlacement::default(),
+            error_display_mode: ErrorDisplayMode::default(),
             highlight_duration_ms: 250,
             debounce_duration_ms: 500,
         }

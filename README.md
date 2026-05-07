@@ -63,7 +63,6 @@ rura --last
 - **PageUp / PageDown** or **Alt + Up / Down**: Scroll the output by page.
 - **Ctrl + u / Ctrl + d**: Scroll up or down quickly.
 - **Alt + w**: Toggle line wrapping.
-- **F2**: Toggle error display mode (Inline vs Pane).
 
 ### Live Execution Modes
 
@@ -96,6 +95,7 @@ Rura can be configured via a TOML file. The configuration path is determined as 
 ### General Options
 
 - `command_line_placement`: Set to `"top"` or `"bottom"` (default) to change where the input field is rendered.
+- `error_display_mode`: Set to `"inline"` or `"pane"` to choose how errors are shown.
 - `highlight_duration_ms`: Duration in milliseconds for the temporary highlighting when executing commands (default: `250`).
 - `debounce_duration_ms`: Duration in milliseconds to wait before executing commands in live mode (default: `500`).
 

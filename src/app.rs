@@ -3,6 +3,7 @@ use crate::app::Action::{CommandCompleted, ResetHighlight, StdinRead, UserInput}
 use crate::config::{KeyBindingsConfig, ThemeConfig, history_path};
 use crate::debouncer::debouncer_task;
 use crate::history::History;
+use crate::output_widget::{ErrorDisplayMode, ErrorPanePlacement, Output, OutputWidget};
 use crate::rura::ExecuteType;
 use crate::rura_widget::RuraWidget;
 use crate::theme::Theme;
@@ -15,20 +16,17 @@ use log::debug;
 use ratatui::crossterm::event;
 use ratatui::crossterm::event::Event;
 use ratatui::layout::{Constraint, Direction, Layout, Margin, Rect};
-use ratatui::prelude::Color::Red;
+use ratatui::prelude::Span;
 use ratatui::prelude::Stylize;
-use ratatui::prelude::{Position, Span};
 use ratatui::style::Color::Yellow;
 use ratatui::style::Style;
 use ratatui::text::{Line, Text};
-use ratatui::widgets::{Block, BorderType, Paragraph, Scrollbar, ScrollbarOrientation};
-use ratatui::widgets::{ScrollbarState, Wrap};
+use ratatui::widgets::{Block, BorderType};
 use ratatui::{DefaultTerminal, Frame};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::error::Error;
 use std::io::{Read, Write, stdin};
-use std::ops::Range;
 use std::process::{Command, Stdio};
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
@@ -38,24 +36,18 @@ use tui_popup::Popup;
 
 pub struct App {
     rura_widget: RuraWidget,
+    output_widget: OutputWidget,
     stdin: String,
-    output: Output,
-    error_output_opt: Option<Output>,
-    offset: Position,
-    wrap: bool,
     exit: bool,
     action_rx: Receiver<Action>,
     command_tx: Sender<(String, String)>,
-    theme: Theme,
     key_bindings: KeyBindings,
     command_line_placement: CommandLinePlacement,
     kb_config: KeyBindingsConfig,
     help: bool,
     input_mode: InputMode,
     debouncer_tx: Sender<()>,
-    error_display_mode: ErrorDisplayMode,
     confirming_live: Option<InputMode>,
-    output_height: u16,
 }
 
 impl App {
@@ -64,6 +56,7 @@ impl App {
         theme_config: &ThemeConfig,
         kb_config: KeyBindingsConfig,
         command_line_placement: CommandLinePlacement,
+        error_display_mode: ErrorDisplayMode,
         highlight_duration_ms: u64,
         debounce_duration_ms: u64,
     ) -> Self {
@@ -120,24 +113,26 @@ impl App {
                 highlight_reset_tx,
                 completions: None,
             },
+            output_widget: OutputWidget::new(
+                theme_config,
+                &kb_config,
+                match command_line_placement {
+                    CommandLinePlacement::Top => ErrorPanePlacement::Top,
+                    CommandLinePlacement::Bottom => ErrorPanePlacement::Bottom,
+                },
+                error_display_mode,
+            ),
             stdin: "".to_string(),
-            offset: Position::default(),
-            output: Output::ok(""),
-            error_output_opt: None,
             action_rx,
             command_tx,
             debouncer_tx,
-            wrap: false,
             exit: false,
-            theme: Theme::from_config(theme_config),
             key_bindings: KeyBindings::from_config(&kb_config),
             command_line_placement,
             kb_config,
             help: false,
             input_mode: InputMode::Normal,
-            error_display_mode: ErrorDisplayMode::Pane,
             confirming_live: None,
-            output_height: 0u16,
         }
     }
 
@@ -155,11 +150,12 @@ impl App {
     fn handle_action(&mut self, action: Action) {
         match action {
             UserInput(event) => self.handle_event(&event),
-            CommandCompleted(output) => self.handle_command_output(output),
+            CommandCompleted(output) => self.output_widget.handle_command_output(output),
             ResetHighlight => self.rura_widget.highlight_until = None,
             StdinRead(stdin) => {
                 self.stdin = stdin;
-                self.output = Output::ok(&self.stdin);
+                self.output_widget
+                    .handle_command_output(Output::ok(&self.stdin))
             }
             Debounced => {
                 match self.input_mode {
@@ -173,19 +169,6 @@ impl App {
                     }
                 }
             }
-        }
-    }
-
-    fn handle_command_output(&mut self, output: Output) {
-        if self.output.len() != output.len() {
-            self.offset.y = 0;
-        }
-
-        if output.ok {
-            self.output = output;
-            self.error_output_opt = None;
-        } else {
-            self.error_output_opt = Some(output);
         }
     }
 
@@ -222,14 +205,6 @@ impl App {
                     (KeyCode::F(1), KeyModifiers::NONE) => {
                         self.help = !self.help;
                     }
-                    (KeyCode::F(2), KeyModifiers::NONE) => match self.error_display_mode {
-                        ErrorDisplayMode::Inline => {
-                            self.error_display_mode = ErrorDisplayMode::Pane
-                        }
-                        ErrorDisplayMode::Pane => {
-                            self.error_display_mode = ErrorDisplayMode::Inline
-                        }
-                    },
                     (KeyCode::F(11), KeyModifiers::NONE) => match self.input_mode {
                         InputMode::Normal => {
                             // self.input_mode = InputMode::LiveUntilCursor;
@@ -280,44 +255,7 @@ impl App {
                             }
                             UiCmd::ResetInput => {
                                 let new_output = Output::ok(&self.stdin);
-                                if self.output.len() != new_output.len() {
-                                    self.offset.y = 0;
-                                }
-                                self.output = new_output;
-                                self.error_output_opt = None
-                            }
-                            UiCmd::ScrollDown => {
-                                let max_offset = self
-                                    .main_output()
-                                    .lines
-                                    .len()
-                                    .saturating_sub(self.output_height as usize);
-                                self.offset.y =
-                                    self.offset.y.saturating_add(1).min(max_offset as u16);
-                            }
-                            UiCmd::ScrollDownPage => {
-                                let max_offset = self
-                                    .main_output()
-                                    .lines
-                                    .len()
-                                    .saturating_sub(self.output_height as usize);
-                                self.offset.y =
-                                    self.offset.y.saturating_add(10).min(max_offset as u16);
-                            }
-                            UiCmd::ScrollUp => {
-                                self.offset.y = self.offset.y.saturating_sub(1);
-                            }
-                            UiCmd::ScrollUpPage => {
-                                self.offset.y = self.offset.y.saturating_sub(10);
-                            }
-                            UiCmd::ScrollLeft => {
-                                self.offset.x = self.offset.x.saturating_sub(1);
-                            }
-                            UiCmd::ScrollRight => {
-                                self.offset.x = self.offset.x.saturating_add(1);
-                            }
-                            UiCmd::ToggleWrap => {
-                                self.wrap = !self.wrap;
+                                self.output_widget.handle_command_output(new_output);
                             }
                             UiCmd::HistoryNext => {
                                 // disable history for live mode
@@ -344,6 +282,9 @@ impl App {
                                     }
                                 }
                             }
+                            _ => {
+                                self.output_widget.handle_event(event);
+                            }
                         },
                     },
                 }
@@ -354,78 +295,45 @@ impl App {
 
     fn handle_execute(&mut self, kind: ExecuteType) {
         match self.rura_widget.execute(kind) {
-            Some(command) if command.is_empty() => {
-                self.output = Output::ok(&self.stdin);
-            }
+            Some(command) if command.is_empty() => self
+                .output_widget
+                .handle_command_output(Output::ok(&self.stdin)),
             Some(c) => self.command_tx.send((c, self.stdin.clone())).unwrap(),
             None => {}
         }
     }
 
     pub fn render(&mut self, frame: &mut Frame, area: Rect) {
-        let theme = &self.theme;
-
         let margin = Margin::new(1, 1);
 
         let inner_area = area.inner(margin);
 
-        let error_output_lines = match self.error_display_mode {
-            ErrorDisplayMode::Inline => 0,
-            ErrorDisplayMode::Pane => self
-                .error_output_opt
-                .as_ref()
-                .map(|e| e.lines.len() + 2)
-                .unwrap_or(0),
+        let (command_input_area, output_area, status_area) = match self.command_line_placement {
+            CommandLinePlacement::Top => {
+                let layout = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints(vec![
+                        Constraint::Length(self.rura_widget.height(inner_area.width) + 2),
+                        Constraint::Fill(1),
+                        Constraint::Length(1),
+                    ])
+                    .split(area);
+
+                (layout[0], layout[1], layout[2])
+            }
+            CommandLinePlacement::Bottom => {
+                let layout = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints(vec![
+                        Constraint::Fill(1),
+                        Constraint::Length(self.rura_widget.height(inner_area.width) + 2),
+                        Constraint::Length(1),
+                    ])
+                    .split(area);
+
+                (layout[1], layout[0], layout[2])
+            }
         };
-
-        let (command_input_area, output_area, errors_area, status_area) =
-            match self.command_line_placement {
-                CommandLinePlacement::Top => {
-                    let layout = Layout::default()
-                        .direction(Direction::Vertical)
-                        .constraints(vec![
-                            Constraint::Length(self.rura_widget.height(inner_area.width) + 2),
-                            Constraint::Length(error_output_lines.min(10) as u16),
-                            Constraint::Fill(1),
-                            Constraint::Length(1),
-                        ])
-                        .split(area);
-
-                    (layout[0], layout[2], layout[1], layout[3])
-                }
-                CommandLinePlacement::Bottom => {
-                    let layout = Layout::default()
-                        .direction(Direction::Vertical)
-                        .constraints(vec![
-                            Constraint::Fill(1),
-                            Constraint::Length(error_output_lines.min(10) as u16),
-                            Constraint::Length(self.rura_widget.height(inner_area.width) + 2),
-                            Constraint::Length(1),
-                        ])
-                        .split(area);
-
-                    (layout[2], layout[0], layout[1], layout[3])
-                }
-            };
-
-        let line_nums_width = self.output.len().to_string().len();
-        let [line_nums_area, output_content_area, vscroll_area] = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints(vec![
-                Constraint::Length((line_nums_width + 1) as u16),
-                Constraint::Fill(1),
-                Constraint::Length(1),
-            ])
-            .areas(output_area);
-
-        self.output_height = output_content_area.height; // save this value for scroll logic
-
-        // it screen was resized (height increased) then adjust current offset
-        let current_max_y_offset =
-            (self.main_output().lines.len() as u16).saturating_sub(output_content_area.height);
-        if self.offset.y > current_max_y_offset {
-            self.offset.y = current_max_y_offset
-        }
 
         let command_input_block = if matches!(self.input_mode, InputMode::Normal) {
             Block::bordered()
@@ -443,69 +351,14 @@ impl App {
         let (x, y) = self.rura_widget.cursor(inner_rect.width);
         frame.set_cursor_position((command_input_area.x + 1 + x, command_input_area.y + 1 + y));
 
-        if matches!(self.error_display_mode, ErrorDisplayMode::Pane) {
-            if let Some(err_output) = &self.error_output_opt {
-                let block = Block::bordered()
-                    .title(format!(" Error: {} ", err_output.status_code.unwrap_or(0)))
-                    .border_style(Style::default().fg(Red));
-                let mut output_par = Paragraph::new(err_output.lines.join("\n"))
-                    .scroll((0, self.offset.x))
-                    .block(block);
+        frame.render_widget(&mut self.output_widget, output_area);
 
-                if self.wrap {
-                    output_par = output_par.wrap(Wrap::default())
-                };
-                frame.render_widget(output_par, errors_area);
-            }
-        }
-
-        let output = self.main_output();
-
-        let height = output_content_area.height.min(output.len() as u16);
-
-        let range: Range<usize> = if height >= output.len() as u16 {
-            0..output.len()
-        } else {
-            let from = (self.offset.y as usize).min(output.len());
-            let to = (self.offset.y as usize + height as usize).min(output.len());
-            from..to
-        };
-
-        // debug!("range: {range:?}");
-
-        let line_nums = range
-            .clone()
-            .map(|i| format!("{: >pad$}", i + 1, pad = line_nums_width))
-            .collect::<Vec<String>>();
-        let lines_par = Paragraph::new(line_nums.join("\n")).style(theme.line_nums);
-        if output.ok {
-            frame.render_widget(lines_par, line_nums_area);
-        }
-
-        let mut output_par = Paragraph::new(output.lines[range].join("\n"))
-            .scroll((0, self.offset.x))
-            .block(Block::default());
-
-        if self.wrap {
-            output_par = output_par.wrap(Wrap::default())
-        };
-        frame.render_widget(output_par, output_content_area);
-
-        let scroll_bar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
-        let mut state = ScrollbarState::new(
-            self.output
-                .len()
-                .saturating_sub(self.output_height as usize),
-        );
-        state = state.position(self.offset.y.into());
-        frame.render_stateful_widget(scroll_bar, vscroll_area, &mut state);
-
-        let status_text = match self.error_display_mode {
+        let status_text = match self.output_widget.error_display_mode {
             ErrorDisplayMode::Inline => {
-                if self.main_output().ok {
+                if self.output_widget.main_output().ok {
                     " OK ".white().on_green()
                 } else {
-                    match self.main_output().status_code {
+                    match self.output_widget.main_output().status_code {
                         None => " ERR ".white().on_red(),
                         Some(code) => format!(" ERR({code}) ").white().on_red(),
                     }
@@ -520,20 +373,20 @@ impl App {
                 Constraint::Length(1),
                 Constraint::Length(status_text.width() as u16 + 1),
                 Constraint::Fill(1),
-                Constraint::Length(self.output.len().to_string().len() as u16 + 3),
+                Constraint::Length(self.output_widget.output_len().to_string().len() as u16 + 3),
                 Constraint::Length(1),
             ])
             .areas(status_area);
 
         frame.render_widget(self.hints_widget(), hints_area);
 
-        match self.error_display_mode {
+        match self.output_widget.error_display_mode {
             ErrorDisplayMode::Pane => (),
             ErrorDisplayMode::Inline => frame.render_widget(status_text, exit_code_area),
         }
 
         frame.render_widget(
-            format!("L:{}", self.output.len())
+            format!("L:{}", self.output_widget.output_len())
                 .bold()
                 .into_right_aligned_line(),
             lines_area,
@@ -609,21 +462,6 @@ impl App {
         spans.push(" Execute ".into());
         spans.push("F1".bold());
         spans.push(" Help ".into());
-        spans.push("F2".bold());
-        spans.push(" Errors:".into());
-
-        match self.error_display_mode {
-            ErrorDisplayMode::Pane => {
-                spans.push("Pane".white().on_dark_gray());
-                spans.push("/Inline".into());
-            }
-            ErrorDisplayMode::Inline => {
-                spans.push("Pane/".into());
-                spans.push("Inline".white().on_dark_gray());
-            }
-        };
-
-        spans.push(" ".into());
         spans.push("F11 ".bold());
         match self.input_mode {
             InputMode::Normal | InputMode::LiveFull => {
@@ -646,46 +484,6 @@ impl App {
         }
 
         Line::from_iter(spans).centered().dim()
-    }
-
-    fn main_output(&self) -> &Output {
-        match self.error_display_mode {
-            ErrorDisplayMode::Inline => self.error_output_opt.as_ref().unwrap_or(&self.output),
-            ErrorDisplayMode::Pane => &self.output,
-        }
-    }
-}
-
-#[derive(PartialEq, Eq)]
-struct Output {
-    lines: Vec<String>,
-    status_code: Option<i32>,
-    ok: bool,
-}
-
-impl Output {
-    fn ok(str: &str) -> Self {
-        Self {
-            lines: Self::lines(str),
-            status_code: Some(0),
-            ok: true,
-        }
-    }
-
-    fn err(str: &str, status_code: Option<i32>) -> Self {
-        Self {
-            lines: Self::lines(str),
-            status_code,
-            ok: false,
-        }
-    }
-
-    fn len(&self) -> usize {
-        self.lines.len()
-    }
-
-    fn lines(input: &str) -> Vec<String> {
-        input.lines().map(|a| a.into()).collect()
     }
 }
 
@@ -790,7 +588,7 @@ enum Action {
     Debounced,
 }
 
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum CommandLinePlacement {
     Top,
@@ -803,11 +601,6 @@ enum InputMode {
     Normal,
     LiveFull,
     LiveUntilCursor,
-}
-
-enum ErrorDisplayMode {
-    Inline,
-    Pane,
 }
 
 #[cfg(test)]
@@ -847,24 +640,23 @@ mod tests {
                     highlight_reset_tx,
                     completions: None,
                 },
-                stdin: "".to_string(),
-                offset: Position::default(),
-                output: Output::ok(""),
-                error_output_opt: None,
+                stdin: "".into(),
+                output_widget: OutputWidget::new(
+                    &theme_config,
+                    &kb_config,
+                    ErrorPanePlacement::Bottom,
+                    ErrorDisplayMode::Pane,
+                ),
                 action_rx,
                 command_tx,
                 debouncer_tx,
-                wrap: false,
                 exit: false,
-                theme: Theme::from_config(&theme_config),
                 key_bindings: KeyBindings::from_config(&kb_config),
                 command_line_placement: CommandLinePlacement::Bottom,
                 kb_config,
                 help: false,
                 input_mode: InputMode::Normal,
-                error_display_mode: ErrorDisplayMode::Pane,
                 confirming_live: None,
-                output_height: 0,
             }
         }
     }
