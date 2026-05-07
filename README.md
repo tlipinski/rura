@@ -1,8 +1,6 @@
-# Rura
+<img src="rura.svg" height="80">
 
-Rura is an interactive TUI pipeline editor built for rapid iteration. It keeps your cursor in place and executes
-commands – either in full or only up to your current position – eliminating the need to navigate shell history to refine
-your logic.
+Rura transforms the tedious "edit, up-arrow, rerun" shell cycle into a fluid, interactive TUI scratchpad. It features live previews, syntax highlighting, and partial execution, allowing you to debug and iterate on commands in real time.
 
 ![](demo.gif)
 
@@ -13,6 +11,7 @@ your logic.
 - **Live Execution Modes**: Real-time feedback as you type, with optional "Live Until Cursor" or "Live Full" modes.
 - **Syntax Highlighting**: Visual feedback for subcommand boundaries, quotes, and pipes.
 - **Persistent History**: Quickly access and reuse previous commands.
+- **Line Wrapping**: Toggle whether long output lines wrap to fit the view.
 - **Flexible Error Display**: Toggle between inline error messages and a dedicated error pane.
 - **Customizable**: Fully configurable key bindings, themes, and UI placement via TOML.
 

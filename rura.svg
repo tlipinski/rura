@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="100.5547mm"
+   height="30mm"
+   viewBox="0 0 100.5547 30"
+   version="1.1"
+   id="svg1"
+   sodipodi:docname="rura_t.svg"
+   inkscape:version="1.4.3 (0d15f75042, 2025-12-25)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="true"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="mm"
+     inkscape:zoom="2.6634722"
+     inkscape:cx="140.41821"
+     inkscape:cy="32.100955"
+     inkscape:window-width="2560"
+     inkscape:window-height="1330"
+     inkscape:window-x="0"
+     inkscape:window-y="108"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="layer1"
+     inkscape:clip-to-page="false"
+     labelstyle="default" />
+  <defs
+     id="defs1" />
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(-41.307728,-50.782879)">
+    <path
+       style="font-size:8.09771px;font-family:Akashi;-inkscape-font-specification:Akashi;fill:#c83737;stroke-width:6.86762"
+       d="m 117.41666,77.612838 q -4.32319,0 -4.32319,-4.301803 V 58.254722 q 0,-4.301804 4.30168,-4.301804 h 17.20673 q 4.30167,0 4.30167,4.301804 v 19.358116 h -6.45252 l -0.0218,-17.207214 H 119.5457 v 10.754509 h 10.7542 l -2.15084,6.452705 z"
+       id="path3"
+       inkscape:label="a" />
+    <path
+       style="font-size:8.09771px;font-family:Akashi;-inkscape-font-specification:Akashi;fill:#c83737;stroke-width:6.86762"
+       d="M 93.73592,77.612838 V 58.254722 q 0,-4.301804 4.301678,-4.301804 h 12.883522 l -2.15083,6.452706 h -8.58185 v 17.207214 z"
+       id="path2"
+       inkscape:label="r" />
+    <path
+       style="font-size:8.09771px;font-family:Akashi;-inkscape-font-specification:Akashi;display:inline;fill:#c83737;stroke-width:6.86762"
+       d="m 70.076684,53.952918 v 17.207215 h 12.905037 l 0.02176,-17.207215 H 89.456 v 19.358117 q 0,4.301803 -4.30168,4.301803 H 67.9261 q -4.301679,0 -4.301679,-4.301803 V 53.952918 Z"
+       id="path1"
+       inkscape:label="u" />
+    <path
+       style="font-size:8.09771px;font-family:Akashi;-inkscape-font-specification:Akashi;fill:#c83737;stroke-width:6.86762"
+       d="M 44.26661,77.612838 V 58.254722 q 0,-4.301804 4.301679,-4.301804 h 12.883529 l -2.15084,6.452706 h -8.58185 v 17.207214 z"
+       id="text1"
+       inkscape:label="r" />
+  </g>
+</svg>

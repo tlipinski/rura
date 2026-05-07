@@ -205,11 +205,20 @@ impl Widget for &mut OutputWidget {
             from..to
         };
 
-        // debug!("range: {range:?}");
-
         let line_nums = range
             .clone()
-            .map(|i| format!("{: >pad$}", i + 1, pad = line_nums_width))
+            .flat_map(|i| {
+                let visual_line_count = if self.wrap {
+                    Paragraph::new(output.lines[i].as_str())
+                        .wrap(Wrap::default())
+                        .line_count(output_content_area.width)
+                } else {
+                    1
+                };
+                std::iter::once(format!("{: >pad$}", i + 1, pad = line_nums_width)).chain(
+                    std::iter::repeat_n(String::new(), visual_line_count.saturating_sub(1)),
+                )
+            })
             .collect::<Vec<String>>();
         let lines_par = Paragraph::new(line_nums.join("\n")).style(theme.line_nums);
         if output.ok {
