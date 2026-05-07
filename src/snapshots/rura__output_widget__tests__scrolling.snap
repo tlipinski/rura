@@ -1,0 +1,9 @@
+---
+source: src/output_widget.rs
+expression: terminal.backend()
+---
+" 1 line1 ▲"
+" 2 line2 █"
+" 3 line3 ║"
+" 4 line4 ║"
+" 5 line5 ▼"

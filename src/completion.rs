@@ -1,72 +1,83 @@
 use log::{debug, error};
 use std::process::Command;
 
+pub trait Completer {
+    fn completions(&self, input: &str, cursor_pos: usize) -> Option<CompletionResult>;
+}
+
 #[derive(Debug, PartialEq)]
 pub struct CompletionResult {
     pub completions: Vec<String>,
     pub word_start: usize,
 }
 
-pub fn get_completions(input: &str, cursor_pos: usize) -> Option<CompletionResult> {
-    let (prefix, completion_type, word_start) = find_completion_prefix(input, cursor_pos);
+pub struct BashCompleter;
 
-    debug!(
-        "Completion prefix for '{}' @ {}: '{}', type: {:?}, word start: {}",
-        input, cursor_pos, prefix, completion_type, word_start
-    );
+impl Completer for BashCompleter {
+    fn completions(&self, input: &str, cursor_pos: usize) -> Option<CompletionResult> {
+        let (prefix, completion_type, word_start) =
+            BashCompleter::find_completion_prefix(input, cursor_pos);
 
-    let comp_type_str = match completion_type {
-        CompletionType::Command => "-c",
-        CompletionType::File => "-f",
-    };
+        debug!(
+            "Completion prefix for '{}' @ {}: '{}', type: {:?}, word start: {}",
+            input, cursor_pos, prefix, completion_type, word_start
+        );
 
-    let output = Command::new("bash")
-        .arg("-c")
-        .arg(format!("compgen {} -- \"{}\"", comp_type_str, prefix))
-        .output();
+        let comp_type_str = match completion_type {
+            CompletionType::Command => "-c",
+            CompletionType::File => "-f",
+        };
 
-    match output {
-        Ok(output) => {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            let completions: Vec<String> = stdout.lines().map(|s| s.to_string()).collect();
+        let output = Command::new("bash")
+            .arg("-c")
+            .arg(format!("compgen {} -- \"{}\"", comp_type_str, prefix))
+            .output();
 
-            debug!("Completion results: {:?}", completions);
+        match output {
+            Ok(output) => {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                let completions: Vec<String> = stdout.lines().map(|s| s.to_string()).collect();
 
-            if completions.is_empty() {
-                None
-            } else {
-                Some(CompletionResult {
-                    completions,
-                    word_start,
-                })
+                debug!("Completion results: {:?}", completions);
+
+                if completions.is_empty() {
+                    None
+                } else {
+                    Some(CompletionResult {
+                        completions,
+                        word_start,
+                    })
+                }
             }
-        }
-        Err(e) => {
-            error!("Failed fetching completions {}", e);
-            None
+            Err(e) => {
+                error!("Failed fetching completions {}", e);
+                None
+            }
         }
     }
 }
 
-fn find_completion_prefix(input: &str, cursor_pos: usize) -> (String, CompletionType, usize) {
-    let input_up_to_cursor = &input[..cursor_pos];
+impl BashCompleter {
+    fn find_completion_prefix(input: &str, cursor_pos: usize) -> (String, CompletionType, usize) {
+        let input_up_to_cursor = &input[..cursor_pos];
 
-    let word_start = input_up_to_cursor
-        .rfind(|c: char| c.is_whitespace() || c == '|')
-        .map(|i| i + 1)
-        .unwrap_or(0);
-    let prefix = &input_up_to_cursor[word_start..];
+        let word_start = input_up_to_cursor
+            .rfind(|c: char| c.is_whitespace() || c == '|')
+            .map(|i| i + 1)
+            .unwrap_or(0);
+        let prefix = &input_up_to_cursor[word_start..];
 
-    // It's a command if it's the first word after the beginning of the string or after a pipe.
-    // todo env vars before command
-    let before_word = &input_up_to_cursor[..word_start].trim_end();
-    let completion_type = if before_word.is_empty() || before_word.ends_with('|') {
-        CompletionType::Command
-    } else {
-        CompletionType::File
-    };
+        // It's a command if it's the first word after the beginning of the string or after a pipe.
+        // todo env vars before command
+        let before_word = &input_up_to_cursor[..word_start].trim_end();
+        let completion_type = if before_word.is_empty() || before_word.ends_with('|') {
+            CompletionType::Command
+        } else {
+            CompletionType::File
+        };
 
-    (prefix.to_string(), completion_type, word_start)
+        (prefix.to_string(), completion_type, word_start)
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -82,31 +93,31 @@ mod tests {
     #[test]
     fn test_find_completion_prefix() {
         assert_eq!(
-            find_completion_prefix("grep ", 5),
+            BashCompleter::find_completion_prefix("grep ", 5),
             ("".to_string(), CompletionType::File, 5)
         );
         assert_eq!(
-            find_completion_prefix("grep f", 6),
+            BashCompleter::find_completion_prefix("grep f", 6),
             ("f".to_string(), CompletionType::File, 5)
         );
         assert_eq!(
-            find_completion_prefix("ls|gr", 5),
+            BashCompleter::find_completion_prefix("ls|gr", 5),
             ("gr".to_string(), CompletionType::Command, 3)
         );
         assert_eq!(
-            find_completion_prefix("ls | gr", 7),
+            BashCompleter::find_completion_prefix("ls | gr", 7),
             ("gr".to_string(), CompletionType::Command, 5)
         );
         assert_eq!(
-            find_completion_prefix("ls | ", 5),
+            BashCompleter::find_completion_prefix("ls | ", 5),
             ("".to_string(), CompletionType::Command, 5)
         );
         assert_eq!(
-            find_completion_prefix("grep foo", 8),
+            BashCompleter::find_completion_prefix("grep foo", 8),
             ("foo".to_string(), CompletionType::File, 5)
         );
         assert_eq!(
-            find_completion_prefix("grep foo ", 9),
+            BashCompleter::find_completion_prefix("grep foo ", 9),
             ("".to_string(), CompletionType::File, 9)
         );
     }

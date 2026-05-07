@@ -1,4 +1,4 @@
-use crate::completion::{CompletionResult, get_completions};
+use crate::completion::{Completer, CompletionResult};
 use crate::history::History;
 use crate::rura::{ExecuteType, Part, Rura};
 use crate::theme::Theme;
@@ -24,6 +24,7 @@ pub struct RuraWidget {
     pub history: History,
     pub highlight_reset_tx: Sender<()>,
     pub completions: Option<(CompletionResult, usize)>,
+    pub completer: Box<dyn Completer>,
 }
 
 impl Widget for &RuraWidget {
@@ -79,101 +80,102 @@ impl RuraWidget {
                             .map(|change| change.value)
                             .unwrap_or(false)
                     }
-                    Some(ui_cmd) => match ui_cmd {
-                        UiCmd::Complete | UiCmd::CompletePrev => {
-                            let current_value = self.command_input.value().to_string();
-                            let cursor_pos = self.command_input.visual_cursor();
-
-                            if let Some((res, index)) = self.completions.as_mut() {
-                                if *ui_cmd == UiCmd::Complete {
-                                    *index = (*index + 1) % res.completions.len();
-                                } else {
-                                    *index = if *index == 0 {
-                                        res.completions.len() - 1
-                                    } else {
-                                        *index - 1
-                                    };
-                                }
-                                let completion = &res.completions[*index];
-                                let new_value = format!(
-                                    "{}{}{}",
-                                    &current_value[..res.word_start],
-                                    completion,
-                                    &current_value[cursor_pos..]
-                                );
-                                self.command_input = Input::from(new_value);
-                                self.command_input.handle(InputRequest::SetCursor(
-                                    res.word_start + completion.len(),
-                                ));
-                            } else if let Some(res) = get_completions(&current_value, cursor_pos) {
-                                let index = if ui_cmd == &UiCmd::Complete {
-                                    0
-                                } else {
-                                    res.completions.len() - 1
-                                };
-                                let word_start = res.word_start;
-                                let completion = res.completions[index].clone();
-                                let new_value = format!(
-                                    "{}{}{}",
-                                    &current_value[..word_start],
-                                    completion,
-                                    &current_value[cursor_pos..]
-                                );
-                                self.completions = Some((res, index));
-                                self.command_input = Input::from(new_value);
-                                self.command_input
-                                    .handle(InputRequest::SetCursor(word_start + completion.len()));
-                            }
-
-                            true
-                        }
-                        UiCmd::SubcommandNext => {
-                            if let Ok(r) = Rura::new(
-                                self.command_input.value(),
-                                self.command_input.visual_cursor(),
-                            ) {
-                                if let Some(cursor) = r.cursor_next() {
-                                    self.command_input.handle(InputRequest::SetCursor(cursor));
-                                }
-                            }
-
-                            self.completions = None;
-
-                            false
-                        }
-                        UiCmd::SubcommandPrev => {
-                            if let Ok(r) = Rura::new(
-                                self.command_input.value(),
-                                self.command_input.visual_cursor(),
-                            ) {
-                                if let Some(cursor) = r.cursor_prev() {
-                                    self.command_input.handle(InputRequest::SetCursor(cursor));
-                                }
-                            }
-
-                            self.completions = None;
-
-                            false
-                        }
-                        UiCmd::HistoryPrev => {
-                            self.command_input =
-                                Input::from(self.history.previous(self.command_input.value()));
-
-                            self.completions = None;
-
-                            false
-                        }
-                        UiCmd::HistoryNext => {
-                            self.command_input =
-                                Input::from(self.history.next(self.command_input.value()));
-
-                            self.completions = None;
-
-                            false
-                        }
-                        _ => false,
-                    },
+                    Some(ui_cmd) => self.handle_ui_command(ui_cmd),
                 }
+            }
+            _ => false,
+        }
+    }
+
+    fn handle_ui_command(&mut self, ui_cmd: UiCmd) -> bool {
+        match ui_cmd {
+            UiCmd::Complete | UiCmd::CompletePrev => {
+                let current_value = self.command_input.value().to_string();
+                let cursor_pos = self.command_input.visual_cursor();
+
+                if let Some((res, index)) = self.completions.as_mut() {
+                    if ui_cmd == UiCmd::Complete {
+                        *index = (*index + 1) % res.completions.len();
+                    } else {
+                        *index = if *index == 0 {
+                            res.completions.len() - 1
+                        } else {
+                            *index - 1
+                        };
+                    }
+                    let completion = &res.completions[*index];
+                    let new_value = format!(
+                        "{}{}{}",
+                        &current_value[..res.word_start],
+                        completion,
+                        &current_value[cursor_pos..]
+                    );
+                    self.command_input = Input::from(new_value);
+                    self.command_input
+                        .handle(InputRequest::SetCursor(res.word_start + completion.len()));
+                } else if let Some(res) = self.completer.completions(&current_value, cursor_pos) {
+                    let index = if ui_cmd == UiCmd::Complete {
+                        0
+                    } else {
+                        res.completions.len() - 1
+                    };
+                    let word_start = res.word_start;
+                    let completion = res.completions[index].clone();
+                    let new_value = format!(
+                        "{}{}{}",
+                        &current_value[..word_start],
+                        completion,
+                        &current_value[cursor_pos..]
+                    );
+                    self.completions = Some((res, index));
+                    self.command_input = Input::from(new_value);
+                    self.command_input
+                        .handle(InputRequest::SetCursor(word_start + completion.len()));
+                }
+
+                true
+            }
+            UiCmd::SubcommandNext => {
+                if let Ok(r) = Rura::new(
+                    self.command_input.value(),
+                    self.command_input.visual_cursor(),
+                ) {
+                    if let Some(cursor) = r.cursor_next() {
+                        self.command_input.handle(InputRequest::SetCursor(cursor));
+                    }
+                }
+
+                self.completions = None;
+
+                false
+            }
+            UiCmd::SubcommandPrev => {
+                if let Ok(r) = Rura::new(
+                    self.command_input.value(),
+                    self.command_input.visual_cursor(),
+                ) {
+                    if let Some(cursor) = r.cursor_prev() {
+                        self.command_input.handle(InputRequest::SetCursor(cursor));
+                    }
+                }
+
+                self.completions = None;
+
+                false
+            }
+            UiCmd::HistoryPrev => {
+                self.command_input = Input::from(self.history.previous(self.command_input.value()));
+
+                self.completions = None;
+
+                false
+            }
+            UiCmd::HistoryNext => {
+                self.command_input = Input::from(self.history.next(self.command_input.value()));
+
+                self.completions = None;
+
+                false
             }
             _ => false,
         }
@@ -195,7 +197,7 @@ impl RuraWidget {
                         ExecuteType::FullLive | ExecuteType::UntilCurrentLive
                     ) {
                         self.highlight_until = Some(cmd_index);
-                        self.highlight_reset_tx.send(()).unwrap();
+                        let _ = self.highlight_reset_tx.send(());
                         self.history.push(self.command_input.value());
                     }
                     Some(cmd)
@@ -262,4 +264,128 @@ fn to_line<'a>(r: Rura, highlight_until: Option<usize>, theme: &Theme) -> Line<'
     }
 
     Line::from_iter(spans)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{KeyBindingsConfig, ThemeConfig};
+    use crate::history::History;
+    use crate::theme::Theme;
+    use crate::uicmd::KeyBindings;
+    use crossterm::event::KeyCode::Char;
+    use crossterm::event::{Event, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
+    use insta::assert_snapshot;
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
+    use tui_input::Input;
+
+    struct TestTerminal(Terminal<TestBackend>);
+
+    struct TestCompleter;
+
+    impl Completer for TestCompleter {
+        fn completions(&self, _input: &str, _cursor_pos: usize) -> Option<CompletionResult> {
+            Some(CompletionResult {
+                completions: vec!["command".to_string(), "command_other".to_string()],
+                word_start: 0,
+            })
+        }
+    }
+
+    impl Default for TestTerminal {
+        fn default() -> Self {
+            TestTerminal(Terminal::new(TestBackend::new(20, 4)).unwrap())
+        }
+    }
+
+    impl Default for RuraWidget {
+        fn default() -> Self {
+            let (highlight_reset_tx, _) = std::sync::mpsc::channel::<()>();
+            let theme_config = ThemeConfig::default();
+            let kb_config = KeyBindingsConfig::default();
+            RuraWidget {
+                command_input: Input::from(""),
+                highlight_until: None,
+                theme: Theme::from_config(&theme_config),
+                history: History::default(),
+                key_bindings: KeyBindings::from_config(&kb_config),
+                highlight_reset_tx,
+                completions: None,
+                completer: Box::new(TestCompleter {}),
+            }
+        }
+    }
+
+    #[test]
+    fn command_input() {
+        let mut widget = RuraWidget::default();
+
+        input_text(&mut widget, "ls -la | grep a");
+
+        let mut terminal = TestTerminal::default().0;
+        terminal
+            .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
+            .unwrap();
+
+        assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn command_input_wrap_line() {
+        let mut widget = RuraWidget::default();
+
+        input_text(&mut widget, "ls -la | grep a | sort | uniq");
+
+        let mut terminal = TestTerminal::default().0;
+        terminal
+            .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
+            .unwrap();
+
+        assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn execute_add_to_history() {
+        let mut widget = RuraWidget::default();
+
+        input_text(&mut widget, "cmd1");
+        widget.execute(ExecuteType::Full);
+        input_text(&mut widget, " | cmd2");
+        widget.execute(ExecuteType::Full);
+        assert_eq!(widget.command_input.value(),"cmd1 | cmd2");
+
+        widget.handle_ui_command(UiCmd::HistoryPrev);
+        assert_eq!(widget.command_input.value(),"cmd1");
+
+        widget.handle_ui_command(UiCmd::HistoryNext);
+        assert_eq!(widget.command_input.value(),"cmd1 | cmd2");
+    }
+
+    #[test]
+    fn completer() {
+        let mut widget = RuraWidget::default();
+
+        input_text(&mut widget, "co");
+
+        widget.handle_ui_command(UiCmd::Complete);
+        assert_eq!(widget.command_input.value(), "command");
+
+        widget.handle_ui_command(UiCmd::Complete);
+        assert_eq!(widget.command_input.value(), "command_other");
+
+        widget.handle_ui_command(UiCmd::CompletePrev);
+        assert_eq!(widget.command_input.value(), "command");
+    }
+
+    fn input_text(app: &mut RuraWidget, text: &str) {
+        for c in text.chars() {
+            app.handle_event(&Event::Key(KeyEvent {
+                code: Char(c),
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                state: KeyEventState::NONE,
+            }));
+        }
+    }
 }

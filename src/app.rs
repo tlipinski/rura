@@ -33,6 +33,7 @@ use std::thread;
 use std::time::Duration;
 use tui_input::Input;
 use tui_popup::Popup;
+use crate::completion::BashCompleter;
 
 pub struct App {
     rura_widget: RuraWidget,
@@ -112,6 +113,7 @@ impl App {
                 key_bindings: KeyBindings::from_config(&kb_config),
                 highlight_reset_tx,
                 completions: None,
+                completer: Box::new(BashCompleter{}),
             },
             output_widget: OutputWidget::new(
                 theme_config,
@@ -639,14 +641,15 @@ mod tests {
                     key_bindings: KeyBindings::from_config(&kb_config),
                     highlight_reset_tx,
                     completions: None,
+                    completer: Box::new(BashCompleter{}),
                 },
-                stdin: "".into(),
                 output_widget: OutputWidget::new(
                     &theme_config,
                     &kb_config,
                     ErrorPanePlacement::Bottom,
                     ErrorDisplayMode::Pane,
                 ),
+                stdin: "".into(),
                 action_rx,
                 command_tx,
                 debouncer_tx,

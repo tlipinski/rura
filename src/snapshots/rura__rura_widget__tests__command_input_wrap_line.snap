@@ -1,0 +1,8 @@
+---
+source: src/rura_widget.rs
+expression: terminal.backend()
+---
+"ls -la | grep a | so"
+"rt | uniq           "
+"                    "
+"                    "

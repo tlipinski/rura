@@ -2,6 +2,7 @@ use crate::config::history_path;
 use std::collections::VecDeque;
 use std::io::Write;
 
+#[derive(Default)]
 pub struct History {
     history: VecDeque<String>,
     position: Option<usize>,

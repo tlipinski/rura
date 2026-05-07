@@ -67,42 +67,46 @@ impl OutputWidget {
                 let key_bindings = &self.key_bindings;
 
                 match to_ui_command(key_bindings, code, mods) {
+                    Some(ui_cmd) => self.handle_ui_command(ui_cmd),
                     None => {}
-                    Some(a) => match a {
-                        UiCmd::ScrollDown => {
-                            let max_offset = self
-                                .main_output()
-                                .lines
-                                .len()
-                                .saturating_sub(self.output_height as usize);
-                            self.offset.y = self.offset.y.saturating_add(1).min(max_offset as u16);
-                        }
-                        UiCmd::ScrollDownPage => {
-                            let max_offset = self
-                                .main_output()
-                                .lines
-                                .len()
-                                .saturating_sub(self.output_height as usize);
-                            self.offset.y = self.offset.y.saturating_add(10).min(max_offset as u16);
-                        }
-                        UiCmd::ScrollUp => {
-                            self.offset.y = self.offset.y.saturating_sub(1);
-                        }
-                        UiCmd::ScrollUpPage => {
-                            self.offset.y = self.offset.y.saturating_sub(10);
-                        }
-                        UiCmd::ScrollLeft => {
-                            self.offset.x = self.offset.x.saturating_sub(1);
-                        }
-                        UiCmd::ScrollRight => {
-                            self.offset.x = self.offset.x.saturating_add(1);
-                        }
-                        UiCmd::ToggleWrap => {
-                            self.wrap = !self.wrap;
-                        }
-                        _ => {}
-                    },
                 }
+            }
+            _ => {}
+        }
+    }
+
+    pub fn handle_ui_command(&mut self, ui_cmd: UiCmd) {
+        match ui_cmd {
+            UiCmd::ScrollDown => {
+                let max_offset = self
+                    .main_output()
+                    .lines
+                    .len()
+                    .saturating_sub(self.output_height as usize);
+                self.offset.y = self.offset.y.saturating_add(1).min(max_offset as u16);
+            }
+            UiCmd::ScrollDownPage => {
+                let max_offset = self
+                    .main_output()
+                    .lines
+                    .len()
+                    .saturating_sub(self.output_height as usize);
+                self.offset.y = self.offset.y.saturating_add(10).min(max_offset as u16);
+            }
+            UiCmd::ScrollUp => {
+                self.offset.y = self.offset.y.saturating_sub(1);
+            }
+            UiCmd::ScrollUpPage => {
+                self.offset.y = self.offset.y.saturating_sub(10);
+            }
+            UiCmd::ScrollLeft => {
+                self.offset.x = self.offset.x.saturating_sub(1);
+            }
+            UiCmd::ScrollRight => {
+                self.offset.x = self.offset.x.saturating_add(1);
+            }
+            UiCmd::ToggleWrap => {
+                self.wrap = !self.wrap;
             }
             _ => {}
         }
@@ -275,5 +279,138 @@ impl Output {
 
     fn lines(input: &str) -> Vec<String> {
         input.lines().map(|a| a.into()).collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use insta::assert_snapshot;
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
+
+    struct TestTerminal(Terminal<TestBackend>);
+
+    impl Default for TestTerminal {
+        fn default() -> Self {
+            TestTerminal(Terminal::new(TestBackend::new(100, 30)).unwrap())
+        }
+    }
+
+    impl Default for OutputWidget {
+        fn default() -> Self {
+            let theme_config = ThemeConfig::default();
+            let kb_config = KeyBindingsConfig::default();
+
+            OutputWidget::new(
+                &theme_config,
+                &kb_config,
+                ErrorPanePlacement::Top,
+                ErrorDisplayMode::Pane,
+            )
+        }
+    }
+
+    #[test]
+    fn errors_pane_top() {
+        let mut terminal = TestTerminal::default().0;
+
+        let mut widget = OutputWidget::default();
+        widget.error_pane_placement = ErrorPanePlacement::Top;
+        widget.error_display_mode = ErrorDisplayMode::Pane;
+
+        widget.handle_command_output(Output::ok("out1\nout2\nout3"));
+        widget.handle_command_output(Output::err("errors1\nerrors2\nerrors3", Some(1)));
+
+        terminal
+            .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
+            .unwrap();
+
+        assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn errors_pane_bottom() {
+        let mut terminal = TestTerminal::default().0;
+
+        let mut widget = OutputWidget::default();
+        widget.error_pane_placement = ErrorPanePlacement::Bottom;
+        widget.error_display_mode = ErrorDisplayMode::Pane;
+
+        widget.handle_command_output(Output::ok("out1\nout2\nout3"));
+        widget.handle_command_output(Output::err("errors1\nerrors2\nerrors3", Some(1)));
+
+        terminal
+            .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
+            .unwrap();
+
+        assert_snapshot!(terminal.backend());
+    }
+
+    fn generate_lines(count: usize) -> String {
+        (1..=count)
+            .map(|i| format!("line{}", i))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    #[test]
+    fn errors_inline() {
+        let mut terminal = TestTerminal::default().0;
+
+        let mut widget = OutputWidget::default();
+        widget.error_display_mode = ErrorDisplayMode::Inline;
+
+        widget.handle_command_output(Output::ok("out1\nout2\nout3"));
+        terminal
+            .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
+            .unwrap();
+        assert_snapshot!("after ok", terminal.backend());
+
+        widget.handle_command_output(Output::ok(&generate_lines(3)));
+
+        widget.handle_command_output(Output::err("errors1\nerrors2\nerrors3", Some(1)));
+        terminal
+            .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
+            .unwrap();
+        assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn scrolling() {
+        let mut terminal = Terminal::new(TestBackend::new(10, 5)).unwrap();
+
+        let mut widget = OutputWidget::default();
+        widget.error_display_mode = ErrorDisplayMode::Inline;
+
+        widget.handle_command_output(Output::ok(&generate_lines(10)));
+        terminal
+            .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
+            .unwrap();
+        assert_snapshot!("scroll base", terminal.backend());
+
+        widget.handle_ui_command(UiCmd::ScrollDown);
+        terminal
+            .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
+            .unwrap();
+        assert_snapshot!("scroll down line", terminal.backend());
+
+        widget.handle_ui_command(UiCmd::ScrollDownPage);
+        terminal
+            .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
+            .unwrap();
+        assert_snapshot!("scroll down page", terminal.backend());
+
+        widget.handle_ui_command(UiCmd::ScrollUp);
+        terminal
+            .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
+            .unwrap();
+        assert_snapshot!("scroll up line", terminal.backend());
+
+        widget.handle_ui_command(UiCmd::ScrollUpPage);
+        terminal
+            .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
+            .unwrap();
+        assert_snapshot!("scroll up page", terminal.backend());
     }
 }

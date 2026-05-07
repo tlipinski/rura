@@ -2,7 +2,7 @@ use crate::config::KeyBindingsConfig;
 use crossterm::event::{KeyCode, KeyModifiers};
 use std::collections::HashMap;
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum UiCmd {
     Quit,
     ExecuteFull,
@@ -127,10 +127,10 @@ fn parse_key_binding(s: &str) -> Option<(KeyCode, KeyModifiers)> {
     Some((code, modifiers))
 }
 
-pub fn to_ui_command(bindings: &KeyBindings, code: KeyCode, mods: KeyModifiers) -> Option<&UiCmd> {
+pub fn to_ui_command(bindings: &KeyBindings, code: KeyCode, mods: KeyModifiers) -> Option<UiCmd> {
     bindings.bindings.iter().find_map(|(action, bindings)| {
         if bindings.contains(&(code, mods)) {
-            Some(action)
+            Some(*action)
         } else {
             None
         }
