@@ -3,6 +3,7 @@ mod completion;
 mod config;
 mod debouncer;
 mod history;
+mod output_widget;
 mod props;
 mod rura;
 mod rura_widget;
@@ -75,6 +76,7 @@ fn run(args: Args, config: config::Config) -> Result<(), Box<dyn Error>> {
         &config.theme,
         config.keybindings,
         config.command_line_placement,
+        config.error_display_mode,
         config.highlight_duration_ms,
         config.debounce_duration_ms,
     );
