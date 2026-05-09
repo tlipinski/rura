@@ -18,37 +18,38 @@ use env_logger::{Builder, Target};
 use log::{LevelFilter, error, info};
 use props::APP_NAME;
 use std::error::Error;
+use std::fs;
 use std::fs::OpenOptions;
 use std::process::exit;
-use std::str::FromStr;
 
 fn main() {
-    let file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(format!("/tmp/{APP_NAME}.log"))
-        .expect("Failed to open log file");
+    let _: Vec<_> = dirs::cache_dir()
+        .map(|d| d.join(APP_NAME).join("logs.txt"))
+        .into_iter()
+        .flat_map(|path| {
+            if !path.exists() {
+                if let Some(parent) = path.parent() {
+                    let _ = fs::create_dir_all(parent);
+                }
+            }
+            OpenOptions::new().create(true).append(true).open(path)
+        })
+        .map(|file| {
+            Builder::new()
+                .target(Target::Pipe(Box::new(file)))
+                .filter_level(LevelFilter::Debug)
+                .init()
+        })
+        .collect();
 
     let args = Args::parse();
-
-    let config = load_config(args.config.as_deref());
 
     if args.last {
         println!("{}", History::load().previous(""));
         exit(0)
     }
 
-    let level_filter = match config.log_level {
-        Some(ref level) => {
-            LevelFilter::from_str(&level).expect("Invalid log level specified in config")
-        }
-        None => LevelFilter::Info,
-    };
-
-    Builder::new()
-        .target(Target::Pipe(Box::new(file)))
-        .filter_level(level_filter)
-        .init();
+    let config = load_config(args.config.as_deref());
 
     info!("{args:?}");
 
