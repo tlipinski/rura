@@ -353,13 +353,13 @@ mod tests {
         widget.execute(ExecuteType::Full);
         input_text(&mut widget, " | cmd2");
         widget.execute(ExecuteType::Full);
-        assert_eq!(widget.command_input.value(),"cmd1 | cmd2");
+        assert_eq!(widget.command_input.value(), "cmd1 | cmd2");
 
         widget.handle_ui_command(UiCmd::HistoryPrev);
-        assert_eq!(widget.command_input.value(),"cmd1");
+        assert_eq!(widget.command_input.value(), "cmd1");
 
         widget.handle_ui_command(UiCmd::HistoryNext);
-        assert_eq!(widget.command_input.value(),"cmd1 | cmd2");
+        assert_eq!(widget.command_input.value(), "cmd1 | cmd2");
     }
 
     #[test]

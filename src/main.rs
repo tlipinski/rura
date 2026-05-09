@@ -20,6 +20,7 @@ use props::APP_NAME;
 use std::error::Error;
 use std::fs::OpenOptions;
 use std::process::exit;
+use std::str::FromStr;
 
 fn main() {
     let file = OpenOptions::new()
@@ -28,19 +29,26 @@ fn main() {
         .open(format!("/tmp/{APP_NAME}.log"))
         .expect("Failed to open log file");
 
-    Builder::new()
-        .target(Target::Pipe(Box::new(file)))
-        .filter_level(LevelFilter::Debug)
-        .init();
-
     let args = Args::parse();
+
+    let config = load_config(args.config.as_deref());
 
     if args.last {
         println!("{}", History::load().previous(""));
         exit(0)
     }
 
-    let config = load_config(args.config.as_deref());
+    let level_filter = match config.log_level {
+        Some(ref level) => {
+            LevelFilter::from_str(&level).expect("Invalid log level specified in config")
+        }
+        None => LevelFilter::Info,
+    };
+
+    Builder::new()
+        .target(Target::Pipe(Box::new(file)))
+        .filter_level(level_filter)
+        .init();
 
     info!("{args:?}");
 

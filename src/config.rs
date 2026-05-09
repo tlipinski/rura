@@ -119,7 +119,12 @@ impl Default for KeyBindingsConfig {
             subcommand_next: vec!["alt+right".into()],
             subcommand_prev: vec!["alt+left".into()],
             complete: vec!["tab".into()],
-            complete_prev: vec!["shift+tab".into(), "backtab".into()],
+            complete_prev: vec![
+                "shift+tab".into(),
+                "shift+backtab".into(),
+                "alt+tab".into(),
+                "backtab".into(),
+            ],
         }
     }
 }
@@ -127,6 +132,7 @@ impl Default for KeyBindingsConfig {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(default)]
 pub struct Config {
+    pub log_level: Option<String>,
     pub theme: ThemeConfig,
     pub keybindings: KeyBindingsConfig,
     pub command_line_placement: CommandLinePlacement,
@@ -138,6 +144,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Config {
+            log_level: None,
             theme: ThemeConfig::default(),
             keybindings: KeyBindingsConfig::default(),
             command_line_placement: CommandLinePlacement::default(),

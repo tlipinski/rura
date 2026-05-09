@@ -91,13 +91,19 @@ impl OutputWidget {
                     .lines
                     .len()
                     .saturating_sub(self.output_height as usize);
-                self.offset.y = self.offset.y.saturating_add(10).min(max_offset as u16);
+                let page_size = self.output_height / 2;
+                self.offset.y = self
+                    .offset
+                    .y
+                    .saturating_add(page_size)
+                    .min(max_offset as u16);
             }
             UiCmd::ScrollUp => {
                 self.offset.y = self.offset.y.saturating_sub(1);
             }
             UiCmd::ScrollUpPage => {
-                self.offset.y = self.offset.y.saturating_sub(10);
+                let page_size = self.output_height / 2;
+                self.offset.y = self.offset.y.saturating_sub(page_size);
             }
             UiCmd::ScrollLeft => {
                 self.offset.x = self.offset.x.saturating_sub(1);
@@ -258,7 +264,7 @@ pub enum ErrorPanePlacement {
     Bottom,
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Output {
     pub lines: Vec<String>,
     pub status_code: Option<i32>,

@@ -1,5 +1,6 @@
 use crate::Args;
-use crate::app::Action::{CommandCompleted, ResetHighlight, StdinRead, UserInput};
+use crate::app::Action::{CommandCompleted, Debounced, ResetHighlight, StdinRead, UserInput};
+use crate::completion::ShCompleter;
 use crate::config::{KeyBindingsConfig, ThemeConfig, history_path};
 use crate::debouncer::debouncer_task;
 use crate::history::History;
@@ -8,11 +9,10 @@ use crate::rura::ExecuteType;
 use crate::rura_widget::RuraWidget;
 use crate::theme::Theme;
 use crate::uicmd::{KeyBindings, UiCmd, to_ui_command};
-use Action::Debounced;
 use crossterm::event::KeyCode::Char;
 use crossterm::event::{KeyCode, KeyModifiers};
 use crossterm::tty::IsTty;
-use log::debug;
+use log::{debug, info};
 use ratatui::crossterm::event;
 use ratatui::crossterm::event::Event;
 use ratatui::layout::{Constraint, Direction, Layout, Margin, Rect};
@@ -33,12 +33,11 @@ use std::thread;
 use std::time::Duration;
 use tui_input::Input;
 use tui_popup::Popup;
-use crate::completion::BashCompleter;
 
 pub struct App {
     rura_widget: RuraWidget,
     output_widget: OutputWidget,
-    stdin: String,
+    stdin: Output,
     exit: bool,
     action_rx: Receiver<Action>,
     command_tx: Sender<(String, String)>,
@@ -113,7 +112,7 @@ impl App {
                 key_bindings: KeyBindings::from_config(&kb_config),
                 highlight_reset_tx,
                 completions: None,
-                completer: Box::new(BashCompleter{}),
+                completer: Box::new(ShCompleter {}),
             },
             output_widget: OutputWidget::new(
                 theme_config,
@@ -124,7 +123,7 @@ impl App {
                 },
                 error_display_mode,
             ),
-            stdin: "".to_string(),
+            stdin: Output::ok(""),
             action_rx,
             command_tx,
             debouncer_tx,
@@ -154,10 +153,13 @@ impl App {
             UserInput(event) => self.handle_event(&event),
             CommandCompleted(output) => self.output_widget.handle_command_output(output),
             ResetHighlight => self.rura_widget.highlight_until = None,
-            StdinRead(stdin) => {
-                self.stdin = stdin;
-                self.output_widget
-                    .handle_command_output(Output::ok(&self.stdin))
+            StdinRead(output) => {
+                if output.ok {
+                    self.stdin = output.clone();
+                } else {
+                    self.stdin = Output::ok("");
+                }
+                self.output_widget.handle_command_output(output)
             }
             Debounced => {
                 match self.input_mode {
@@ -256,8 +258,8 @@ impl App {
                                 self.handle_execute(ExecuteType::UntilCurrentPrev)
                             }
                             UiCmd::ResetInput => {
-                                let new_output = Output::ok(&self.stdin);
-                                self.output_widget.handle_command_output(new_output);
+                                let stdin = self.stdin.clone();
+                                self.output_widget.handle_command_output(stdin);
                             }
                             UiCmd::HistoryNext => {
                                 // disable history for live mode
@@ -297,10 +299,14 @@ impl App {
 
     fn handle_execute(&mut self, kind: ExecuteType) {
         match self.rura_widget.execute(kind) {
-            Some(command) if command.is_empty() => self
-                .output_widget
-                .handle_command_output(Output::ok(&self.stdin)),
-            Some(c) => self.command_tx.send((c, self.stdin.clone())).unwrap(),
+            Some(command) if command.is_empty() => {
+                let stdin = self.stdin.clone();
+                self.output_widget.handle_command_output(stdin)
+            }
+            Some(c) => self
+                .command_tx
+                .send((c, self.stdin.lines.join("\n")))
+                .unwrap(),
             None => {}
         }
     }
@@ -495,7 +501,7 @@ fn handle_command_task(
 ) -> Result<(), Box<dyn Error>> {
     loop {
         if let Ok((command, stdin)) = command_rx.recv() {
-            debug!("executing command: {command}");
+            info!("executing command: {command}");
 
             let mut cmd = Command::new("sh");
             cmd.args(["-c", &command]);
@@ -538,7 +544,7 @@ fn handle_command_task(
 fn handle_input_task(tx: Sender<Action>) -> Result<(), Box<dyn Error>> {
     loop {
         if let Ok(event) = event::read() {
-            // debug!("event: {:?}", event);
+            debug!("event: {:?}", event);
             tx.send(UserInput(event))?
         }
     }
@@ -546,24 +552,33 @@ fn handle_input_task(tx: Sender<Action>) -> Result<(), Box<dyn Error>> {
 
 fn read_stdin_task(file_opt: Option<String>, tx: Sender<Action>) -> Result<(), Box<dyn Error>> {
     if let Some(file) = file_opt {
-        debug!("reading file {file}");
-        let file_content = std::fs::read_to_string(file).expect("Failed to read file");
-        tx.send(StdinRead(file_content))?;
+        info!("reading file {file}");
+        let file_content = std::fs::read_to_string(file);
+        match file_content {
+            Ok(content) => {
+                tx.send(StdinRead(Output::ok(&content)))?;
+            }
+            Err(err) => {
+                tx.send(StdinRead(Output::err(&err.to_string(), None)))?;
+            }
+        }
         Ok(())
     } else {
-        let mut input = String::new();
+        let mut buff = String::new();
         let tty = stdin().is_tty();
-        debug!("tty? {tty}");
         if !tty {
-            debug!("reading input");
-            stdin()
-                .read_to_string(&mut input)
-                .expect("Failed to read input");
+            let result = stdin().read_to_string(&mut buff);
 
-            tx.send(StdinRead(input))?;
+            match result {
+                Ok(_) => {
+                    tx.send(StdinRead(Output::ok(&buff)))?;
+                }
+                Err(e) => {
+                    tx.send(StdinRead(Output::err(e.to_string().as_str(), None)))?;
+                }
+            }
             Ok(())
         } else {
-            debug!("skipping input");
             Ok(())
         }
     }
@@ -585,7 +600,7 @@ fn reset_highlight_task(
 enum Action {
     UserInput(Event),
     CommandCompleted(Output),
-    StdinRead(String),
+    StdinRead(Output),
     ResetHighlight,
     Debounced,
 }
@@ -641,7 +656,7 @@ mod tests {
                     key_bindings: KeyBindings::from_config(&kb_config),
                     highlight_reset_tx,
                     completions: None,
-                    completer: Box::new(BashCompleter{}),
+                    completer: Box::new(ShCompleter {}),
                 },
                 output_widget: OutputWidget::new(
                     &theme_config,
@@ -649,7 +664,7 @@ mod tests {
                     ErrorPanePlacement::Bottom,
                     ErrorDisplayMode::Pane,
                 ),
-                stdin: "".into(),
+                stdin: Output::ok(""),
                 action_rx,
                 command_tx,
                 debouncer_tx,

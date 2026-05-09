@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use log::{debug, error};
 use std::process::Command;
 
@@ -11,12 +12,12 @@ pub struct CompletionResult {
     pub word_start: usize,
 }
 
-pub struct BashCompleter;
+pub struct ShCompleter;
 
-impl Completer for BashCompleter {
+impl Completer for ShCompleter {
     fn completions(&self, input: &str, cursor_pos: usize) -> Option<CompletionResult> {
         let (prefix, completion_type, word_start) =
-            BashCompleter::find_completion_prefix(input, cursor_pos);
+            ShCompleter::find_completion_prefix(input, cursor_pos);
 
         debug!(
             "Completion prefix for '{}' @ {}: '{}', type: {:?}, word start: {}",
@@ -28,7 +29,7 @@ impl Completer for BashCompleter {
             CompletionType::File => "-f",
         };
 
-        let output = Command::new("bash")
+        let output = Command::new("sh")
             .arg("-c")
             .arg(format!("compgen {} -- \"{}\"", comp_type_str, prefix))
             .output();
@@ -36,9 +37,19 @@ impl Completer for BashCompleter {
         match output {
             Ok(output) => {
                 let stdout = String::from_utf8_lossy(&output.stdout);
-                let completions: Vec<String> = stdout.lines().map(|s| s.to_string()).collect();
+                let completions: Vec<String> = stdout
+                    .lines()
+                    .map(|s| s.to_string())
+                    .unique()
+                    .sorted_by(|a, b| a.len().cmp(&b.len()))
+                    .sorted()
+                    .collect();
 
-                debug!("Completion results: {:?}", completions);
+                debug!(
+                    "completion results [{}]: {:?}",
+                    completions.len(),
+                    completions
+                );
 
                 if completions.is_empty() {
                     None
@@ -57,7 +68,7 @@ impl Completer for BashCompleter {
     }
 }
 
-impl BashCompleter {
+impl ShCompleter {
     fn find_completion_prefix(input: &str, cursor_pos: usize) -> (String, CompletionType, usize) {
         let input_up_to_cursor = &input[..cursor_pos];
 
@@ -93,31 +104,31 @@ mod tests {
     #[test]
     fn test_find_completion_prefix() {
         assert_eq!(
-            BashCompleter::find_completion_prefix("grep ", 5),
+            ShCompleter::find_completion_prefix("grep ", 5),
             ("".to_string(), CompletionType::File, 5)
         );
         assert_eq!(
-            BashCompleter::find_completion_prefix("grep f", 6),
+            ShCompleter::find_completion_prefix("grep f", 6),
             ("f".to_string(), CompletionType::File, 5)
         );
         assert_eq!(
-            BashCompleter::find_completion_prefix("ls|gr", 5),
+            ShCompleter::find_completion_prefix("ls|gr", 5),
             ("gr".to_string(), CompletionType::Command, 3)
         );
         assert_eq!(
-            BashCompleter::find_completion_prefix("ls | gr", 7),
+            ShCompleter::find_completion_prefix("ls | gr", 7),
             ("gr".to_string(), CompletionType::Command, 5)
         );
         assert_eq!(
-            BashCompleter::find_completion_prefix("ls | ", 5),
+            ShCompleter::find_completion_prefix("ls | ", 5),
             ("".to_string(), CompletionType::Command, 5)
         );
         assert_eq!(
-            BashCompleter::find_completion_prefix("grep foo", 8),
+            ShCompleter::find_completion_prefix("grep foo", 8),
             ("foo".to_string(), CompletionType::File, 5)
         );
         assert_eq!(
-            BashCompleter::find_completion_prefix("grep foo ", 9),
+            ShCompleter::find_completion_prefix("grep foo ", 9),
             ("".to_string(), CompletionType::File, 9)
         );
     }
