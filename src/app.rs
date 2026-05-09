@@ -261,29 +261,16 @@ impl App {
                                 let stdin = self.stdin.clone();
                                 self.output_widget.handle_command_output(stdin);
                             }
-                            UiCmd::HistoryNext => {
-                                // disable history for live mode
-                                if matches!(self.input_mode, InputMode::Normal) {
-                                    self.rura_widget.handle_event(event);
-                                }
+                            UiCmd::SubcommandNext | UiCmd::SubcommandPrev => {
+                                self.rura_widget.handle_event(event);
                             }
-                            UiCmd::HistoryPrev => {
-                                // disable history for live mode
-                                if matches!(self.input_mode, InputMode::Normal) {
-                                    self.rura_widget.handle_event(event);
-                                }
-                            }
-                            UiCmd::SubcommandNext
-                            | UiCmd::SubcommandPrev
+                            UiCmd::HistoryNext
+                            | UiCmd::HistoryPrev
                             | UiCmd::Complete
                             | UiCmd::CompletePrev => {
-                                if self.rura_widget.handle_event(event) {
-                                    match self.input_mode {
-                                        InputMode::Normal => {}
-                                        InputMode::LiveFull | InputMode::LiveUntilCursor => {
-                                            self.debouncer_tx.send(()).unwrap();
-                                        }
-                                    }
+                                // disable history and completions in live mode
+                                if matches!(self.input_mode, InputMode::Normal) {
+                                    self.rura_widget.handle_event(event);
                                 }
                             }
                             _ => {
