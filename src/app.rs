@@ -214,7 +214,7 @@ impl App {
                             self.searching = false;
                         } else {
                             self.searching = false;
-                            self.output_widget.search("");
+                            self.output_widget.search_next("");
                         }
                     }
                     (KeyCode::F(1), KeyModifiers::NONE) => {
@@ -246,18 +246,16 @@ impl App {
                     },
                     (KeyCode::F(3), KeyModifiers::NONE) => {
                         self.searching = true;
-                        self.output_widget.handle_event(event);
-                        self.output_widget.search(self.search_input.value());
+                        self.output_widget.search_next(self.search_input.value());
                     }
                     (KeyCode::F(4), KeyModifiers::NONE) => {
-                        self.output_widget.handle_event(event);
-                        self.output_widget.search(self.search_input.value());
+                        self.output_widget.search_prev(self.search_input.value());
                     }
                     _ => match to_ui_command(key_bindings, code, mods) {
                         None => {
                             if self.searching {
                                 self.search_input.handle_event(event);
-                                self.output_widget.search(self.search_input.value());
+                                self.output_widget.search_next(self.search_input.value());
                             } else {
                                 if self.rura_widget.handle_event(event) {
                                     match self.input_mode {

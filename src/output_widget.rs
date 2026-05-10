@@ -25,6 +25,7 @@ pub struct OutputWidget {
     key_bindings: KeyBindings,
     output_height: u16,
     error_pane_placement: ErrorPanePlacement,
+    search: String,
     search_positions: Vec<(usize, Range<usize>)>,
     search_index: usize,
     visible_range: Range<usize>,
@@ -48,13 +49,48 @@ impl OutputWidget {
             error_display_mode,
             output_height: 0u16,
             error_pane_placement,
+            search: String::new(),
             search_positions: vec![],
             visible_range: 0..0,
             search_index: 0,
         }
     }
 
-    pub fn search(&mut self, search_str: &str) {
+    pub fn search_next(&mut self, search_str: &str) {
+        if (self.search == search_str) {
+            if !self.search_positions.is_empty() {
+                self.search_index = (self.search_index + 1) % self.search_positions.len();
+                let (line, _) = self.search_positions[self.search_index];
+                if !(self.visible_range.contains(&line)) {
+                    self.offset.y = line.saturating_sub(3) as u16;
+                }
+            }
+        } else {
+            self.search(search_str);
+        }
+    }
+
+    pub fn search_prev(&mut self, search_str: &str) {
+        if (self.search == search_str) {
+            if !self.search_positions.is_empty() {
+                if self.search_index == 0 {
+                    self.search_index = self.search_positions.len().saturating_sub(1);
+                } else {
+                    self.search_index = self.search_index.saturating_sub(1);
+                }
+
+                let (line, _) = self.search_positions[self.search_index];
+
+                if !(self.visible_range.contains(&line)) {
+                    self.offset.y = line.saturating_sub(3) as u16;
+                }
+            }
+        } else {
+            self.search(search_str);
+        }
+    }
+
+    fn search(&mut self, search_str: &str) {
         if !search_str.is_empty() {
             let pattern = Regex::new(&regex::escape(&search_str.to_lowercase())).unwrap();
 
@@ -109,31 +145,6 @@ impl OutputWidget {
                 let key_bindings = &self.key_bindings;
 
                 match key_event.code {
-                    KeyCode::F(3) => {
-                        if !self.search_positions.is_empty() {
-                            self.search_index =
-                                (self.search_index + 1) % self.search_positions.len();
-                            let (line, _) = self.search_positions[self.search_index];
-                            if !(self.visible_range.contains(&line)) {
-                                self.offset.y = line.saturating_sub(3) as u16;
-                            }
-                        }
-                    }
-                    KeyCode::F(4) => {
-                        if !self.search_positions.is_empty() {
-                            if self.search_index == 0 {
-                                self.search_index = self.search_positions.len().saturating_sub(1);
-                            } else {
-                                self.search_index = self.search_index.saturating_sub(1);
-                            }
-
-                            let (line, _) = self.search_positions[self.search_index];
-
-                            if !(self.visible_range.contains(&line)) {
-                                self.offset.y = line.saturating_sub(3) as u16;
-                            }
-                        }
-                    }
                     _ => match to_ui_command(key_bindings, code, mods) {
                         Some(ui_cmd) => self.handle_ui_command(ui_cmd),
                         None => {}
