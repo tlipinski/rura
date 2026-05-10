@@ -210,6 +210,7 @@ impl App {
                 match (code, mods) {
                     (KeyCode::Esc, KeyModifiers::NONE) => {
                         self.help = false;
+                        self.searching = false;
                     }
                     (KeyCode::F(1), KeyModifiers::NONE) => {
                         self.help = !self.help;
@@ -239,6 +240,7 @@ impl App {
                         }
                     },
                     (KeyCode::F(3), KeyModifiers::NONE) => {
+                        self.searching = !self.searching;
                         self.output_widget.search(self.search_input.value());
                         self.output_widget.handle_event(event);
                     }
@@ -352,7 +354,7 @@ impl App {
             };
 
         if self.searching {
-            let par = Paragraph::new(self.search_input.value()).block(Block::bordered());
+            let par = Paragraph::new(self.search_input.value()).block(Block::bordered().title(" Search "));
             par.render(search_input_area, frame.buffer_mut());
         }
 

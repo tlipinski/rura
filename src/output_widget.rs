@@ -105,8 +105,11 @@ impl OutputWidget {
 
                 match key_event.code {
                     KeyCode::F(3) => {
-                        self.search_index = (self.search_index + 1) % self.search_positions.len();
-                        self.offset.y = self.search_positions[self.search_index] as u16;
+                        if !self.search_positions.is_empty() {
+                            self.search_index =
+                                (self.search_index + 1) % self.search_positions.len();
+                            self.offset.y = self.search_positions[self.search_index] as u16;
+                        }
                     }
                     _ => match to_ui_command(key_bindings, code, mods) {
                         Some(ui_cmd) => self.handle_ui_command(ui_cmd),
