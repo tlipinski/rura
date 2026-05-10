@@ -32,6 +32,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 use std::time::Duration;
 use tui_input::Input;
+use tui_input::backend::crossterm::EventHandler;
 use tui_popup::Popup;
 
 pub struct App {
@@ -238,7 +239,7 @@ impl App {
                         }
                     },
                     (KeyCode::F(3), KeyModifiers::NONE) => {
-                        self.output_widget.search("export");
+                        self.output_widget.search(self.search_input.value());
                         self.output_widget.handle_event(event);
                     }
                     (KeyCode::F(4), KeyModifiers::NONE) => {
@@ -247,11 +248,16 @@ impl App {
                     }
                     _ => match to_ui_command(key_bindings, code, mods) {
                         None => {
-                            if self.rura_widget.handle_event(event) {
-                                match self.input_mode {
-                                    InputMode::Normal => {}
-                                    InputMode::LiveFull | InputMode::LiveUntilCursor => {
-                                        self.debouncer_tx.send(()).unwrap();
+                            if self.searching {
+                                self.search_input.handle_event(event);
+                                self.output_widget.search(self.search_input.value());
+                            } else {
+                                if self.rura_widget.handle_event(event) {
+                                    match self.input_mode {
+                                        InputMode::Normal => {}
+                                        InputMode::LiveFull | InputMode::LiveUntilCursor => {
+                                            self.debouncer_tx.send(()).unwrap();
+                                        }
                                     }
                                 }
                             }
@@ -286,7 +292,12 @@ impl App {
                                 }
                             }
                             _ => {
-                                self.output_widget.handle_event(event);
+                                if self.searching {
+                                    self.search_input.handle_event(event);
+                                    self.output_widget.search(self.search_input.value());
+                                } else {
+                                    self.output_widget.handle_event(event);
+                                }
                             }
                         },
                     },
