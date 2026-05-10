@@ -19,9 +19,9 @@ use ratatui::layout::{Constraint, Direction, Layout, Margin, Rect};
 use ratatui::prelude::Span;
 use ratatui::prelude::Stylize;
 use ratatui::style::Color::Yellow;
-use ratatui::style::Style;
+use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Text};
-use ratatui::widgets::{Block, BorderType, Paragraph, Widget};
+use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Widget};
 use ratatui::{DefaultTerminal, Frame};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
@@ -368,6 +368,9 @@ impl App {
 
 
         frame.render_widget(command_input_block, command_input_area);
+        if self.searching {
+            frame.render_widget(Block::default().on_gray(), command_input_area.inner(margin));
+        }
         frame.render_widget(&self.rura_widget, command_input_area.inner(margin));
 
         if self.searching {
