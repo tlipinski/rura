@@ -308,22 +308,15 @@ impl Widget for &mut OutputWidget {
                             .find_or_first(|(_, range)| range == current_match_range)
                             .map(|(i, _)| i);
 
-                        let spans = split_by_ranges(line, line_highlight_ranges)
+                        let spans = split_by_ranges(line, line_highlight_ranges, current_match_num)
                             .into_iter()
-                            .enumerate()
-                            .map(|(match_count, part)| {
-                                debug!("match_count: {}, part: {:?}", match_count, part);
+                            .map(|part| {
                                 match part {
+                                    Part::InsideRangeX(value) => {
+                                        Span::from(value).style(Style::default().bg(Color::Yellow))
+                                    }
                                     Part::InsideRange(value) => {
-                                        if let Some(n) = current_match_num {
-                                            if match_count == *n {
-                                                Span::from(value).style(Style::default().bg(Color::Yellow))
-                                            } else {
-                                                Span::from(value).style(Style::default().bg(Color::Magenta))
-                                            }
-                                        } else {
-                                            Span::from(value).style(Style::default().bg(Color::Magenta))
-                                        }
+                                        Span::from(value).style(Style::default().bg(Color::Magenta))
                                     }
                                     Part::OutsideRange(value) => {
                                         Span::from(value).style(Style::default())
@@ -554,16 +547,16 @@ mod tests {
         assert_eq!(
             spans,
             vec![
-                Part::InsideRange("01".into()),
+                Part::InsideRangeX("01".into()),
                 Part::OutsideRange("23456".into()),
-                Part::InsideRange("7890".into()),
+                Part::InsideRangeX("7890".into()),
                 Part::OutsideRange("123".into()),
-                Part::InsideRange("4567".into()),
+                Part::InsideRangeX("4567".into()),
                 Part::OutsideRange("89".into())
             ]
         );
 
-        let spans = split_by_ranges(str, vec![&(1..2), &(7..11), &(14..18)]);
+        let spans = split_by_ranges(str, vec![&(1..2), &(7..11), &(14..18)], None);
         assert_eq!(
             spans,
             vec![
@@ -581,20 +574,27 @@ mod tests {
 
 #[derive(Debug, PartialEq)]
 enum Part {
+    InsideRangeX(String),
     InsideRange(String),
     OutsideRange(String),
 }
 
-fn split_by_ranges(str: &str, ranges: Vec<&Range<usize>>) -> Vec<Part> {
+fn split_by_ranges(str: &str, ranges: Vec<&Range<usize>>, c: Option<&usize>) -> Vec<Part> {
     let mut results = vec![];
     let mut last_end = 0;
 
-    for range in ranges.iter() {
+    for (i, range) in ranges.iter().enumerate() {
         if last_end < range.start {
             results.push(Part::OutsideRange(str[last_end..range.start].to_string()));
         }
 
-        results.push(Part::InsideRange(str[range.start..range.end].to_string()));
+        if let Some(ccc) = c
+            && *ccc == i
+        {
+            results.push(Part::InsideRangeX(str[range.start..range.end].to_string()));
+        } else {
+            results.push(Part::InsideRange(str[range.start..range.end].to_string()));
+        }
         last_end = range.end;
     }
 
