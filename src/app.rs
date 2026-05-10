@@ -139,8 +139,8 @@ impl App {
             input_mode: InputMode::Normal,
             confirming_live: None,
             search_input: Input::from(""),
-            searching: true,
-            case_sensitive: true,
+            searching: false,
+            case_sensitive: false,
         }
     }
 
@@ -216,7 +216,7 @@ impl App {
                             self.searching = false;
                         } else {
                             self.searching = false;
-                            self.output_widget.search_next("");
+                            self.output_widget.clear_search();
                         }
                     }
                     (KeyCode::F(1), KeyModifiers::NONE) => {
@@ -246,16 +246,22 @@ impl App {
                             self.input_mode = InputMode::LiveFull;
                         }
                     },
+                    (KeyCode::Enter, KeyModifiers::NONE) if self.searching => {
+                        self.output_widget
+                            .search_next(self.search_input.value(), self.case_sensitive);
+                    }
                     (KeyCode::F(3), KeyModifiers::NONE) => {
                         if self.searching {
-                            self.output_widget.search_next(self.search_input.value());
+                            self.output_widget
+                                .search_next(self.search_input.value(), self.case_sensitive);
                         } else {
                             self.searching = true;
                         }
                     }
                     (KeyCode::F(4), KeyModifiers::NONE) => {
                         if self.searching {
-                            self.output_widget.search_prev(self.search_input.value());
+                            self.output_widget
+                                .search_prev(self.search_input.value(), self.case_sensitive);
                         } else {
                             self.searching = true;
                         }
@@ -264,7 +270,8 @@ impl App {
                         None => {
                             if self.searching {
                                 self.search_input.handle_event(event);
-                                self.output_widget.search_next(self.search_input.value());
+                                self.output_widget
+                                    .search_next(self.search_input.value(), self.case_sensitive);
                             } else {
                                 if self.rura_widget.handle_event(event) {
                                     match self.input_mode {
@@ -722,6 +729,7 @@ mod tests {
                 help: false,
                 input_mode: InputMode::Normal,
                 confirming_live: None,
+                case_sensitive: true,
             }
         }
     }
@@ -796,7 +804,7 @@ mod tests {
 
     fn input_text(app: &mut App, text: &str) {
         for c in text.chars() {
-            app.handle_event(&Event::Key(KeyEvent {
+            app.handle_event(&Key(KeyEvent {
                 code: Char(c),
                 modifiers: KeyModifiers::NONE,
                 kind: KeyEventKind::Press,

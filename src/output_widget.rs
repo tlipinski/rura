@@ -60,7 +60,12 @@ impl OutputWidget {
         (self.search_index, self.search_positions.len())
     }
 
-    pub fn search_next(&mut self, search_str: &str) {
+    pub fn clear_search(&mut self) {
+        self.search_positions = vec![];
+        self.search_index = 0;
+    }
+
+    pub fn search_next(&mut self, search_str: &str, case_sensitive: bool) {
         if self.search == search_str {
             if !self.search_positions.is_empty() {
                 self.search_index = (self.search_index + 1) % self.search_positions.len();
@@ -68,7 +73,7 @@ impl OutputWidget {
                 self.offset.y = line.saturating_sub(self.visible_range.len() / 2) as u16;
             }
         } else {
-            self.search(search_str);
+            self.search(search_str, case_sensitive);
             // focus on the first match
             if !self.search_positions.is_empty() {
                 let (line, _) = self.search_positions[self.search_index];
@@ -77,7 +82,7 @@ impl OutputWidget {
         }
     }
 
-    pub fn search_prev(&mut self, search_str: &str) {
+    pub fn search_prev(&mut self, search_str: &str, case_sensitive: bool) {
         if self.search == search_str {
             if !self.search_positions.is_empty() {
                 if self.search_index == 0 {
@@ -91,7 +96,7 @@ impl OutputWidget {
                 self.offset.y = line.saturating_sub(self.visible_range.len() / 2) as u16;
             }
         } else {
-            self.search(search_str);
+            self.search(search_str, case_sensitive);
             // focus on the first match
             if !self.search_positions.is_empty() {
                 let (line, _) = self.search_positions[self.search_index];
@@ -100,10 +105,14 @@ impl OutputWidget {
         }
     }
 
-    fn search(&mut self, search_str: &str) {
+    fn search(&mut self, search_str: &str, case_sensitive: bool) {
         self.search = search_str.to_string();
         if !search_str.is_empty() {
-            let pattern = Regex::new(&regex::escape(&search_str.to_lowercase())).unwrap();
+            let pattern = if case_sensitive {
+                Regex::new(&regex::escape(&search_str)).unwrap()
+            } else {
+                Regex::new(&regex::escape(&search_str.to_lowercase())).unwrap()
+            };
 
             let positions = self
                 .output
@@ -111,9 +120,14 @@ impl OutputWidget {
                 .iter()
                 .enumerate()
                 .filter_map(|(i, line)| {
+                    let line_to_match = if case_sensitive {
+                        line
+                    } else {
+                        &line.to_lowercase()
+                    };
                     let matches = pattern
-                        .find_iter(&line.to_lowercase())
-                        .map(|m| (i, (m.start()..m.start() + search_str.len())))
+                        .find_iter(line_to_match)
+                        .map(|m| (i, m.start()..m.start() + search_str.len()))
                         .collect_vec();
                     if !matches.is_empty() {
                         Some(matches)
