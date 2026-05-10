@@ -294,12 +294,10 @@ impl Widget for &mut OutputWidget {
 
                         debug!("{:?}", a);
 
-                        let line_search_positions = self
+                        let line_highlight_ranges: Vec<&Range<usize>> = self
                             .search_positions
                             .iter()
-                            .filter(|(row, _)| *row == logical_line_num);
-
-                        let line_highlight_ranges: Vec<&Range<usize>> = line_search_positions
+                            .filter(|(row, _)| *row == logical_line_num)
                             .map(|(_, range)| range)
                             .collect();
 
