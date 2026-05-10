@@ -25,10 +25,10 @@ pub struct OutputWidget {
     key_bindings: KeyBindings,
     output_height: u16,
     error_pane_placement: ErrorPanePlacement,
-    search: String,
-    search_positions: Vec<(usize, Range<usize>)>,
-    search_index: usize,
     visible_range: Range<usize>,
+    highlight: String,
+    highlight_positions: Vec<(usize, Range<usize>)>,
+    highlight_index: usize,
     pub error_display_mode: ErrorDisplayMode,
 }
 
@@ -49,64 +49,64 @@ impl OutputWidget {
             error_display_mode,
             output_height: 0u16,
             error_pane_placement,
-            search: String::new(),
-            search_positions: vec![],
+            highlight: String::new(),
+            highlight_positions: vec![],
             visible_range: 0..0,
-            search_index: 0,
+            highlight_index: 0,
         }
     }
 
-    pub fn search_info(&self) -> (usize, usize) {
-        (self.search_index, self.search_positions.len())
+    pub fn highlight_info(&self) -> (usize, usize) {
+        (self.highlight_index, self.highlight_positions.len())
     }
 
-    pub fn clear_search(&mut self) {
-        self.search_positions = vec![];
-        self.search_index = 0;
+    pub fn clear_highlight(&mut self) {
+        self.highlight_positions = vec![];
+        self.highlight_index = 0;
     }
 
-    pub fn search_next(&mut self, search_str: &str, case_sensitive: bool) {
-        if self.search == search_str {
-            if !self.search_positions.is_empty() {
-                self.search_index = (self.search_index + 1) % self.search_positions.len();
-                let (line, _) = self.search_positions[self.search_index];
+    pub fn highlight_next(&mut self, highlight: &str, case_sensitive: bool) {
+        if self.highlight == highlight {
+            if !self.highlight_positions.is_empty() {
+                self.highlight_index = (self.highlight_index + 1) % self.highlight_positions.len();
+                let (line, _) = self.highlight_positions[self.highlight_index];
                 self.offset.y = line.saturating_sub(self.visible_range.len() / 2) as u16;
             }
         } else {
-            self.search(search_str, case_sensitive);
+            self.search(highlight, case_sensitive);
             // focus on the first match
-            if !self.search_positions.is_empty() {
-                let (line, _) = self.search_positions[self.search_index];
+            if !self.highlight_positions.is_empty() {
+                let (line, _) = self.highlight_positions[self.highlight_index];
                 self.offset.y = line.saturating_sub(self.visible_range.len() / 2) as u16;
             }
         }
     }
 
-    pub fn search_prev(&mut self, search_str: &str, case_sensitive: bool) {
-        if self.search == search_str {
-            if !self.search_positions.is_empty() {
-                if self.search_index == 0 {
-                    self.search_index = self.search_positions.len().saturating_sub(1);
+    pub fn highlight_prev(&mut self, highlight: &str, case_sensitive: bool) {
+        if self.highlight == highlight {
+            if !self.highlight_positions.is_empty() {
+                if self.highlight_index == 0 {
+                    self.highlight_index = self.highlight_positions.len().saturating_sub(1);
                 } else {
-                    self.search_index = self.search_index.saturating_sub(1);
+                    self.highlight_index = self.highlight_index.saturating_sub(1);
                 }
 
-                let (line, _) = self.search_positions[self.search_index];
+                let (line, _) = self.highlight_positions[self.highlight_index];
 
                 self.offset.y = line.saturating_sub(self.visible_range.len() / 2) as u16;
             }
         } else {
-            self.search(search_str, case_sensitive);
+            self.search(highlight, case_sensitive);
             // focus on the first match
-            if !self.search_positions.is_empty() {
-                let (line, _) = self.search_positions[self.search_index];
+            if !self.highlight_positions.is_empty() {
+                let (line, _) = self.highlight_positions[self.highlight_index];
                 self.offset.y = line.saturating_sub(self.visible_range.len() / 2) as u16;
             }
         }
     }
 
     fn search(&mut self, search_str: &str, case_sensitive: bool) {
-        self.search = search_str.to_string();
+        self.highlight = search_str.to_string();
         if !search_str.is_empty() {
             let pattern = if case_sensitive {
                 Regex::new(&regex::escape(&search_str)).unwrap()
@@ -138,10 +138,10 @@ impl OutputWidget {
                 .flatten()
                 .collect::<Vec<(usize, Range<usize>)>>();
 
-            self.search_index = self.search_index.min(positions.len().saturating_sub(1)); // todo first index after offset
-            self.search_positions = positions;
+            self.highlight_index = self.highlight_index.min(positions.len().saturating_sub(1)); // todo first index after offset
+            self.highlight_positions = positions;
         } else {
-            self.search_positions = vec![];
+            self.highlight_positions = vec![];
         }
     }
 
@@ -161,9 +161,9 @@ impl OutputWidget {
             self.error_output_opt = Some(output);
         }
 
-        self.search_index = 0;
-        self.search_positions = vec![];
-        self.search = String::new();
+        self.highlight_index = 0;
+        self.highlight_positions = vec![];
+        self.highlight = String::new();
     }
 
     pub fn handle_event(&mut self, event: &Event) {
@@ -345,7 +345,7 @@ impl Widget for &mut OutputWidget {
         }
 
         let output_par = {
-            let mut par = if !self.search_positions.is_empty() {
+            let mut par = if !self.highlight_positions.is_empty() {
                 let lines = (&output.lines[visible_range.clone()])
                     .iter()
                     .enumerate()
@@ -354,17 +354,17 @@ impl Widget for &mut OutputWidget {
                         let logical_line_num = line_index + visible_range.start;
 
                         let (current_match_line, current_match_range) =
-                            self.search_positions.get(self.search_index).unwrap();
+                            self.highlight_positions.get(self.highlight_index).unwrap();
 
                         let line_highlight_ranges: Vec<&Range<usize>> = self
-                            .search_positions
+                            .highlight_positions
                             .iter()
                             .filter(|(row, _)| *row == logical_line_num)
                             .map(|(_, range)| range)
                             .collect();
 
                         let current_match_num = if logical_line_num == *current_match_line {
-                            self.search_positions
+                            self.highlight_positions
                                 .iter()
                                 .filter(|(row, _)| *row == logical_line_num)
                                 .find_position(|(_, range)| range == current_match_range)

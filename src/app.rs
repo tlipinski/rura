@@ -216,7 +216,7 @@ impl App {
                             self.searching = false;
                         } else {
                             self.searching = false;
-                            self.output_widget.clear_search();
+                            self.output_widget.clear_highlight();
                         }
                     }
                     (KeyCode::F(1), KeyModifiers::NONE) => {
@@ -248,12 +248,12 @@ impl App {
                     },
                     (KeyCode::Enter, KeyModifiers::NONE) if self.searching => {
                         self.output_widget
-                            .search_next(self.search_input.value(), self.case_sensitive);
+                            .highlight_next(self.search_input.value(), self.case_sensitive);
                     }
                     (KeyCode::F(3), KeyModifiers::NONE) => {
                         if self.searching {
                             self.output_widget
-                                .search_next(self.search_input.value(), self.case_sensitive);
+                                .highlight_next(self.search_input.value(), self.case_sensitive);
                         } else {
                             self.searching = true;
                         }
@@ -261,7 +261,7 @@ impl App {
                     (KeyCode::F(4), KeyModifiers::NONE) => {
                         if self.searching {
                             self.output_widget
-                                .search_prev(self.search_input.value(), self.case_sensitive);
+                                .highlight_prev(self.search_input.value(), self.case_sensitive);
                         } else {
                             self.searching = true;
                         }
@@ -271,7 +271,7 @@ impl App {
                             if self.searching {
                                 self.search_input.handle_event(event);
                                 self.output_widget
-                                    .search_next(self.search_input.value(), self.case_sensitive);
+                                    .highlight_next(self.search_input.value(), self.case_sensitive);
                             } else {
                                 if self.rura_widget.handle_event(event) {
                                     match self.input_mode {
@@ -375,7 +375,7 @@ impl App {
             };
 
         if self.searching {
-            let (current, total) = self.output_widget.search_info();
+            let (current, total) = self.output_widget.highlight_info();
             let par =
                 Paragraph::new(self.search_input.value()).block(Block::bordered().title(format!(
                     " Search: {} / {} ",
