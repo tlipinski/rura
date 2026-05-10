@@ -81,7 +81,7 @@ impl OutputWidget {
                 .flatten()
                 .collect::<Vec<(usize, usize)>>();
 
-            info!("positions: {:?}",positions);
+            info!("positions: {:?}", positions);
 
             self.search_positions = positions;
             // self.search_index = 0; // todo first index after offset
@@ -295,7 +295,13 @@ impl Widget for &mut OutputWidget {
                         .map(|(line_index, line)| {
                             let logical_line = line_index + range.start;
                             debug!("line: {:?}", logical_line);
-                            let matches_in_line = self.search_positions.iter().filter(|(x, y)| *x == logical_line).collect_vec();
+                            let matches_in_line = self
+                                .search_positions
+                                .iter()
+                                .filter_map(
+                                    |(x, y)| if *x == logical_line { Some(y) } else { None },
+                                )
+                                .collect_vec();
                             debug!("matches_in_line: {:?}", matches_in_line);
 
                             let regular_spans = line.split(st).map(Span::from);
