@@ -535,7 +535,7 @@ mod tests {
             ]
         );
 
-        let spans = split_by_ranges(str, vec![1..2, 7..11, 14..18]);
+        let spans = split_by_ranges(str, vec![&(1..2), &(7..11), &(14..18)]);
         assert_eq!(
             spans,
             vec![

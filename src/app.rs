@@ -19,9 +19,9 @@ use ratatui::layout::{Constraint, Direction, Layout, Margin, Rect};
 use ratatui::prelude::Span;
 use ratatui::prelude::Stylize;
 use ratatui::style::Color::Yellow;
-use ratatui::style::{Color, Style};
+use ratatui::style::Style;
 use ratatui::text::{Line, Text};
-use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Widget};
+use ratatui::widgets::{Block, BorderType, Paragraph, Widget};
 use ratatui::{DefaultTerminal, Frame};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
@@ -287,7 +287,9 @@ impl App {
                             UiCmd::HistoryNext
                             | UiCmd::HistoryPrev
                             | UiCmd::Complete
-                            | UiCmd::CompletePrev if !self.searching => {
+                            | UiCmd::CompletePrev
+                                if !self.searching =>
+                            {
                                 // disable history and completions in live mode
                                 if matches!(self.input_mode, InputMode::Normal) {
                                     self.rura_widget.handle_event(event);
@@ -354,7 +356,8 @@ impl App {
             };
 
         if self.searching {
-            let par = Paragraph::new(self.search_input.value()).block(Block::bordered().title(" Search "));
+            let par = Paragraph::new(self.search_input.value())
+                .block(Block::bordered().title(" Search "));
             par.render(search_input_area, frame.buffer_mut());
         }
 
@@ -365,7 +368,6 @@ impl App {
                 .border_style(Style::default().fg(Yellow))
                 .border_type(BorderType::Thick)
         };
-
 
         frame.render_widget(command_input_block, command_input_area);
         frame.render_widget(&self.rura_widget, command_input_area.inner(margin));
