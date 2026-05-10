@@ -15,6 +15,7 @@ use ratatui::widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, Scroll
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
+use clap::error::ContextValue::StyledStr;
 
 pub struct OutputWidget {
     output: Output,
@@ -294,7 +295,6 @@ impl Widget for &mut OutputWidget {
                         .enumerate()
                         .map(|(line_index, line)| {
                             let logical_line = line_index + range.start;
-                            debug!("line: {:?}", logical_line);
                             let matches_in_line = self
                                 .search_positions
                                 .iter()
