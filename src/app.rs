@@ -247,20 +247,18 @@ impl App {
                     },
                     (Enter, KeyModifiers::NONE) if self.searching => {
                         self.output_widget
-                            .highlight_next(self.search_input.value(), self.case_sensitive);
+                            .highlight(self.search_input.value(), self.case_sensitive);
                     }
                     (F(3), KeyModifiers::NONE) => {
                         if self.searching {
-                            self.output_widget
-                                .highlight_next(self.search_input.value(), self.case_sensitive);
+                            self.output_widget.highlight_next();
                         } else {
                             self.searching = true;
                         }
                     }
                     (F(4), KeyModifiers::NONE) => {
                         if self.searching {
-                            self.output_widget
-                                .highlight_prev(self.search_input.value(), self.case_sensitive);
+                            self.output_widget.highlight_prev();
                         } else {
                             self.searching = true;
                         }
@@ -275,7 +273,7 @@ impl App {
                             if self.searching {
                                 self.search_input.handle_event(event);
                                 self.output_widget
-                                    .highlight_next(self.search_input.value(), self.case_sensitive);
+                                    .highlight(self.search_input.value(), self.case_sensitive);
                             } else {
                                 if self.rura_widget.handle_event(event) {
                                     match self.input_mode {
@@ -402,7 +400,10 @@ impl App {
         frame.render_widget(&self.rura_widget, command_input_area.inner(margin));
 
         if self.searching {
-            frame.render_widget(Block::default().white().on_dark_gray(), command_input_area.inner(margin));
+            frame.render_widget(
+                Block::default().white().on_dark_gray(),
+                command_input_area.inner(margin),
+            );
         }
 
         if self.searching {

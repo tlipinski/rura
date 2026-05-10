@@ -65,34 +65,25 @@ impl OutputWidget {
         self.highlight_index = 0;
     }
 
-    pub fn highlight_next(&mut self, highlight: &str, case_sensitive: bool) {
-        if self.highlight == highlight {
-            if !self.highlight_positions.is_empty() {
-                self.highlight_index = (self.highlight_index + 1) % self.highlight_positions.len();
-                let (line, _) = self.highlight_positions[self.highlight_index];
-                self.offset.y = line.saturating_sub(self.visible_range.len() / 2) as u16;
-            }
-        } else {
-            self.highlight(highlight, case_sensitive);
-            // focus on the first match
+    pub fn highlight_next(&mut self) {
+        if !self.highlight_positions.is_empty() {
+            self.highlight_index = (self.highlight_index + 1) % self.highlight_positions.len();
+            let (line, _) = self.highlight_positions[self.highlight_index];
+            self.offset.y = line.saturating_sub(self.visible_range.len() / 2) as u16;
         }
     }
 
-    pub fn highlight_prev(&mut self, highlight: &str, case_sensitive: bool) {
-        if self.highlight == highlight {
-            if !self.highlight_positions.is_empty() {
-                if self.highlight_index == 0 {
-                    self.highlight_index = self.highlight_positions.len().saturating_sub(1);
-                } else {
-                    self.highlight_index = self.highlight_index.saturating_sub(1);
-                }
-
-                let (line, _) = self.highlight_positions[self.highlight_index];
-
-                self.offset.y = line.saturating_sub(self.visible_range.len() / 2) as u16;
+    pub fn highlight_prev(&mut self) {
+        if !self.highlight_positions.is_empty() {
+            if self.highlight_index == 0 {
+                self.highlight_index = self.highlight_positions.len().saturating_sub(1);
+            } else {
+                self.highlight_index = self.highlight_index.saturating_sub(1);
             }
-        } else {
-            self.highlight(highlight, case_sensitive);
+
+            let (line, _) = self.highlight_positions[self.highlight_index];
+
+            self.offset.y = line.saturating_sub(self.visible_range.len() / 2) as u16;
         }
     }
 
