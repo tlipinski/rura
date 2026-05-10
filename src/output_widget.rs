@@ -299,11 +299,11 @@ impl Widget for &mut OutputWidget {
                             .iter()
                             .filter(|(row, _)| *row == logical_line_num);
 
-                        let line_matches: Vec<&Range<usize>> = line_search_positions
+                        let line_highlight_ranges: Vec<&Range<usize>> = line_search_positions
                             .map(|(_, range)| range)
                             .collect();
 
-                        let spans = split_by_ranges(line, line_matches)
+                        let spans = split_by_ranges(line, line_highlight_ranges)
                             .into_iter()
                             .enumerate()
                             .map(|(match_count, part)| {
