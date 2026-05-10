@@ -401,7 +401,7 @@ impl App {
 
         if self.searching {
             frame.render_widget(
-                Block::default().white().on_dark_gray(),
+                Block::default().reversed(),
                 command_input_area.inner(margin),
             );
         }
