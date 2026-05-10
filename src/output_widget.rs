@@ -287,13 +287,11 @@ impl Widget for &mut OutputWidget {
                     .iter()
                     .enumerate()
                     .map(|(line_index, line)| {
-                        debug!("line_index: {:?}", line_index);
+                        // todo simplify
                         let logical_line_num = line_index + visible_range.start;
 
                         let a @ (current_match_line, current_match_range) =
                             self.search_positions.get(self.search_index).unwrap();
-
-                        debug!("current highlight {:?}", a);
 
                         let line_highlight_ranges: Vec<&Range<usize>> = self
                             .search_positions
@@ -312,10 +310,6 @@ impl Widget for &mut OutputWidget {
                         } else {
                             None
                         };
-
-                        debug!("current_match_range: {:?}", current_match_range);
-                        debug!("current_match_num: {:?}", current_match_num);
-
 
                         let spans = split_by_ranges(line, line_highlight_ranges, current_match_num)
                             .into_iter()
