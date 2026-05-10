@@ -116,7 +116,7 @@ impl OutputWidget {
                 .flatten()
                 .collect::<Vec<(usize, Range<usize>)>>();
 
-            self.search_index = self.search_index.min(positions.len() - 1); // todo first index after offset
+            self.search_index = self.search_index.min(positions.len().saturating_sub(1)); // todo first index after offset
             self.search_positions = positions;
         } else {
             self.search_positions = vec![];
@@ -138,6 +138,10 @@ impl OutputWidget {
         } else {
             self.error_output_opt = Some(output);
         }
+
+        self.search_index = 0;
+        self.search_positions = vec![];
+        self.search = String::new();
     }
 
     pub fn handle_event(&mut self, event: &Event) {
