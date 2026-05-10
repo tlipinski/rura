@@ -8,7 +8,9 @@ use log::info;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Direction, Layout, Position, Rect};
 use ratatui::prelude::Color::Red;
-use ratatui::prelude::{StatefulWidget, Style, Widget};
+use ratatui::prelude::{StatefulWidget, Style, Text, Widget};
+use ratatui::style::Color;
+use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap};
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
@@ -261,7 +263,17 @@ impl Widget for &mut OutputWidget {
         }
 
         let mut output_par = {
-            let mut par = Paragraph::new(output.lines[range].join("\n"))
+            let x = &output.lines[range];
+
+            let z = x.iter().map(|line| {
+                let regular_spans = line.split("git").map(Span::from);
+                let all_spans = regular_spans.intersperse(Span::from("git").style(Style::default().bg(Color::Magenta)));
+                let sp = all_spans.collect::<Vec<_>>();
+                let line: Line = Line::from(sp);
+                line
+            }).collect::<Vec<Line>>();
+
+            let mut par = Paragraph::new(Text::from(z))
                 .scroll((0, self.offset.x))
                 .block(Block::default());
 
