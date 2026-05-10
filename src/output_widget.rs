@@ -24,7 +24,7 @@ pub struct OutputWidget {
     key_bindings: KeyBindings,
     output_height: u16,
     error_pane_placement: ErrorPanePlacement,
-    search_term: Option<String>,
+    highlight: Option<String>,
     search_positions: Vec<usize>,
     search_index: usize,
     pub error_display_mode: ErrorDisplayMode,
@@ -47,14 +47,14 @@ impl OutputWidget {
             error_display_mode,
             output_height: 0u16,
             error_pane_placement,
-            search_term: None,
+            highlight: None,
             search_positions: vec![],
             search_index: 0,
         }
     }
 
     pub fn search(&mut self, s: &str) {
-        self.search_term = Some(s.into());
+        self.highlight = Some(s.into());
 
         let z = self
             .output
@@ -268,7 +268,7 @@ impl Widget for &mut OutputWidget {
         }
 
         let mut output_par = {
-            let mut par = match &self.search_term {
+            let mut par = match &self.highlight {
                 Some(st) => {
                     let z = (&output.lines[range]).iter().map(|line| {
                         let regular_spans = line.split(st).map(Span::from);
