@@ -27,6 +27,7 @@ pub struct OutputWidget {
     error_pane_placement: ErrorPanePlacement,
     search_positions: Vec<(usize, Range<usize>)>,
     search_index: usize,
+    visible_range: Range<usize>,
     pub error_display_mode: ErrorDisplayMode,
 }
 
@@ -48,6 +49,7 @@ impl OutputWidget {
             output_height: 0u16,
             error_pane_placement,
             search_positions: vec![],
+            visible_range: 0..0,
             search_index: 0,
         }
     }
@@ -114,7 +116,10 @@ impl OutputWidget {
                         if !self.search_positions.is_empty() {
                             self.search_index =
                                 (self.search_index + 1) % self.search_positions.len();
-                            self.offset.y = self.search_positions[self.search_index].0 as u16;
+                            let (line, _) = self.search_positions[self.search_index];
+                            if !(self.visible_range.contains(&line)) {
+                                self.offset.y = line.saturating_sub(3) as u16;
+                            }
                         }
                     }
                     _ => match to_ui_command(key_bindings, code, mods) {
@@ -251,17 +256,21 @@ impl Widget for &mut OutputWidget {
             }
         }
 
-        let output = self.main_output();
+        let output_len = self.main_output().len();
 
-        let height = output_content_area.height.min(output.len() as u16);
+        let height = output_content_area.height.min(output_len as u16);
 
-        let visible_range: Range<usize> = if height >= output.len() as u16 {
-            0..output.len()
+        let visible_range: Range<usize> = if height >= output_len as u16 {
+            0..output_len
         } else {
-            let from = (self.offset.y as usize).min(output.len());
-            let to = (self.offset.y as usize + height as usize).min(output.len());
+            let from = (self.offset.y as usize).min(output_len);
+            let to = (self.offset.y as usize + height as usize).min(output_len);
             from..to
         };
+
+        self.visible_range = visible_range.clone();
+
+        let output = self.main_output();
 
         let line_nums = visible_range
             .clone()
