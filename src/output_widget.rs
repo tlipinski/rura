@@ -3,6 +3,8 @@ use crate::theme::Theme;
 use crate::uicmd::{KeyBindings, UiCmd, to_ui_command};
 use crossterm::event::Event::Key;
 use crossterm::event::{Event, KeyCode};
+use itertools::Itertools;
+use log::info;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Direction, Layout, Position, Rect};
 use ratatui::prelude::Color::Red;
@@ -42,9 +44,25 @@ impl OutputWidget {
             error_display_mode,
             output_height: 0u16,
             error_pane_placement,
-            search_positions: vec![0, 5, 20, 40],
+            search_positions: vec![],
             search_index: 0,
         }
+    }
+
+    pub fn search(&mut self, s: &str) {
+        let z = self
+            .output
+            .lines
+            .iter()
+            .enumerate()
+            .filter_map(|(i, line)| if line.contains(s) { Some(i) } else { None })
+            .collect::<Vec<usize>>();
+        info!(
+            "searching for {} in {} lines: {:?}",
+            s,
+            self.output.lines.len(),
+            z
+        );
     }
 
     pub fn output_len(&self) -> usize {
@@ -73,8 +91,8 @@ impl OutputWidget {
 
                 match key_event.code {
                     KeyCode::F(3) => {
-                        self.search_index = (self.search_index + 1) % self.search_positions.len();
-                        self.offset.y = self.search_positions[self.search_index] as u16;
+                        // self.search_index = (self.search_index + 1) % self.search_positions.len();
+                        // self.offset.y = self.search_positions[self.search_index] as u16;
                     }
                     _ => match to_ui_command(key_bindings, code, mods) {
                         Some(ui_cmd) => self.handle_ui_command(ui_cmd),
