@@ -51,6 +51,7 @@ pub struct App {
     confirming_live: Option<InputMode>,
     search_input: Input,
     searching: bool,
+    case_sensitive: bool,
 }
 
 impl App {
@@ -139,6 +140,7 @@ impl App {
             confirming_live: None,
             search_input: Input::from(""),
             searching: true,
+            case_sensitive: true,
         }
     }
 
@@ -245,11 +247,18 @@ impl App {
                         }
                     },
                     (KeyCode::F(3), KeyModifiers::NONE) => {
-                        self.searching = true;
-                        self.output_widget.search_next(self.search_input.value());
+                        if self.searching {
+                            self.output_widget.search_next(self.search_input.value());
+                        } else {
+                            self.searching = true;
+                        }
                     }
                     (KeyCode::F(4), KeyModifiers::NONE) => {
-                        self.output_widget.search_prev(self.search_input.value());
+                        if self.searching {
+                            self.output_widget.search_prev(self.search_input.value());
+                        } else {
+                            self.searching = true;
+                        }
                     }
                     _ => match to_ui_command(key_bindings, code, mods) {
                         None => {
@@ -362,7 +371,7 @@ impl App {
             let (current, total) = self.output_widget.search_info();
             let par =
                 Paragraph::new(self.search_input.value()).block(Block::bordered().title(format!(
-                    " Search: {} of {} ",
+                    " Search: {} / {} ",
                     if total == 0 { 0 } else { current + 1 },
                     total
                 )));
