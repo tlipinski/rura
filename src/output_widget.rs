@@ -12,9 +12,9 @@ use ratatui::prelude::{StatefulWidget, Style, Text, Widget};
 use ratatui::style::Color;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap};
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
-use regex::Regex;
 
 pub struct OutputWidget {
     output: Output,
@@ -26,7 +26,7 @@ pub struct OutputWidget {
     output_height: u16,
     error_pane_placement: ErrorPanePlacement,
     highlight: Option<String>,
-    search_positions: Vec<usize>,
+    search_positions: Vec<(usize, usize)>,
     search_index: usize,
     pub error_display_mode: ErrorDisplayMode,
 }
@@ -60,19 +60,26 @@ impl OutputWidget {
         } else {
             self.highlight = Some(search_str.into());
 
+            let pattern = Regex::new(&regex::escape(&search_str.to_lowercase())).unwrap();
+
             let positions = self
                 .output
                 .lines
                 .iter()
                 .enumerate()
                 .filter_map(|(i, line)| {
-                    let z = line.match_indices(search_str).collect_vec();
-                    if !z.is_empty() {
-                        debug!("matches {} {:?}", i, z);
+                    let matches = pattern
+                        .find_iter(&line.to_lowercase())
+                        .map(|m| (i, m.start()))
+                        .collect_vec();
+                    if !matches.is_empty() {
+                        Some(matches)
+                    } else {
+                        None
                     }
-                    if line.contains(search_str) { Some(i) } else { None }
                 })
-                .collect::<Vec<usize>>();
+                .flatten()
+                .collect::<Vec<(usize, usize)>>();
 
             info!(
                 "searching for {} in {} lines: {:?}",
@@ -115,7 +122,7 @@ impl OutputWidget {
                         if !self.search_positions.is_empty() {
                             self.search_index =
                                 (self.search_index + 1) % self.search_positions.len();
-                            self.offset.y = self.search_positions[self.search_index] as u16;
+                            self.offset.y = self.search_positions[self.search_index].0 as u16;
                         }
                     }
                     _ => match to_ui_command(key_bindings, code, mods) {
