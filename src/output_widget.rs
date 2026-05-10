@@ -4,7 +4,7 @@ use crate::uicmd::{KeyBindings, UiCmd, to_ui_command};
 use crossterm::event::Event::Key;
 use crossterm::event::{Event, KeyCode};
 use itertools::Itertools;
-use log::info;
+use log::{debug, info};
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Direction, Layout, Position, Rect};
 use ratatui::prelude::Color::Red;
@@ -53,23 +53,27 @@ impl OutputWidget {
         }
     }
 
-    pub fn search(&mut self, s: &str) {
-        if s.is_empty() {
+    pub fn search(&mut self, search_str: &str) {
+        if search_str.is_empty() {
             self.highlight = None;
         } else {
-            self.highlight = Some(s.into());
+            self.highlight = Some(search_str.into());
 
             let positions = self
                 .output
                 .lines
                 .iter()
                 .enumerate()
-                .filter_map(|(i, line)| if line.contains(s) { Some(i) } else { None })
+                .filter_map(|(i, line)| {
+                    let z = line.match_indices(search_str).collect_vec();
+                    debug!("searching for {} in line {}: {:?}", search_str, i, z);
+                    if line.contains(search_str) { Some(i) } else { None }
+                })
                 .collect::<Vec<usize>>();
 
             info!(
                 "searching for {} in {} lines: {:?}",
-                s,
+                search_str,
                 self.output.lines.len(),
                 positions
             );

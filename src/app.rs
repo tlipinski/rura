@@ -240,7 +240,7 @@ impl App {
                         }
                     },
                     (KeyCode::F(3), KeyModifiers::NONE) => {
-                        self.searching = !self.searching;
+                        self.searching = true;
                         self.output_widget.search(self.search_input.value());
                         self.output_widget.handle_event(event);
                     }
