@@ -690,6 +690,8 @@ mod tests {
                     ErrorPanePlacement::Bottom,
                     ErrorDisplayMode::Pane,
                 ),
+                search_input: Input::new("".into()),
+                searching: false,
                 stdin: Output::ok(""),
                 action_rx,
                 command_tx,

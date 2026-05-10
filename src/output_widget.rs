@@ -522,11 +522,13 @@ mod tests {
     }
 
     #[test]
-    fn split_line_into_highlights() {
+    fn split_line_into_highlights_test() {
         let str = "abcdefghijklmnopqrstu";
 
-        let spans = split_line_into_highlights(str, vec![(0, 3), (7, 10), (14, 17)]);
+        let spans = split_line_into_highlights(str, vec![]);
+        assert_eq!(spans, vec![]);
 
+        let spans = split_line_into_highlights(str, vec![(0, 3), (7, 10), (14, 17)]);
         assert_eq!(
             spans,
             vec![
@@ -546,6 +548,7 @@ mod tests {
 }
 
 #[derive(Debug)]
+#[derive(PartialEq)]
 enum Highlight {
     Yes(String),
     No(String),
