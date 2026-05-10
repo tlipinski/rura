@@ -522,41 +522,55 @@ mod tests {
     }
 
     #[test]
-    fn split_line_into_highlights_test() {
+    fn split_line_into_parts_by_ranges_test() {
         let str = "01234567890123456789";
 
-        let spans = split_line_into_highlights(str, vec![]);
-        assert_eq!(spans, vec![Highlight::No(str.to_string())]);
+        let spans = split_by_ranges(str, vec![]);
+        assert_eq!(spans, vec![Part::OutsideRange(str.to_string())]);
 
-        let spans = split_line_into_highlights(str, vec![0..2, 7..11, 14..18]);
+        let spans = split_by_ranges(str, vec![0..2, 7..11, 14..18]);
         assert_eq!(
             spans,
             vec![
-                Highlight::Yes("01".into()),
-                Highlight::No("23456".into()),
-                Highlight::Yes("7890".into()),
-                Highlight::No("123".into()),
-                Highlight::Yes("4567".into()),
-                Highlight::No("89".into())
+                Part::InsideRange("01".into()),
+                Part::OutsideRange("23456".into()),
+                Part::InsideRange("7890".into()),
+                Part::OutsideRange("123".into()),
+                Part::InsideRange("4567".into()),
+                Part::OutsideRange("89".into())
+            ]
+        );
+
+        let spans = split_by_ranges(str, vec![1..2, 7..11, 14..18]);
+        assert_eq!(
+            spans,
+            vec![
+                Part::OutsideRange("0".into()),
+                Part::InsideRange("1".into()),
+                Part::OutsideRange("23456".into()),
+                Part::InsideRange("7890".into()),
+                Part::OutsideRange("123".into()),
+                Part::InsideRange("4567".into()),
+                Part::OutsideRange("89".into())
             ]
         );
     }
 
-    fn split_line_into_highlights(str: &str, ranges: Vec<Range<usize>>) -> Vec<Highlight> {
+    fn split_by_ranges(str: &str, ranges: Vec<Range<usize>>) -> Vec<Part> {
         let mut results = vec![];
         let mut last_end = 0;
 
         for range in ranges.iter() {
             if last_end < range.start {
-                results.push(Highlight::No(str[last_end..range.start].to_string()));
+                results.push(Part::OutsideRange(str[last_end..range.start].to_string()));
             }
 
-            results.push(Highlight::Yes(str[range.clone()].to_string()));
+            results.push(Part::InsideRange(str[range.clone()].to_string()));
             last_end = range.end;
         }
 
         if last_end < str.len() {
-            results.push(Highlight::No(str[last_end..].to_string()));
+            results.push(Part::OutsideRange(str[last_end..].to_string()));
         }
 
         results
@@ -564,7 +578,7 @@ mod tests {
 }
 
 #[derive(Debug, PartialEq)]
-enum Highlight {
-    Yes(String),
-    No(String),
+enum Part {
+    InsideRange(String),
+    OutsideRange(String),
 }
