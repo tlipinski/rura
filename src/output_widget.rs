@@ -59,7 +59,7 @@ impl OutputWidget {
         } else {
             self.highlight = Some(s.into());
 
-            let z = self
+            let positions = self
                 .output
                 .lines
                 .iter()
@@ -68,13 +68,15 @@ impl OutputWidget {
                 .collect::<Vec<usize>>();
 
             info!(
-            "searching for {} in {} lines: {:?}",
-            s,
-            self.output.lines.len(),
-            z
-        );
-        }
+                "searching for {} in {} lines: {:?}",
+                s,
+                self.output.lines.len(),
+                positions
+            );
 
+            self.search_positions = positions;
+            // self.search_index = 0; // todo first index after offset
+        }
     }
 
     pub fn output_len(&self) -> usize {
@@ -103,8 +105,8 @@ impl OutputWidget {
 
                 match key_event.code {
                     KeyCode::F(3) => {
-                        // self.search_index = (self.search_index + 1) % self.search_positions.len();
-                        // self.offset.y = self.search_positions[self.search_index] as u16;
+                        self.search_index = (self.search_index + 1) % self.search_positions.len();
+                        self.offset.y = self.search_positions[self.search_index] as u16;
                     }
                     _ => match to_ui_command(key_bindings, code, mods) {
                         Some(ui_cmd) => self.handle_ui_command(ui_cmd),
@@ -275,24 +277,26 @@ impl Widget for &mut OutputWidget {
         let mut output_par = {
             let mut par = match &self.highlight {
                 Some(st) => {
-                    let z = (&output.lines[range]).iter().map(|line| {
-                        let regular_spans = line.split(st).map(Span::from);
-                        let all_spans = regular_spans.intersperse(Span::from(st).style(Style::default().bg(Color::Magenta)));
-                        let sp = all_spans.collect::<Vec<_>>();
-                        let line: Line = Line::from(sp);
-                        line
-                    }).collect::<Vec<Line>>();
+                    let z = (&output.lines[range])
+                        .iter()
+                        .map(|line| {
+                            let regular_spans = line.split(st).map(Span::from);
+                            let all_spans = regular_spans.intersperse(
+                                Span::from(st).style(Style::default().bg(Color::Magenta)),
+                            );
+                            let sp = all_spans.collect::<Vec<_>>();
+                            let line: Line = Line::from(sp);
+                            line
+                        })
+                        .collect::<Vec<Line>>();
 
                     Paragraph::new(Text::from(z))
                         .scroll((0, self.offset.x))
                         .block(Block::default())
                 }
-                None => {
-                    Paragraph::new(output.lines[range].join("\n"))
-                        .scroll((0, self.offset.x))
-                        .block(Block::default())
-
-                }
+                None => Paragraph::new(output.lines[range].join("\n"))
+                    .scroll((0, self.offset.x))
+                    .block(Block::default()),
             };
 
             if self.wrap {
