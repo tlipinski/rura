@@ -331,7 +331,7 @@ impl Widget for &mut OutputWidget {
                         // todo simplify
                         let logical_line_num = line_index + visible_range.start;
 
-                        let a @ (current_match_line, current_match_range) =
+                        let (current_match_line, current_match_range) =
                             self.search_positions.get(self.search_index).unwrap();
 
                         let line_highlight_ranges: Vec<&Range<usize>> = self
