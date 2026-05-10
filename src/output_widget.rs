@@ -1,15 +1,13 @@
 use crate::config::{KeyBindingsConfig, ThemeConfig};
 use crate::theme::Theme;
 use crate::uicmd::{KeyBindings, UiCmd, to_ui_command};
+use crossterm::event::Event;
 use crossterm::event::Event::Key;
-use crossterm::event::{Event, KeyCode};
 use itertools::Itertools;
-use log::debug;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Direction, Layout, Position, Rect};
 use ratatui::prelude::Color::Red;
 use ratatui::prelude::{StatefulWidget, Style, Text, Widget};
-use ratatui::style::Color;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap};
 use regex::Regex;
@@ -365,10 +363,10 @@ impl Widget for &mut OutputWidget {
                             .into_iter()
                             .map(|part| match part {
                                 Part::InsideRangeX(value) => {
-                                    Span::from(value).style(theme.output_highlight)
+                                    Span::from(value).style(theme.output_highlight_current)
                                 }
                                 Part::InsideRange(value) => {
-                                    Span::from(value).style(Style::default().reversed())
+                                    Span::from(value).style(theme.output_highlight)
                                 }
                                 Part::OutsideRange(value) => {
                                     Span::from(value).style(Style::default())
