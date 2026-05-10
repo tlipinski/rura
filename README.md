@@ -2,7 +2,7 @@
 
 Rura transforms the tedious "edit, up-arrow, rerun" shell cycle into a fluid, interactive TUI scratchpad. It features live previews, syntax highlighting, and partial execution, allowing you to debug and iterate on commands in real time.
 
-![](demo.gif)
+![Made with VHS](https://vhs.charm.sh/vhs-1Fv1rbJ2qMfPYx21lF5tDG.gif)
 
 ## Features
 
