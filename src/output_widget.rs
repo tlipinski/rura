@@ -61,18 +61,14 @@ impl OutputWidget {
             if !self.search_positions.is_empty() {
                 self.search_index = (self.search_index + 1) % self.search_positions.len();
                 let (line, _) = self.search_positions[self.search_index];
-                if !(self.visible_range.contains(&line)) {
-                    self.offset.y = line.saturating_sub(3) as u16;
-                }
+                self.offset.y = line.saturating_sub(self.visible_range.len() / 2) as u16;
             }
         } else {
             self.search(search_str);
             // focus on the first match
             if !self.search_positions.is_empty() {
                 let (line, _) = self.search_positions[self.search_index];
-                if !(self.visible_range.contains(&line)) {
-                    self.offset.y = line.saturating_sub(3) as u16;
-                }
+                self.offset.y = line.saturating_sub(self.visible_range.len() / 2) as u16;
             }
         }
     }
@@ -88,18 +84,14 @@ impl OutputWidget {
 
                 let (line, _) = self.search_positions[self.search_index];
 
-                if !self.visible_range.contains(&line) {
-                    self.offset.y = line.saturating_sub(3) as u16;
-                }
+                self.offset.y = line.saturating_sub(self.visible_range.len() / 2) as u16;
             }
         } else {
             self.search(search_str);
             // focus on the first match
             if !self.search_positions.is_empty() {
                 let (line, _) = self.search_positions[self.search_index];
-                if !(self.visible_range.contains(&line)) {
-                    self.offset.y = line.saturating_sub(3) as u16;
-                }
+                self.offset.y = line.saturating_sub(self.visible_range.len() / 2) as u16;
             }
         }
     }
