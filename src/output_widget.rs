@@ -66,7 +66,7 @@ impl OutputWidget {
 
     pub fn handle_event(&mut self, event: &Event) {
         match event {
-            Event::Key(key_event) => {
+            Key(key_event) => {
                 let code = key_event.code;
                 let mods = key_event.modifiers;
                 let key_bindings = &self.key_bindings;
@@ -74,11 +74,6 @@ impl OutputWidget {
                 match key_event.code {
                     KeyCode::F(3) => {
                         self.search_index = (self.search_index + 1) % self.search_positions.len();
-                        self.offset.y = self.search_positions[self.search_index] as u16;
-                    }
-                    KeyCode::F(4) => {
-                        self.search_index = (self.search_index + self.search_positions.len() - 1)
-                            % self.search_positions.len();
                         self.offset.y = self.search_positions[self.search_index] as u16;
                     }
                     _ => match to_ui_command(key_bindings, code, mods) {
