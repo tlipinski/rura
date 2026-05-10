@@ -57,6 +57,7 @@ impl OutputWidget {
     }
 
     pub fn search_next(&mut self, search_str: &str) {
+        debug!("next {}", search_str);
         if (self.search == search_str) {
             if !self.search_positions.is_empty() {
                 self.search_index = (self.search_index + 1) % self.search_positions.len();
@@ -71,6 +72,7 @@ impl OutputWidget {
     }
 
     pub fn search_prev(&mut self, search_str: &str) {
+        debug!("prev {}", search_str);
         if (self.search == search_str) {
             if !self.search_positions.is_empty() {
                 if self.search_index == 0 {
@@ -91,6 +93,7 @@ impl OutputWidget {
     }
 
     fn search(&mut self, search_str: &str) {
+        self.search = search_str.to_string();
         if !search_str.is_empty() {
             let pattern = Regex::new(&regex::escape(&search_str.to_lowercase())).unwrap();
 
