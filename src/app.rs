@@ -9,6 +9,7 @@ use crate::rura::ExecuteType;
 use crate::rura_widget::RuraWidget;
 use crate::theme::Theme;
 use crate::uicmd::{KeyBindings, UiCmd, to_ui_command};
+use KeyCode::{Enter, Esc, F};
 use crossterm::event::KeyCode::Char;
 use crossterm::event::{KeyCode, KeyModifiers};
 use crossterm::tty::IsTty;
@@ -192,9 +193,7 @@ impl App {
 
                 if let Some(confirming_live) = self.confirming_live.clone() {
                     match (code, mods) {
-                        (KeyCode::Esc | Char('n'), KeyModifiers::NONE) => {
-                            self.confirming_live = None
-                        }
+                        (Esc | Char('n'), KeyModifiers::NONE) => self.confirming_live = None,
                         (Char('y'), KeyModifiers::NONE) => {
                             self.confirming_live = None;
                             self.input_mode = confirming_live;
@@ -210,7 +209,7 @@ impl App {
                 }
 
                 match (code, mods) {
-                    (KeyCode::Esc, KeyModifiers::NONE) => {
+                    (Esc, KeyModifiers::NONE) => {
                         self.help = false;
                         if self.searching {
                             self.searching = false;
@@ -219,10 +218,10 @@ impl App {
                             self.output_widget.clear_highlight();
                         }
                     }
-                    (KeyCode::F(1), KeyModifiers::NONE) => {
+                    (F(1), KeyModifiers::NONE) => {
                         self.help = !self.help;
                     }
-                    (KeyCode::F(11), KeyModifiers::NONE) => match self.input_mode {
+                    (F(11), KeyModifiers::NONE) => match self.input_mode {
                         InputMode::Normal => {
                             // self.input_mode = InputMode::LiveUntilCursor;
                             self.confirming_live = Some(InputMode::LiveUntilCursor);
@@ -234,7 +233,7 @@ impl App {
                             self.input_mode = InputMode::Normal;
                         }
                     },
-                    (KeyCode::F(12), KeyModifiers::NONE) => match self.input_mode {
+                    (F(12), KeyModifiers::NONE) => match self.input_mode {
                         InputMode::Normal => {
                             // self.input_mode = InputMode::LiveFull;
                             self.confirming_live = Some(InputMode::LiveFull);
@@ -246,11 +245,11 @@ impl App {
                             self.input_mode = InputMode::LiveFull;
                         }
                     },
-                    (KeyCode::Enter, KeyModifiers::NONE) if self.searching => {
+                    (Enter, KeyModifiers::NONE) if self.searching => {
                         self.output_widget
                             .highlight_next(self.search_input.value(), self.case_sensitive);
                     }
-                    (KeyCode::F(3), KeyModifiers::NONE) => {
+                    (F(3), KeyModifiers::NONE) => {
                         if self.searching {
                             self.output_widget
                                 .highlight_next(self.search_input.value(), self.case_sensitive);
@@ -258,13 +257,18 @@ impl App {
                             self.searching = true;
                         }
                     }
-                    (KeyCode::F(4), KeyModifiers::NONE) => {
+                    (F(4), KeyModifiers::NONE) => {
                         if self.searching {
                             self.output_widget
                                 .highlight_prev(self.search_input.value(), self.case_sensitive);
                         } else {
                             self.searching = true;
                         }
+                    }
+                    (Char('c'), KeyModifiers::ALT) => {
+                        self.case_sensitive = !self.case_sensitive;
+                        self.output_widget
+                            .highlight(self.search_input.value(), self.case_sensitive);
                     }
                     _ => match to_ui_command(key_bindings, code, mods) {
                         None => {
@@ -378,9 +382,10 @@ impl App {
             let (current, total) = self.output_widget.highlight_info();
             let par =
                 Paragraph::new(self.search_input.value()).block(Block::bordered().title(format!(
-                    " Search: {} / {} ",
+                    " Search: {} / {} | {} ",
                     if total == 0 { 0 } else { current + 1 },
-                    total
+                    total,
+                    if (self.case_sensitive) { "[Cc]" } else { "Cc" }
                 )));
             par.render(search_input_area, frame.buffer_mut());
         }
@@ -750,7 +755,7 @@ mod tests {
     fn main_screen_help() {
         let mut app = App::default();
 
-        input_key(&mut app, KeyCode::F(1), KeyModifiers::NONE);
+        input_key(&mut app, F(1), KeyModifiers::NONE);
 
         let mut terminal = TestTerminal::default().0;
         terminal
@@ -764,7 +769,7 @@ mod tests {
     fn live_mode_confirm() {
         let mut app = App::default();
 
-        input_key(&mut app, KeyCode::F(11), KeyModifiers::NONE);
+        input_key(&mut app, F(11), KeyModifiers::NONE);
 
         let mut terminal = TestTerminal::default().0;
         terminal
@@ -778,7 +783,7 @@ mod tests {
     fn live_mode_full_confirm() {
         let mut app = App::default();
 
-        input_key(&mut app, KeyCode::F(12), KeyModifiers::NONE);
+        input_key(&mut app, F(12), KeyModifiers::NONE);
 
         let mut terminal = TestTerminal::default().0;
         terminal

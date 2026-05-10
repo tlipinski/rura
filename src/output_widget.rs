@@ -73,12 +73,8 @@ impl OutputWidget {
                 self.offset.y = line.saturating_sub(self.visible_range.len() / 2) as u16;
             }
         } else {
-            self.search(highlight, case_sensitive);
+            self.highlight(highlight, case_sensitive);
             // focus on the first match
-            if !self.highlight_positions.is_empty() {
-                let (line, _) = self.highlight_positions[self.highlight_index];
-                self.offset.y = line.saturating_sub(self.visible_range.len() / 2) as u16;
-            }
         }
     }
 
@@ -96,16 +92,11 @@ impl OutputWidget {
                 self.offset.y = line.saturating_sub(self.visible_range.len() / 2) as u16;
             }
         } else {
-            self.search(highlight, case_sensitive);
-            // focus on the first match
-            if !self.highlight_positions.is_empty() {
-                let (line, _) = self.highlight_positions[self.highlight_index];
-                self.offset.y = line.saturating_sub(self.visible_range.len() / 2) as u16;
-            }
+            self.highlight(highlight, case_sensitive);
         }
     }
 
-    fn search(&mut self, search_str: &str, case_sensitive: bool) {
+    pub fn highlight(&mut self, search_str: &str, case_sensitive: bool) {
         self.highlight = search_str.to_string();
         if !search_str.is_empty() {
             let pattern = if case_sensitive {
@@ -140,6 +131,12 @@ impl OutputWidget {
 
             self.highlight_index = self.highlight_index.min(positions.len().saturating_sub(1)); // todo first index after offset
             self.highlight_positions = positions;
+
+            // focus on the first match
+            if !self.highlight_positions.is_empty() {
+                let (line, _) = self.highlight_positions[self.highlight_index];
+                self.offset.y = line.saturating_sub(self.visible_range.len() / 2) as u16;
+            }
         } else {
             self.highlight_positions = vec![];
         }
