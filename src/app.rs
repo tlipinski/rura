@@ -268,26 +268,26 @@ impl App {
                             UiCmd::Quit => {
                                 self.exit = true;
                             }
-                            UiCmd::ExecuteFull => {
+                            UiCmd::ExecuteFull if !self.searching => {
                                 self.handle_execute(ExecuteType::Full);
                             }
-                            UiCmd::ExecuteUntilCurrent => {
+                            UiCmd::ExecuteUntilCurrent if !self.searching => {
                                 self.handle_execute(ExecuteType::UntilCurrent)
                             }
-                            UiCmd::ExecuteUntilPrev => {
+                            UiCmd::ExecuteUntilPrev if !self.searching => {
                                 self.handle_execute(ExecuteType::UntilCurrentPrev)
                             }
-                            UiCmd::ResetInput => {
+                            UiCmd::ResetInput if !self.searching => {
                                 let stdin = self.stdin.clone();
                                 self.output_widget.handle_command_output(stdin);
                             }
-                            UiCmd::SubcommandNext | UiCmd::SubcommandPrev => {
+                            UiCmd::SubcommandNext | UiCmd::SubcommandPrev if !self.searching => {
                                 self.rura_widget.handle_event(event);
                             }
                             UiCmd::HistoryNext
                             | UiCmd::HistoryPrev
                             | UiCmd::Complete
-                            | UiCmd::CompletePrev => {
+                            | UiCmd::CompletePrev if !self.searching => {
                                 // disable history and completions in live mode
                                 if matches!(self.input_mode, InputMode::Normal) {
                                     self.rura_widget.handle_event(event);
@@ -366,7 +366,6 @@ impl App {
                 .border_type(BorderType::Thick)
         };
 
-        let inner_rect = command_input_area.inner(margin);
 
         frame.render_widget(command_input_block, command_input_area);
         frame.render_widget(&self.rura_widget, command_input_area.inner(margin));
@@ -375,6 +374,7 @@ impl App {
             let x = self.search_input.visual_cursor() as u16;
             frame.set_cursor_position((search_input_area.x + 1 + x, search_input_area.y + 1));
         } else {
+            let inner_rect = command_input_area.inner(margin);
             let (x, y) = self.rura_widget.cursor(inner_rect.width);
             frame.set_cursor_position((command_input_area.x + 1 + x, command_input_area.y + 1 + y));
         }
