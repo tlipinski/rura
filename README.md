@@ -18,6 +18,10 @@ Rura transforms the tedious "edit, up-arrow, rerun" shell cycle into a fluid, in
 
 ## Installation
 
+Check the [Releases](https://github.com/tlipinski/rura/releases) page for pre-compiled binaries for your platform.
+
+Alternatively, you can install Rura from source using Cargo:
+
 ```bash
 cargo install --path .
 ```
