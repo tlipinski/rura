@@ -287,12 +287,13 @@ impl Widget for &mut OutputWidget {
                     .iter()
                     .enumerate()
                     .map(|(line_index, line)| {
+                        debug!("line_index: {:?}", line_index);
                         let logical_line_num = line_index + visible_range.start;
 
                         let a @ (current_match_line, current_match_range) =
                             self.search_positions.get(self.search_index).unwrap();
 
-                        debug!("{:?}", a);
+                        debug!("current highlight {:?}", a);
 
                         let line_highlight_ranges: Vec<&Range<usize>> = self
                             .search_positions
@@ -301,15 +302,20 @@ impl Widget for &mut OutputWidget {
                             .map(|(_, range)| range)
                             .collect();
 
-                        let current_match_num = self
-                            .search_positions
-                            .iter()
-                            .filter(|(row, _)| *row == logical_line_num)
-                            .find_position(|(_, range)| range == current_match_range)
-                            .map(|(i, _)| i);
+                        let current_match_num = if (logical_line_num == *current_match_line) {
+                            self
+                                .search_positions
+                                .iter()
+                                .filter(|(row, _)| *row == logical_line_num)
+                                .find_position(|(_, range)| range == current_match_range)
+                                .map(|(i, _)| i)
+                        } else {
+                            None
+                        };
 
                         debug!("current_match_range: {:?}", current_match_range);
                         debug!("current_match_num: {:?}", current_match_num);
+
 
                         let spans = split_by_ranges(line, line_highlight_ranges, current_match_num)
                             .into_iter()
