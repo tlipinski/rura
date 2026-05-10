@@ -287,7 +287,7 @@ impl Widget for &mut OutputWidget {
                     .iter()
                     .enumerate()
                     .map(|(line_index, line)| {
-                        let logical_line = line_index + visible_range.start;
+                        let logical_line_num = line_index + visible_range.start;
 
                         // let (current_match, _) = self.search_positions.get(self.search_index).unwrap();
 
@@ -295,7 +295,7 @@ impl Widget for &mut OutputWidget {
                             .search_positions
                             .iter()
                             .filter_map(|(row, range)| {
-                                if *row == logical_line {
+                                if *row == logical_line_num {
                                     Some(range)
                                 } else {
                                     None
