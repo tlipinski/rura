@@ -274,7 +274,7 @@ impl Widget for &mut OutputWidget {
             lines_par.render(line_nums_area, buf);
         }
 
-        let mut output_par = {
+        let output_par = {
             let mut par = match &self.highlight {
                 Some(st) => {
                     let z = (&output.lines[range])

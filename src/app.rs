@@ -21,7 +21,7 @@ use ratatui::prelude::Stylize;
 use ratatui::style::Color::Yellow;
 use ratatui::style::Style;
 use ratatui::text::{Line, Text};
-use ratatui::widgets::{Block, BorderType};
+use ratatui::widgets::{Block, BorderType, Paragraph, Widget};
 use ratatui::{DefaultTerminal, Frame};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
@@ -48,6 +48,8 @@ pub struct App {
     input_mode: InputMode,
     debouncer_tx: Sender<()>,
     confirming_live: Option<InputMode>,
+    search_input: Input,
+    searching: bool,
 }
 
 impl App {
@@ -134,6 +136,8 @@ impl App {
             help: false,
             input_mode: InputMode::Normal,
             confirming_live: None,
+            search_input: Input::from(""),
+            searching: true,
         }
     }
 
@@ -311,32 +315,40 @@ impl App {
 
         let inner_area = area.inner(margin);
 
-        let (command_input_area, output_area, status_area) = match self.command_line_placement {
-            CommandLinePlacement::Top => {
-                let layout = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints(vec![
-                        Constraint::Length(self.rura_widget.height(inner_area.width) + 2),
-                        Constraint::Fill(1),
-                        Constraint::Length(1),
-                    ])
-                    .split(area);
+        let (command_input_area, search_input_area, output_area, status_area) =
+            match self.command_line_placement {
+                CommandLinePlacement::Top => {
+                    let layout = Layout::default()
+                        .direction(Direction::Vertical)
+                        .constraints(vec![
+                            Constraint::Length(self.rura_widget.height(inner_area.width) + 2), // command
+                            Constraint::Length(if self.searching { 3 } else { 0 }), // search
+                            Constraint::Fill(1),                                    // output
+                            Constraint::Length(1),                                  // status
+                        ])
+                        .split(area);
 
-                (layout[0], layout[1], layout[2])
-            }
-            CommandLinePlacement::Bottom => {
-                let layout = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints(vec![
-                        Constraint::Fill(1),
-                        Constraint::Length(self.rura_widget.height(inner_area.width) + 2),
-                        Constraint::Length(1),
-                    ])
-                    .split(area);
+                    (layout[0], layout[1], layout[2], layout[3])
+                }
+                CommandLinePlacement::Bottom => {
+                    let layout = Layout::default()
+                        .direction(Direction::Vertical)
+                        .constraints(vec![
+                            Constraint::Fill(1),                                               // output
+                            Constraint::Length(if self.searching { 3 } else { 0 }), // search
+                            Constraint::Length(self.rura_widget.height(inner_area.width) + 2), // command
+                            Constraint::Length(1), // status
+                        ])
+                        .split(area);
 
-                (layout[1], layout[0], layout[2])
-            }
-        };
+                    (layout[2], layout[1], layout[0], layout[3])
+                }
+            };
+
+        if self.searching {
+            let par = Paragraph::new(self.search_input.value()).block(Block::bordered());
+            par.render(search_input_area, frame.buffer_mut());
+        }
 
         let command_input_block = if matches!(self.input_mode, InputMode::Normal) {
             Block::bordered()
@@ -351,8 +363,13 @@ impl App {
         frame.render_widget(command_input_block, command_input_area);
         frame.render_widget(&self.rura_widget, command_input_area.inner(margin));
 
-        let (x, y) = self.rura_widget.cursor(inner_rect.width);
-        frame.set_cursor_position((command_input_area.x + 1 + x, command_input_area.y + 1 + y));
+        if self.searching {
+            let x = self.search_input.visual_cursor() as u16;
+            frame.set_cursor_position((search_input_area.x + 1 + x, search_input_area.y + 1));
+        } else {
+            let (x, y) = self.rura_widget.cursor(inner_rect.width);
+            frame.set_cursor_position((command_input_area.x + 1 + x, command_input_area.y + 1 + y));
+        }
 
         frame.render_widget(&mut self.output_widget, output_area);
 
