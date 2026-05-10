@@ -368,7 +368,7 @@ impl Widget for &mut OutputWidget {
                                     Span::from(value).style(Style::default().bg(Color::Yellow))
                                 }
                                 Part::InsideRange(value) => {
-                                    Span::from(value).style(Style::default().bg(Color::Magenta))
+                                    Span::from(value).style(Style::default().reversed())
                                 }
                                 Part::OutsideRange(value) => {
                                     Span::from(value).style(Style::default())
