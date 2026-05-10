@@ -465,6 +465,8 @@ impl App {
         spans.push(" Execute ".into());
         spans.push("F1".bold());
         spans.push(" Help ".into());
+        spans.push("F3".bold());
+        spans.push(" Search ".into());
         spans.push("F11 ".bold());
         match self.input_mode {
             InputMode::Normal | InputMode::LiveFull => {
