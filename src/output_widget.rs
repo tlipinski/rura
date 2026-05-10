@@ -57,7 +57,7 @@ impl OutputWidget {
     }
 
     pub fn search_next(&mut self, search_str: &str) {
-        if (self.search == search_str) {
+        if self.search == search_str  {
             if !self.search_positions.is_empty() {
                 self.search_index = (self.search_index + 1) % self.search_positions.len();
                 let (line, _) = self.search_positions[self.search_index];
@@ -71,7 +71,7 @@ impl OutputWidget {
     }
 
     pub fn search_prev(&mut self, search_str: &str) {
-        if (self.search == search_str) {
+        if self.search == search_str  {
             if !self.search_positions.is_empty() {
                 if self.search_index == 0 {
                     self.search_index = self.search_positions.len().saturating_sub(1);
@@ -81,7 +81,7 @@ impl OutputWidget {
 
                 let (line, _) = self.search_positions[self.search_index];
 
-                if !(self.visible_range.contains(&line)) {
+                if !self.visible_range.contains(&line) {
                     self.offset.y = line.saturating_sub(3) as u16;
                 }
             }
@@ -339,7 +339,7 @@ impl Widget for &mut OutputWidget {
                             .map(|(_, range)| range)
                             .collect();
 
-                        let current_match_num = if (logical_line_num == *current_match_line) {
+                        let current_match_num = if logical_line_num == *current_match_line  {
                             self.search_positions
                                 .iter()
                                 .filter(|(row, _)| *row == logical_line_num)
@@ -582,7 +582,7 @@ mod tests {
         let spans = split_by_ranges(str, vec![], None);
         assert_eq!(spans, vec![Part::OutsideRange(str.to_string())]);
 
-        let spans = split_by_ranges(str, vec![0..2, 7..11, 14..18], None);
+        let spans = split_by_ranges(str, vec![&(0..2), &(7..11), &(14..18)], None);
         assert_eq!(
             spans,
             vec![
