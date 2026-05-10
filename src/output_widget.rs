@@ -365,7 +365,7 @@ impl Widget for &mut OutputWidget {
                             .into_iter()
                             .map(|part| match part {
                                 Part::InsideRangeX(value) => {
-                                    Span::from(value).style(Style::default().bg(Color::Yellow))
+                                    Span::from(value).style(Style::default().bg(Color::Magenta))
                                 }
                                 Part::InsideRange(value) => {
                                     Span::from(value).style(Style::default().reversed())
