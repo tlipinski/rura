@@ -556,29 +556,30 @@ mod tests {
         );
     }
 
-    fn split_by_ranges(str: &str, ranges: Vec<Range<usize>>) -> Vec<Part> {
-        let mut results = vec![];
-        let mut last_end = 0;
-
-        for range in ranges.iter() {
-            if last_end < range.start {
-                results.push(Part::OutsideRange(str[last_end..range.start].to_string()));
-            }
-
-            results.push(Part::InsideRange(str[range.clone()].to_string()));
-            last_end = range.end;
-        }
-
-        if last_end < str.len() {
-            results.push(Part::OutsideRange(str[last_end..].to_string()));
-        }
-
-        results
-    }
 }
 
 #[derive(Debug, PartialEq)]
 enum Part {
     InsideRange(String),
     OutsideRange(String),
+}
+
+fn split_by_ranges(str: &str, ranges: Vec<Range<usize>>) -> Vec<Part> {
+    let mut results = vec![];
+    let mut last_end = 0;
+
+    for range in ranges.iter() {
+        if last_end < range.start {
+            results.push(Part::OutsideRange(str[last_end..range.start].to_string()));
+        }
+
+        results.push(Part::InsideRange(str[range.clone()].to_string()));
+        last_end = range.end;
+    }
+
+    if last_end < str.len() {
+        results.push(Part::OutsideRange(str[last_end..].to_string()));
+    }
+
+    results
 }
