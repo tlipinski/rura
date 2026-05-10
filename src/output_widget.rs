@@ -289,21 +289,19 @@ impl Widget for &mut OutputWidget {
                     .map(|(line_index, line)| {
                         let logical_line_num = line_index + visible_range.start;
 
-                        // let (current_match, _) = self.search_positions.get(self.search_index).unwrap();
+                        let (current_match_line, current_match_range) =
+                            self.search_positions.get(self.search_index).unwrap();
 
-                        let matches_in_line: Vec<&Range<usize>> = self
+                        let line_search_positions = self
                             .search_positions
                             .iter()
-                            .filter_map(|(row, range)| {
-                                if *row == logical_line_num {
-                                    Some(range)
-                                } else {
-                                    None
-                                }
-                            })
+                            .filter(|(row, _)| *row == logical_line_num);
+
+                        let line_matches: Vec<&Range<usize>> = line_search_positions
+                            .map(|(_, range)| range)
                             .collect();
 
-                        let spans = split_by_ranges(line, matches_in_line)
+                        let spans = split_by_ranges(line, line_matches)
                             .into_iter()
                             .enumerate()
                             .map(|(match_count, part)| match part {
