@@ -1,6 +1,7 @@
 use crate::config::{KeyBindingsConfig, ThemeConfig};
 use crate::theme::Theme;
 use crate::uicmd::{KeyBindings, UiCmd, to_ui_command};
+use clap::error::ContextValue::StyledStr;
 use crossterm::event::Event::Key;
 use crossterm::event::{Event, KeyCode};
 use itertools::Itertools;
@@ -15,7 +16,6 @@ use ratatui::widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, Scroll
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
-use clap::error::ContextValue::StyledStr;
 
 pub struct OutputWidget {
     output: Output,
@@ -520,4 +520,32 @@ mod tests {
             .unwrap();
         assert_snapshot!("scroll up page", terminal.backend());
     }
+
+    #[test]
+    fn split_line_into_highlights() {
+        let str = "abcdefghijklmnopqrstu";
+
+        let spans = split_line_into_highlights(str, vec![0, 7, 14], 3);
+
+        assert_eq!(
+            spans,
+            vec![
+                Highlight::Yes("abc".into()),
+                Highlight::No("defg".into()),
+                Highlight::Yes("hij".into()),
+                Highlight::No("klmn".into()),
+                Highlight::Yes("opq".into()),
+                Highlight::No("rstu".into())
+            ]
+        );
+    }
+
+    fn split_line_into_highlights(str: &str, at: Vec<usize>, len: usize) -> Vec<Highlight> {
+        todo!()
+    }
+}
+
+enum Highlight {
+    Yes(String),
+    No(String),
 }
