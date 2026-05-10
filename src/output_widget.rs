@@ -260,13 +260,18 @@ impl Widget for &mut OutputWidget {
             lines_par.render(line_nums_area, buf);
         }
 
-        let mut output_par = Paragraph::new(output.lines[range].join("\n"))
-            .scroll((0, self.offset.x))
-            .block(Block::default());
+        let mut output_par = {
+            let mut par = Paragraph::new(output.lines[range].join("\n"))
+                .scroll((0, self.offset.x))
+                .block(Block::default());
 
-        if self.wrap {
-            output_par = output_par.wrap(Wrap::default())
+            if self.wrap {
+                par = par.wrap(Wrap::default())
+            };
+
+            par
         };
+
         output_par.render(output_content_area, buf);
 
         let scroll_bar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
