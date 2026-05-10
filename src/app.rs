@@ -138,7 +138,7 @@ impl App {
             input_mode: InputMode::Normal,
             confirming_live: None,
             search_input: Input::from(""),
-            searching: false,
+            searching: true,
         }
     }
 
