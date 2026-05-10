@@ -24,7 +24,6 @@ pub struct OutputWidget {
     key_bindings: KeyBindings,
     output_height: u16,
     error_pane_placement: ErrorPanePlacement,
-    highlight: Option<String>,
     search_positions: Vec<(usize, Range<usize>)>,
     search_index: usize,
     pub error_display_mode: ErrorDisplayMode,
@@ -47,18 +46,13 @@ impl OutputWidget {
             error_display_mode,
             output_height: 0u16,
             error_pane_placement,
-            highlight: None,
             search_positions: vec![],
             search_index: 0,
         }
     }
 
     pub fn search(&mut self, search_str: &str) {
-        if search_str.is_empty() {
-            self.highlight = None;
-        } else {
-            self.highlight = Some(search_str.into());
-
+        if !search_str.is_empty() {
             let pattern = Regex::new(&regex::escape(&search_str.to_lowercase())).unwrap();
 
             let positions = self
@@ -284,45 +278,44 @@ impl Widget for &mut OutputWidget {
         }
 
         let output_par = {
-            let mut par = match &self.highlight {
-                Some(st) => {
-                    let lines = (&output.lines[range.clone()])
-                        .iter()
-                        .enumerate()
-                        .map(|(line_index, line)| {
-                            let logical_line = line_index + range.start;
-                            let matches_in_line: Vec<Range<usize>> = self
-                                .search_positions
-                                .clone()
-                                .into_iter()
-                                .filter_map(
-                                    |(row, col)| if row == logical_line { Some(col) } else { None },
-                                )
-                                .collect();
+            let mut par = if !self.search_positions.is_empty() {
+                let lines = (&output.lines[range.clone()])
+                    .iter()
+                    .enumerate()
+                    .map(|(line_index, line)| {
+                        let logical_line = line_index + range.start;
+                        let matches_in_line: Vec<Range<usize>> = self
+                            .search_positions
+                            .clone()
+                            .into_iter()
+                            .filter_map(
+                                |(row, col)| if row == logical_line { Some(col) } else { None },
+                            )
+                            .collect();
 
-                            let spans = split_by_ranges(line, matches_in_line)
-                                .into_iter()
-                                .map(|part| match part {
-                                    Part::InsideRange(value) => {
-                                        Span::from(value).style(Style::default().bg(Color::Magenta))
-                                    }
-                                    Part::OutsideRange(value) => {
-                                        Span::from(value).style(Style::default())
-                                    }
-                                })
-                                .collect_vec();
+                        let spans = split_by_ranges(line, matches_in_line)
+                            .into_iter()
+                            .map(|part| match part {
+                                Part::InsideRange(value) => {
+                                    Span::from(value).style(Style::default().bg(Color::Magenta))
+                                }
+                                Part::OutsideRange(value) => {
+                                    Span::from(value).style(Style::default())
+                                }
+                            })
+                            .collect_vec();
 
-                            Line::from(spans)
-                        })
-                        .collect::<Vec<Line>>();
+                        Line::from(spans)
+                    })
+                    .collect::<Vec<Line>>();
 
-                    Paragraph::new(Text::from(lines))
-                        .scroll((0, self.offset.x))
-                        .block(Block::default())
-                }
-                None => Paragraph::new(output.lines[range].join("\n"))
+                Paragraph::new(Text::from(lines))
                     .scroll((0, self.offset.x))
-                    .block(Block::default()),
+                    .block(Block::default())
+            } else {
+                Paragraph::new(output.lines[range].join("\n"))
+                    .scroll((0, self.offset.x))
+                    .block(Block::default())
             };
 
             if self.wrap {
