@@ -402,7 +402,7 @@ impl App {
         frame.render_widget(&self.rura_widget, command_input_area.inner(margin));
 
         if self.searching {
-            frame.render_widget(Block::default().on_gray(), command_input_area.inner(margin));
+            frame.render_widget(Block::default().white().on_dark_gray(), command_input_area.inner(margin));
         }
 
         if self.searching {
