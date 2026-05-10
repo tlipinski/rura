@@ -526,7 +526,7 @@ mod tests {
         let str = "abcdefghijklmnopqrstu";
 
         let spans = split_line_into_highlights(str, vec![]);
-        assert_eq!(spans, vec![]);
+        assert_eq!(spans, vec![Highlight::No(str.to_string())]);
 
         let spans = split_line_into_highlights(str, vec![(0, 3), (7, 10), (14, 17)]);
         assert_eq!(
@@ -543,7 +543,11 @@ mod tests {
     }
 
     fn split_line_into_highlights(str: &str, ranges: Vec<(usize, usize)>) -> Vec<Highlight> {
-        todo!()
+        if ranges.is_empty() {
+            return vec![Highlight::No(str.to_string())];
+        } else {
+            todo!()
+        }
     }
 }
 
