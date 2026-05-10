@@ -253,7 +253,7 @@ impl Widget for &mut OutputWidget {
 
         let height = output_content_area.height.min(output.len() as u16);
 
-        let range: Range<usize> = if height >= output.len() as u16 {
+        let visible_range: Range<usize> = if height >= output.len() as u16 {
             0..output.len()
         } else {
             let from = (self.offset.y as usize).min(output.len());
@@ -261,7 +261,7 @@ impl Widget for &mut OutputWidget {
             from..to
         };
 
-        let line_nums = range
+        let line_nums = visible_range
             .clone()
             .flat_map(|i| {
                 let visual_line_count = if self.wrap {
@@ -283,11 +283,14 @@ impl Widget for &mut OutputWidget {
 
         let output_par = {
             let mut par = if !self.search_positions.is_empty() {
-                let lines = (&output.lines[range.clone()])
+                let lines = (&output.lines[visible_range.clone()])
                     .iter()
                     .enumerate()
                     .map(|(line_index, line)| {
-                        let logical_line = line_index + range.start;
+                        let logical_line = line_index + visible_range.start;
+
+                        // let (current_match, _) = self.search_positions.get(self.search_index).unwrap();
+
                         let matches_in_line: Vec<&Range<usize>> = self
                             .search_positions
                             .iter()
@@ -302,7 +305,8 @@ impl Widget for &mut OutputWidget {
 
                         let spans = split_by_ranges(line, matches_in_line)
                             .into_iter()
-                            .map(|part| match part {
+                            .enumerate()
+                            .map(|(match_count, part)| match part {
                                 Part::InsideRange(value) => {
                                     Span::from(value).style(Style::default().bg(Color::Magenta))
                                 }
@@ -320,7 +324,7 @@ impl Widget for &mut OutputWidget {
                     .scroll((0, self.offset.x))
                     .block(Block::default())
             } else {
-                Paragraph::new(output.lines[range].join("\n"))
+                Paragraph::new(output.lines[visible_range].join("\n"))
                     .scroll((0, self.offset.x))
                     .block(Block::default())
             };
