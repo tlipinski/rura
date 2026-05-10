@@ -54,22 +54,27 @@ impl OutputWidget {
     }
 
     pub fn search(&mut self, s: &str) {
-        self.highlight = Some(s.into());
+        if s.is_empty() {
+            self.highlight = None;
+        } else {
+            self.highlight = Some(s.into());
 
-        let z = self
-            .output
-            .lines
-            .iter()
-            .enumerate()
-            .filter_map(|(i, line)| if line.contains(s) { Some(i) } else { None })
-            .collect::<Vec<usize>>();
+            let z = self
+                .output
+                .lines
+                .iter()
+                .enumerate()
+                .filter_map(|(i, line)| if line.contains(s) { Some(i) } else { None })
+                .collect::<Vec<usize>>();
 
-        info!(
+            info!(
             "searching for {} in {} lines: {:?}",
             s,
             self.output.lines.len(),
             z
         );
+        }
+
     }
 
     pub fn output_len(&self) -> usize {

@@ -237,6 +237,10 @@ impl App {
                         self.output_widget.search("export");
                         self.output_widget.handle_event(event);
                     }
+                    (KeyCode::F(4), KeyModifiers::NONE) => {
+                        self.output_widget.search("");
+                        self.output_widget.handle_event(event);
+                    }
                     _ => match to_ui_command(key_bindings, code, mods) {
                         None => {
                             if self.rura_widget.handle_event(event) {
