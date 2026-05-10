@@ -246,12 +246,12 @@ impl App {
                     },
                     (KeyCode::F(3), KeyModifiers::NONE) => {
                         self.searching = true;
-                        self.output_widget.search(self.search_input.value());
                         self.output_widget.handle_event(event);
+                        self.output_widget.search(self.search_input.value());
                     }
                     (KeyCode::F(4), KeyModifiers::NONE) => {
-                        self.output_widget.search("");
                         self.output_widget.handle_event(event);
+                        self.output_widget.search(self.search_input.value());
                     }
                     _ => match to_ui_command(key_bindings, code, mods) {
                         None => {

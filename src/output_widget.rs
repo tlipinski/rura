@@ -119,6 +119,21 @@ impl OutputWidget {
                             }
                         }
                     }
+                    KeyCode::F(4) => {
+                        if !self.search_positions.is_empty() {
+                            if self.search_index == 0 {
+                                self.search_index = self.search_positions.len().saturating_sub(1);
+                            } else {
+                                self.search_index = self.search_index.saturating_sub(1);
+                            }
+
+                            let (line, _) = self.search_positions[self.search_index];
+
+                            if !(self.visible_range.contains(&line)) {
+                                self.offset.y = line.saturating_sub(3) as u16;
+                            }
+                        }
+                    }
                     _ => match to_ui_command(key_bindings, code, mods) {
                         Some(ui_cmd) => self.handle_ui_command(ui_cmd),
                         None => {}
@@ -309,8 +324,7 @@ impl Widget for &mut OutputWidget {
                             .collect();
 
                         let current_match_num = if (logical_line_num == *current_match_line) {
-                            self
-                                .search_positions
+                            self.search_positions
                                 .iter()
                                 .filter(|(row, _)| *row == logical_line_num)
                                 .find_position(|(_, range)| range == current_match_range)
@@ -321,17 +335,15 @@ impl Widget for &mut OutputWidget {
 
                         let spans = split_by_ranges(line, line_highlight_ranges, current_match_num)
                             .into_iter()
-                            .map(|part| {
-                                match part {
-                                    Part::InsideRangeX(value) => {
-                                        Span::from(value).style(Style::default().bg(Color::Yellow))
-                                    }
-                                    Part::InsideRange(value) => {
-                                        Span::from(value).style(Style::default().bg(Color::Magenta))
-                                    }
-                                    Part::OutsideRange(value) => {
-                                        Span::from(value).style(Style::default())
-                                    }
+                            .map(|part| match part {
+                                Part::InsideRangeX(value) => {
+                                    Span::from(value).style(Style::default().bg(Color::Yellow))
+                                }
+                                Part::InsideRange(value) => {
+                                    Span::from(value).style(Style::default().bg(Color::Magenta))
+                                }
+                                Part::OutsideRange(value) => {
+                                    Span::from(value).style(Style::default())
                                 }
                             })
                             .collect_vec();
