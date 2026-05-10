@@ -301,6 +301,13 @@ impl Widget for &mut OutputWidget {
                             .map(|(_, range)| range)
                             .collect();
 
+                        let current_match_num = self
+                            .search_positions
+                            .iter()
+                            .filter(|(row, _)| *row == logical_line_num)
+                            .find_or_first(|(_, range)| range == current_match_range)
+                            .map(|(i, _)| i);
+
                         let spans = split_by_ranges(line, line_highlight_ranges)
                             .into_iter()
                             .enumerate()
@@ -308,8 +315,12 @@ impl Widget for &mut OutputWidget {
                                 debug!("match_count: {}, part: {:?}", match_count, part);
                                 match part {
                                     Part::InsideRange(value) => {
-                                        if match_count == 0 {
-                                            Span::from(value).style(Style::default().bg(Color::Yellow))
+                                        if let Some(n) = current_match_num {
+                                            if match_count == *n {
+                                                Span::from(value).style(Style::default().bg(Color::Yellow))
+                                            } else {
+                                                Span::from(value).style(Style::default().bg(Color::Magenta))
+                                            }
                                         } else {
                                             Span::from(value).style(Style::default().bg(Color::Magenta))
                                         }
