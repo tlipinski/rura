@@ -284,12 +284,11 @@ impl Widget for &mut OutputWidget {
                     .enumerate()
                     .map(|(line_index, line)| {
                         let logical_line = line_index + range.start;
-                        let matches_in_line: Vec<Range<usize>> = self
+                        let matches_in_line: Vec<&Range<usize>> = self
                             .search_positions
-                            .clone()
-                            .into_iter()
+                            .iter()
                             .filter_map(
-                                |(row, col)| if row == logical_line { Some(col) } else { None },
+                                |(row, col)| if *row == logical_line { Some(col) } else { None },
                             )
                             .collect();
 
@@ -558,7 +557,7 @@ enum Part {
     OutsideRange(String),
 }
 
-fn split_by_ranges(str: &str, ranges: Vec<Range<usize>>) -> Vec<Part> {
+fn split_by_ranges(str: &str, ranges: Vec<&Range<usize>>) -> Vec<Part> {
     let mut results = vec![];
     let mut last_end = 0;
 
@@ -567,7 +566,7 @@ fn split_by_ranges(str: &str, ranges: Vec<Range<usize>>) -> Vec<Part> {
             results.push(Part::OutsideRange(str[last_end..range.start].to_string()));
         }
 
-        results.push(Part::InsideRange(str[range.clone()].to_string()));
+        results.push(Part::InsideRange(str[range.start..range.end].to_string()));
         last_end = range.end;
     }
 
