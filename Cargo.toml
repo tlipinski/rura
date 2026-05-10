@@ -1,8 +1,11 @@
 [package]
 name = "rura"
-version = "0.0.0"
+version = "1.0.0"
 license = "MIT"
 edition = "2024"
+description = "Interactive TUI pipeline editor built for rapid iteration"
+repository = "https://github.com/tlipinski/rura"
+homepage = "https://github.com/tlipinski/rura"
 
 [dependencies]
 clap = { version = "4.6.1", features = ["derive"] }
@@ -27,3 +30,8 @@ codegen-units = 1
 lto = true
 opt-level = "s"
 strip = true
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
