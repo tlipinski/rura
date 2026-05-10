@@ -9,6 +9,7 @@ Rura transforms the tedious "edit, up-arrow, rerun" shell cycle into a fluid, in
 - **Partial Pipeline Execution**: Execute only up to the current subcommand to debug complex pipes.
 - **Context-aware Completion**: Tab-complete commands and file paths using your system's bash tools.
 - **Live Execution Modes**: Real-time feedback as you type, with optional "Live Until Cursor" or "Live Full" modes.
+- **Search**: Search and highlight text within the output pane with case-sensitivity control.
 - **Syntax Highlighting**: Visual feedback for subcommand boundaries, quotes, and pipes.
 - **Persistent History**: Quickly access and reuse previous commands.
 - **Line Wrapping**: Toggle whether long output lines wrap to fit the view.
@@ -61,6 +62,8 @@ rura --last
 - **Arrows** or **Alt + h/j/k/l**: Scroll the output (Left, Down, Up, Right).
 - **PageUp / PageDown** or **Alt + Up / Down**: Scroll the output by page.
 - **Ctrl + u / Ctrl + d**: Scroll up or down quickly.
+- **F3 / F4**: Search forward or backward in the output.
+- **Alt + c**: Toggle case sensitivity for search.
 - **Alt + w**: Toggle line wrapping.
 
 ### Live Execution Modes
@@ -124,6 +127,8 @@ Available theme keys:
 - `cmd_highlight_current`: Style for the current subcommand during execution.
 - `cmd_quoted`: Style for quoted strings.
 - `cmd_invalid`: Style for invalid subcommands (if parsing fails).
+- `output_highlight`: Style for search results in the output.
+- `output_highlight_current`: Style for the currently selected search result.
 - `line_nums`: Style for line numbers in the output.
 
 ```toml

@@ -2,11 +2,15 @@ use crate::config::{KeyBindingsConfig, ThemeConfig};
 use crate::theme::Theme;
 use crate::uicmd::{KeyBindings, UiCmd, to_ui_command};
 use crossterm::event::Event;
+use crossterm::event::Event::Key;
+use itertools::Itertools;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Direction, Layout, Position, Rect};
 use ratatui::prelude::Color::Red;
-use ratatui::prelude::{StatefulWidget, Style, Widget};
+use ratatui::prelude::{StatefulWidget, Style, Text, Widget};
+use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap};
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
 
@@ -19,6 +23,10 @@ pub struct OutputWidget {
     key_bindings: KeyBindings,
     output_height: u16,
     error_pane_placement: ErrorPanePlacement,
+    visible_range: Range<usize>,
+    highlight: String,
+    highlight_positions: Vec<(usize, Range<usize>)>,
+    highlight_index: usize,
     pub error_display_mode: ErrorDisplayMode,
 }
 
@@ -39,6 +47,87 @@ impl OutputWidget {
             error_display_mode,
             output_height: 0u16,
             error_pane_placement,
+            highlight: String::new(),
+            highlight_positions: vec![],
+            visible_range: 0..0,
+            highlight_index: 0,
+        }
+    }
+
+    pub fn highlight_info(&self) -> (usize, usize) {
+        (self.highlight_index, self.highlight_positions.len())
+    }
+
+    pub fn clear_highlight(&mut self) {
+        self.highlight_positions = vec![];
+        self.highlight_index = 0;
+    }
+
+    pub fn highlight_next(&mut self) {
+        if !self.highlight_positions.is_empty() {
+            self.highlight_index = (self.highlight_index + 1) % self.highlight_positions.len();
+            let (line, _) = self.highlight_positions[self.highlight_index];
+            self.offset.y = line.saturating_sub(self.visible_range.len() / 2) as u16;
+        }
+    }
+
+    pub fn highlight_prev(&mut self) {
+        if !self.highlight_positions.is_empty() {
+            if self.highlight_index == 0 {
+                self.highlight_index = self.highlight_positions.len().saturating_sub(1);
+            } else {
+                self.highlight_index = self.highlight_index.saturating_sub(1);
+            }
+
+            let (line, _) = self.highlight_positions[self.highlight_index];
+
+            self.offset.y = line.saturating_sub(self.visible_range.len() / 2) as u16;
+        }
+    }
+
+    pub fn highlight(&mut self, search_str: &str, case_sensitive: bool) {
+        self.highlight = search_str.to_string();
+        if !search_str.is_empty() {
+            let pattern = if case_sensitive {
+                Regex::new(&regex::escape(&search_str)).unwrap()
+            } else {
+                Regex::new(&regex::escape(&search_str.to_lowercase())).unwrap()
+            };
+
+            let positions = self
+                .output
+                .lines
+                .iter()
+                .enumerate()
+                .filter_map(|(i, line)| {
+                    let line_to_match = if case_sensitive {
+                        line
+                    } else {
+                        &line.to_lowercase()
+                    };
+                    let matches = pattern
+                        .find_iter(line_to_match)
+                        .map(|m| (i, m.start()..m.start() + search_str.len()))
+                        .collect_vec();
+                    if !matches.is_empty() {
+                        Some(matches)
+                    } else {
+                        None
+                    }
+                })
+                .flatten()
+                .collect::<Vec<(usize, Range<usize>)>>();
+
+            self.highlight_index = self.highlight_index.min(positions.len().saturating_sub(1)); // todo first index after offset
+            self.highlight_positions = positions;
+
+            // focus on the first match
+            if !self.highlight_positions.is_empty() {
+                let (line, _) = self.highlight_positions[self.highlight_index];
+                self.offset.y = line.saturating_sub(self.visible_range.len() / 2) as u16;
+            }
+        } else {
+            self.highlight_positions = vec![];
         }
     }
 
@@ -57,18 +146,24 @@ impl OutputWidget {
         } else {
             self.error_output_opt = Some(output);
         }
+
+        self.highlight_index = 0;
+        self.highlight_positions = vec![];
+        self.highlight = String::new();
     }
 
     pub fn handle_event(&mut self, event: &Event) {
         match event {
-            Event::Key(key_event) => {
+            Key(key_event) => {
                 let code = key_event.code;
                 let mods = key_event.modifiers;
                 let key_bindings = &self.key_bindings;
 
-                match to_ui_command(key_bindings, code, mods) {
-                    Some(ui_cmd) => self.handle_ui_command(ui_cmd),
-                    None => {}
+                match key_event.code {
+                    _ => match to_ui_command(key_bindings, code, mods) {
+                        Some(ui_cmd) => self.handle_ui_command(ui_cmd),
+                        None => {}
+                    },
                 }
             }
             _ => {}
@@ -188,30 +283,34 @@ impl Widget for &mut OutputWidget {
                 let block = Block::bordered()
                     .title(format!(" Error: {} ", err_output.status_code.unwrap_or(0)))
                     .border_style(Style::default().fg(Red));
-                let mut output_par = Paragraph::new(err_output.lines.join("\n"))
+                let mut err_output_par = Paragraph::new(err_output.lines.join("\n"))
                     .scroll((0, self.offset.x))
                     .block(block);
 
                 if self.wrap {
-                    output_par = output_par.wrap(Wrap::default())
+                    err_output_par = err_output_par.wrap(Wrap::default())
                 };
-                output_par.render(errors_area, buf);
+                err_output_par.render(errors_area, buf);
             }
         }
 
-        let output = self.main_output();
+        let output_len = self.main_output().len();
 
-        let height = output_content_area.height.min(output.len() as u16);
+        let height = output_content_area.height.min(output_len as u16);
 
-        let range: Range<usize> = if height >= output.len() as u16 {
-            0..output.len()
+        let visible_range: Range<usize> = if height >= output_len as u16 {
+            0..output_len
         } else {
-            let from = (self.offset.y as usize).min(output.len());
-            let to = (self.offset.y as usize + height as usize).min(output.len());
+            let from = (self.offset.y as usize).min(output_len);
+            let to = (self.offset.y as usize + height as usize).min(output_len);
             from..to
         };
 
-        let line_nums = range
+        self.visible_range = visible_range.clone();
+
+        let output = self.main_output();
+
+        let line_nums = visible_range
             .clone()
             .flat_map(|i| {
                 let visual_line_count = if self.wrap {
@@ -231,13 +330,70 @@ impl Widget for &mut OutputWidget {
             lines_par.render(line_nums_area, buf);
         }
 
-        let mut output_par = Paragraph::new(output.lines[range].join("\n"))
-            .scroll((0, self.offset.x))
-            .block(Block::default());
+        let output_par = {
+            let mut par = if !self.highlight_positions.is_empty() {
+                let lines = (&output.lines[visible_range.clone()])
+                    .iter()
+                    .enumerate()
+                    .map(|(line_index, line)| {
+                        // todo simplify
+                        let logical_line_num = line_index + visible_range.start;
 
-        if self.wrap {
-            output_par = output_par.wrap(Wrap::default())
+                        let (current_match_line, current_match_range) =
+                            self.highlight_positions.get(self.highlight_index).unwrap();
+
+                        let line_highlight_ranges: Vec<&Range<usize>> = self
+                            .highlight_positions
+                            .iter()
+                            .filter(|(row, _)| *row == logical_line_num)
+                            .map(|(_, range)| range)
+                            .collect();
+
+                        let current_match_num = if logical_line_num == *current_match_line {
+                            self.highlight_positions
+                                .iter()
+                                .filter(|(row, _)| *row == logical_line_num)
+                                .find_position(|(_, range)| range == current_match_range)
+                                .map(|(i, _)| i)
+                        } else {
+                            None
+                        };
+
+                        let spans = split_by_ranges(line, line_highlight_ranges, current_match_num)
+                            .into_iter()
+                            .map(|part| match part {
+                                Part::InsideRangeCurrent(value) => {
+                                    Span::from(value).style(theme.output_highlight_current)
+                                }
+                                Part::InsideRange(value) => {
+                                    Span::from(value).style(theme.output_highlight)
+                                }
+                                Part::OutsideRange(value) => {
+                                    Span::from(value).style(Style::default())
+                                }
+                            })
+                            .collect_vec();
+
+                        Line::from(spans)
+                    })
+                    .collect::<Vec<Line>>();
+
+                Paragraph::new(Text::from(lines))
+                    .scroll((0, self.offset.x))
+                    .block(Block::default())
+            } else {
+                Paragraph::new(output.lines[visible_range].join("\n"))
+                    .scroll((0, self.offset.x))
+                    .block(Block::default())
+            };
+
+            if self.wrap {
+                par = par.wrap(Wrap::default())
+            };
+
+            par
         };
+
         output_par.render(output_content_area, buf);
 
         let scroll_bar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
@@ -428,4 +584,72 @@ mod tests {
             .unwrap();
         assert_snapshot!("scroll up page", terminal.backend());
     }
+
+    #[test]
+    fn split_line_into_parts_by_ranges_test() {
+        let str = "01234567890123456789";
+
+        let spans = split_by_ranges(str, vec![], None);
+        assert_eq!(spans, vec![Part::OutsideRange(str.to_string())]);
+
+        let spans = split_by_ranges(str, vec![&(0..2), &(7..11), &(14..18)], None);
+        assert_eq!(
+            spans,
+            vec![
+                Part::InsideRange("01".into()),
+                Part::OutsideRange("23456".into()),
+                Part::InsideRange("7890".into()),
+                Part::OutsideRange("123".into()),
+                Part::InsideRange("4567".into()),
+                Part::OutsideRange("89".into())
+            ]
+        );
+
+        let spans = split_by_ranges(str, vec![&(1..2), &(7..11), &(14..18)], None);
+        assert_eq!(
+            spans,
+            vec![
+                Part::OutsideRange("0".into()),
+                Part::InsideRange("1".into()),
+                Part::OutsideRange("23456".into()),
+                Part::InsideRange("7890".into()),
+                Part::OutsideRange("123".into()),
+                Part::InsideRange("4567".into()),
+                Part::OutsideRange("89".into())
+            ]
+        );
+    }
+}
+
+#[derive(Debug, PartialEq)]
+enum Part {
+    InsideRangeCurrent(String),
+    InsideRange(String),
+    OutsideRange(String),
+}
+
+fn split_by_ranges(str: &str, ranges: Vec<&Range<usize>>, current_opt: Option<usize>) -> Vec<Part> {
+    let mut results = vec![];
+    let mut last_end = 0;
+
+    for (i, range) in ranges.iter().enumerate() {
+        if last_end < range.start {
+            results.push(Part::OutsideRange(str[last_end..range.start].to_string()));
+        }
+
+        if let Some(current) = current_opt
+            && current == i
+        {
+            results.push(Part::InsideRangeCurrent(str[range.start..range.end].to_string()));
+        } else {
+            results.push(Part::InsideRange(str[range.start..range.end].to_string()));
+        }
+        last_end = range.end;
+    }
+
+    if last_end < str.len() {
+        results.push(Part::OutsideRange(str[last_end..].to_string()));
+    }
+
+    results
 }

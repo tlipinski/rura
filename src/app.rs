@@ -9,6 +9,7 @@ use crate::rura::ExecuteType;
 use crate::rura_widget::RuraWidget;
 use crate::theme::Theme;
 use crate::uicmd::{KeyBindings, UiCmd, to_ui_command};
+use KeyCode::{Enter, Esc, F};
 use crossterm::event::KeyCode::Char;
 use crossterm::event::{KeyCode, KeyModifiers};
 use crossterm::tty::IsTty;
@@ -21,7 +22,7 @@ use ratatui::prelude::Stylize;
 use ratatui::style::Color::Yellow;
 use ratatui::style::Style;
 use ratatui::text::{Line, Text};
-use ratatui::widgets::{Block, BorderType};
+use ratatui::widgets::{Block, BorderType, Paragraph, Widget};
 use ratatui::{DefaultTerminal, Frame};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
@@ -32,6 +33,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 use std::time::Duration;
 use tui_input::Input;
+use tui_input::backend::crossterm::EventHandler;
 use tui_popup::Popup;
 
 pub struct App {
@@ -48,6 +50,9 @@ pub struct App {
     input_mode: InputMode,
     debouncer_tx: Sender<()>,
     confirming_live: Option<InputMode>,
+    search_input: Input,
+    searching: bool,
+    case_sensitive: bool,
 }
 
 impl App {
@@ -134,6 +139,9 @@ impl App {
             help: false,
             input_mode: InputMode::Normal,
             confirming_live: None,
+            search_input: Input::from(""),
+            searching: false,
+            case_sensitive: false,
         }
     }
 
@@ -185,9 +193,7 @@ impl App {
 
                 if let Some(confirming_live) = self.confirming_live.clone() {
                     match (code, mods) {
-                        (KeyCode::Esc | Char('n'), KeyModifiers::NONE) => {
-                            self.confirming_live = None
-                        }
+                        (Esc | Char('n'), KeyModifiers::NONE) => self.confirming_live = None,
                         (Char('y'), KeyModifiers::NONE) => {
                             self.confirming_live = None;
                             self.input_mode = confirming_live;
@@ -203,13 +209,19 @@ impl App {
                 }
 
                 match (code, mods) {
-                    (KeyCode::Esc, KeyModifiers::NONE) => {
+                    (Esc, KeyModifiers::NONE) => {
                         self.help = false;
+                        if self.searching {
+                            self.searching = false;
+                        } else {
+                            self.searching = false;
+                            self.output_widget.clear_highlight();
+                        }
                     }
-                    (KeyCode::F(1), KeyModifiers::NONE) => {
+                    (F(1), KeyModifiers::NONE) => {
                         self.help = !self.help;
                     }
-                    (KeyCode::F(11), KeyModifiers::NONE) => match self.input_mode {
+                    (F(11), KeyModifiers::NONE) => match self.input_mode {
                         InputMode::Normal => {
                             // self.input_mode = InputMode::LiveUntilCursor;
                             self.confirming_live = Some(InputMode::LiveUntilCursor);
@@ -221,7 +233,7 @@ impl App {
                             self.input_mode = InputMode::Normal;
                         }
                     },
-                    (KeyCode::F(12), KeyModifiers::NONE) => match self.input_mode {
+                    (F(12), KeyModifiers::NONE) => match self.input_mode {
                         InputMode::Normal => {
                             // self.input_mode = InputMode::LiveFull;
                             self.confirming_live = Some(InputMode::LiveFull);
@@ -233,13 +245,42 @@ impl App {
                             self.input_mode = InputMode::LiveFull;
                         }
                     },
+                    (Enter, KeyModifiers::NONE) if self.searching => {
+                        self.output_widget
+                            .highlight(self.search_input.value(), self.case_sensitive);
+                    }
+                    (F(3), KeyModifiers::NONE) => {
+                        if self.searching {
+                            self.output_widget.highlight_next();
+                        } else {
+                            self.searching = true;
+                        }
+                    }
+                    (F(4), KeyModifiers::NONE) => {
+                        if self.searching {
+                            self.output_widget.highlight_prev();
+                        } else {
+                            self.searching = true;
+                        }
+                    }
+                    (Char('c'), KeyModifiers::ALT) => {
+                        self.case_sensitive = !self.case_sensitive;
+                        self.output_widget
+                            .highlight(self.search_input.value(), self.case_sensitive);
+                    }
                     _ => match to_ui_command(key_bindings, code, mods) {
                         None => {
-                            if self.rura_widget.handle_event(event) {
-                                match self.input_mode {
-                                    InputMode::Normal => {}
-                                    InputMode::LiveFull | InputMode::LiveUntilCursor => {
-                                        self.debouncer_tx.send(()).unwrap();
+                            if self.searching {
+                                self.search_input.handle_event(event);
+                                self.output_widget
+                                    .highlight(self.search_input.value(), self.case_sensitive);
+                            } else {
+                                if self.rura_widget.handle_event(event) {
+                                    match self.input_mode {
+                                        InputMode::Normal => {}
+                                        InputMode::LiveFull | InputMode::LiveUntilCursor => {
+                                            self.debouncer_tx.send(()).unwrap();
+                                        }
                                     }
                                 }
                             }
@@ -248,26 +289,28 @@ impl App {
                             UiCmd::Quit => {
                                 self.exit = true;
                             }
-                            UiCmd::ExecuteFull => {
+                            UiCmd::ExecuteFull if !self.searching => {
                                 self.handle_execute(ExecuteType::Full);
                             }
-                            UiCmd::ExecuteUntilCurrent => {
+                            UiCmd::ExecuteUntilCurrent if !self.searching => {
                                 self.handle_execute(ExecuteType::UntilCurrent)
                             }
-                            UiCmd::ExecuteUntilPrev => {
+                            UiCmd::ExecuteUntilPrev if !self.searching => {
                                 self.handle_execute(ExecuteType::UntilCurrentPrev)
                             }
-                            UiCmd::ResetInput => {
+                            UiCmd::ResetInput if !self.searching => {
                                 let stdin = self.stdin.clone();
                                 self.output_widget.handle_command_output(stdin);
                             }
-                            UiCmd::SubcommandNext | UiCmd::SubcommandPrev => {
+                            UiCmd::SubcommandNext | UiCmd::SubcommandPrev if !self.searching => {
                                 self.rura_widget.handle_event(event);
                             }
                             UiCmd::HistoryNext
                             | UiCmd::HistoryPrev
                             | UiCmd::Complete
-                            | UiCmd::CompletePrev => {
+                            | UiCmd::CompletePrev
+                                if !self.searching =>
+                            {
                                 // disable history and completions in live mode
                                 if matches!(self.input_mode, InputMode::Normal) {
                                     self.rura_widget.handle_event(event);
@@ -303,32 +346,47 @@ impl App {
 
         let inner_area = area.inner(margin);
 
-        let (command_input_area, output_area, status_area) = match self.command_line_placement {
-            CommandLinePlacement::Top => {
-                let layout = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints(vec![
-                        Constraint::Length(self.rura_widget.height(inner_area.width) + 2),
-                        Constraint::Fill(1),
-                        Constraint::Length(1),
-                    ])
-                    .split(area);
+        let (command_input_area, search_input_area, output_area, status_area) =
+            match self.command_line_placement {
+                CommandLinePlacement::Top => {
+                    let layout = Layout::default()
+                        .direction(Direction::Vertical)
+                        .constraints(vec![
+                            Constraint::Length(self.rura_widget.height(inner_area.width) + 2), // command
+                            Constraint::Length(if self.searching { 3 } else { 0 }), // search
+                            Constraint::Fill(1),                                    // output
+                            Constraint::Length(1),                                  // status
+                        ])
+                        .split(area);
 
-                (layout[0], layout[1], layout[2])
-            }
-            CommandLinePlacement::Bottom => {
-                let layout = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints(vec![
-                        Constraint::Fill(1),
-                        Constraint::Length(self.rura_widget.height(inner_area.width) + 2),
-                        Constraint::Length(1),
-                    ])
-                    .split(area);
+                    (layout[0], layout[1], layout[2], layout[3])
+                }
+                CommandLinePlacement::Bottom => {
+                    let layout = Layout::default()
+                        .direction(Direction::Vertical)
+                        .constraints(vec![
+                            Constraint::Fill(1),                                               // output
+                            Constraint::Length(if self.searching { 3 } else { 0 }), // search
+                            Constraint::Length(self.rura_widget.height(inner_area.width) + 2), // command
+                            Constraint::Length(1), // status
+                        ])
+                        .split(area);
 
-                (layout[1], layout[0], layout[2])
-            }
-        };
+                    (layout[2], layout[1], layout[0], layout[3])
+                }
+            };
+
+        if self.searching {
+            let (current, total) = self.output_widget.highlight_info();
+            let par =
+                Paragraph::new(self.search_input.value()).block(Block::bordered().title(format!(
+                    " Search: {} / {} | {} ",
+                    if total == 0 { 0 } else { current + 1 },
+                    total,
+                    if self.case_sensitive { "[Cc]" } else { "Cc" }
+                )));
+            par.render(search_input_area, frame.buffer_mut());
+        }
 
         let command_input_block = if matches!(self.input_mode, InputMode::Normal) {
             Block::bordered()
@@ -338,13 +396,24 @@ impl App {
                 .border_type(BorderType::Thick)
         };
 
-        let inner_rect = command_input_area.inner(margin);
-
         frame.render_widget(command_input_block, command_input_area);
         frame.render_widget(&self.rura_widget, command_input_area.inner(margin));
 
-        let (x, y) = self.rura_widget.cursor(inner_rect.width);
-        frame.set_cursor_position((command_input_area.x + 1 + x, command_input_area.y + 1 + y));
+        if self.searching {
+            frame.render_widget(
+                Block::default().reversed(),
+                command_input_area.inner(margin),
+            );
+        }
+
+        if self.searching {
+            let x = self.search_input.visual_cursor() as u16;
+            frame.set_cursor_position((search_input_area.x + 1 + x, search_input_area.y + 1));
+        } else {
+            let inner_rect = command_input_area.inner(margin);
+            let (x, y) = self.rura_widget.cursor(inner_rect.width);
+            frame.set_cursor_position((command_input_area.x + 1 + x, command_input_area.y + 1 + y));
+        }
 
         frame.render_widget(&mut self.output_widget, output_area);
 
@@ -420,6 +489,10 @@ impl App {
             Line::from(format!("{:09} - Execute before cursor", self.kb_config.execute_until_prev.first().unwrap().to_string())),
             Line::from(format!("{:09} - Reset input", self.kb_config.reset_input.first().unwrap().to_string())),
             Line::from(""),
+            Line::from(format!("{:09} - Search ↓", "F3")),
+            Line::from(format!("{:09} - Search ↑", "F4")),
+            Line::from(format!("{:09} - Switch case sensitivity", "alt+c")),
+            Line::from(""),
             Line::from(format!("{:09} - Complete forward", self.kb_config.complete.first().unwrap().to_string())),
             Line::from(format!("{:09} - Complete backward", self.kb_config.complete_prev.first().unwrap().to_string())),
             Line::from(""),
@@ -457,13 +530,17 @@ impl App {
         spans.push(" Execute ".into());
         spans.push("F1".bold());
         spans.push(" Help ".into());
+        spans.push("F3".bold());
+        spans.push("/".into());
+        spans.push("F4".bold());
+        spans.push(" Search ↓/↑ ".into());
         spans.push("F11 ".bold());
         match self.input_mode {
             InputMode::Normal | InputMode::LiveFull => {
                 spans.push("Live UC".into());
             }
             InputMode::LiveUntilCursor => {
-                spans.push("Live UC".on_yellow());
+                spans.push("Live UC".reversed());
             }
         }
 
@@ -474,7 +551,7 @@ impl App {
                 spans.push("Live".into());
             }
             InputMode::LiveFull => {
-                spans.push("Live".on_yellow());
+                spans.push("Live".reversed());
             }
         }
 
@@ -651,6 +728,8 @@ mod tests {
                     ErrorPanePlacement::Bottom,
                     ErrorDisplayMode::Pane,
                 ),
+                search_input: Input::new("".into()),
+                searching: false,
                 stdin: Output::ok(""),
                 action_rx,
                 command_tx,
@@ -662,6 +741,7 @@ mod tests {
                 help: false,
                 input_mode: InputMode::Normal,
                 confirming_live: None,
+                case_sensitive: true,
             }
         }
     }
@@ -682,7 +762,7 @@ mod tests {
     fn main_screen_help() {
         let mut app = App::default();
 
-        input_key(&mut app, KeyCode::F(1), KeyModifiers::NONE);
+        input_key(&mut app, F(1), KeyModifiers::NONE);
 
         let mut terminal = TestTerminal::default().0;
         terminal
@@ -696,7 +776,7 @@ mod tests {
     fn live_mode_confirm() {
         let mut app = App::default();
 
-        input_key(&mut app, KeyCode::F(11), KeyModifiers::NONE);
+        input_key(&mut app, F(11), KeyModifiers::NONE);
 
         let mut terminal = TestTerminal::default().0;
         terminal
@@ -710,7 +790,7 @@ mod tests {
     fn live_mode_full_confirm() {
         let mut app = App::default();
 
-        input_key(&mut app, KeyCode::F(12), KeyModifiers::NONE);
+        input_key(&mut app, F(12), KeyModifiers::NONE);
 
         let mut terminal = TestTerminal::default().0;
         terminal
@@ -736,7 +816,7 @@ mod tests {
 
     fn input_text(app: &mut App, text: &str) {
         for c in text.chars() {
-            app.handle_event(&Event::Key(KeyEvent {
+            app.handle_event(&Key(KeyEvent {
                 code: Char(c),
                 modifiers: KeyModifiers::NONE,
                 kind: KeyEventKind::Press,

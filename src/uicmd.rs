@@ -22,6 +22,8 @@ pub enum UiCmd {
     SubcommandPrev,
     Complete,
     CompletePrev,
+    SearchNext,
+    SearchPrev,
 }
 
 pub struct KeyBindings {
