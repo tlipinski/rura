@@ -289,8 +289,10 @@ impl Widget for &mut OutputWidget {
                     .map(|(line_index, line)| {
                         let logical_line_num = line_index + visible_range.start;
 
-                        let (current_match_line, current_match_range) =
+                        let a @ (current_match_line, current_match_range) =
                             self.search_positions.get(self.search_index).unwrap();
+
+                        debug!("{:?}", a);
 
                         let line_search_positions = self
                             .search_positions
@@ -304,12 +306,19 @@ impl Widget for &mut OutputWidget {
                         let spans = split_by_ranges(line, line_matches)
                             .into_iter()
                             .enumerate()
-                            .map(|(match_count, part)| match part {
-                                Part::InsideRange(value) => {
-                                    Span::from(value).style(Style::default().bg(Color::Magenta))
-                                }
-                                Part::OutsideRange(value) => {
-                                    Span::from(value).style(Style::default())
+                            .map(|(match_count, part)| {
+                                debug!("match_count: {}, part: {:?}", match_count, part);
+                                match part {
+                                    Part::InsideRange(value) => {
+                                        if match_count == 0 {
+                                            Span::from(value).style(Style::default().bg(Color::Yellow))
+                                        } else {
+                                            Span::from(value).style(Style::default().bg(Color::Magenta))
+                                        }
+                                    }
+                                    Part::OutsideRange(value) => {
+                                        Span::from(value).style(Style::default())
+                                    }
                                 }
                             })
                             .collect_vec();
