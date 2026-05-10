@@ -234,7 +234,7 @@ impl App {
                         }
                     },
                     (KeyCode::F(3), KeyModifiers::NONE) => {
-                        self.output_widget.search("git");
+                        self.output_widget.search("export");
                         self.output_widget.handle_event(event);
                     }
                     _ => match to_ui_command(key_bindings, code, mods) {

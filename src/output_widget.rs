@@ -24,6 +24,7 @@ pub struct OutputWidget {
     key_bindings: KeyBindings,
     output_height: u16,
     error_pane_placement: ErrorPanePlacement,
+    search_term: Option<String>,
     search_positions: Vec<usize>,
     search_index: usize,
     pub error_display_mode: ErrorDisplayMode,
@@ -46,12 +47,15 @@ impl OutputWidget {
             error_display_mode,
             output_height: 0u16,
             error_pane_placement,
+            search_term: None,
             search_positions: vec![],
             search_index: 0,
         }
     }
 
     pub fn search(&mut self, s: &str) {
+        self.search_term = Some(s.into());
+
         let z = self
             .output
             .lines
@@ -59,6 +63,7 @@ impl OutputWidget {
             .enumerate()
             .filter_map(|(i, line)| if line.contains(s) { Some(i) } else { None })
             .collect::<Vec<usize>>();
+
         info!(
             "searching for {} in {} lines: {:?}",
             s,
@@ -263,19 +268,27 @@ impl Widget for &mut OutputWidget {
         }
 
         let mut output_par = {
-            let x = &output.lines[range];
+            let mut par = match &self.search_term {
+                Some(st) => {
+                    let z = (&output.lines[range]).iter().map(|line| {
+                        let regular_spans = line.split(st).map(Span::from);
+                        let all_spans = regular_spans.intersperse(Span::from(st).style(Style::default().bg(Color::Magenta)));
+                        let sp = all_spans.collect::<Vec<_>>();
+                        let line: Line = Line::from(sp);
+                        line
+                    }).collect::<Vec<Line>>();
 
-            let z = x.iter().map(|line| {
-                let regular_spans = line.split("git").map(Span::from);
-                let all_spans = regular_spans.intersperse(Span::from("git").style(Style::default().bg(Color::Magenta)));
-                let sp = all_spans.collect::<Vec<_>>();
-                let line: Line = Line::from(sp);
-                line
-            }).collect::<Vec<Line>>();
+                    Paragraph::new(Text::from(z))
+                        .scroll((0, self.offset.x))
+                        .block(Block::default())
+                }
+                None => {
+                    Paragraph::new(output.lines[range].join("\n"))
+                        .scroll((0, self.offset.x))
+                        .block(Block::default())
 
-            let mut par = Paragraph::new(Text::from(z))
-                .scroll((0, self.offset.x))
-                .block(Block::default());
+                }
+            };
 
             if self.wrap {
                 par = par.wrap(Wrap::default())
