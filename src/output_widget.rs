@@ -523,29 +523,34 @@ mod tests {
 
     #[test]
     fn split_line_into_highlights_test() {
-        let str = "abcdefghijklmnopqrstu";
+        let str = "01234567890123456789";
 
         let spans = split_line_into_highlights(str, vec![]);
         assert_eq!(spans, vec![Highlight::No(str.to_string())]);
 
-        let spans = split_line_into_highlights(str, vec![(0, 3), (7, 10), (14, 17)]);
+        let spans = split_line_into_highlights(str, vec![(0, 1), (7, 10), (14, 17)]);
         assert_eq!(
             spans,
             vec![
-                Highlight::Yes("abc".into()),
-                Highlight::No("defg".into()),
-                Highlight::Yes("hij".into()),
-                Highlight::No("klmn".into()),
-                Highlight::Yes("opq".into()),
-                Highlight::No("rstu".into())
+                Highlight::Yes("01".into()),
+                Highlight::No("23456".into()),
+                Highlight::Yes("7890".into()),
+                Highlight::No("123".into()),
+                Highlight::Yes("4567".into()),
+                Highlight::No("89".into())
             ]
         );
     }
 
     fn split_line_into_highlights(str: &str, ranges: Vec<(usize, usize)>) -> Vec<Highlight> {
         if ranges.is_empty() {
-            return vec![Highlight::No(str.to_string())];
+            vec![Highlight::No(str.to_string())]
         } else {
+            let mut i = 0;
+
+            for (i, c) in str.chars().enumerate() {
+
+            }
             todo!()
         }
     }
