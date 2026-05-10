@@ -81,12 +81,7 @@ impl OutputWidget {
                 .flatten()
                 .collect::<Vec<(usize, usize)>>();
 
-            info!(
-                "searching for {} in {} lines: {:?}",
-                search_str,
-                self.output.lines.len(),
-                positions
-            );
+            info!("positions: {:?}",positions);
 
             self.search_positions = positions;
             // self.search_index = 0; // todo first index after offset
@@ -294,9 +289,15 @@ impl Widget for &mut OutputWidget {
         let output_par = {
             let mut par = match &self.highlight {
                 Some(st) => {
-                    let z = (&output.lines[range])
+                    let z = (&output.lines[range.clone()])
                         .iter()
-                        .map(|line| {
+                        .enumerate()
+                        .map(|(line_index, line)| {
+                            let logical_line = line_index + range.start;
+                            debug!("line: {:?}", logical_line);
+                            let matches_in_line = self.search_positions.iter().filter(|(x, y)| *x == logical_line).collect_vec();
+                            debug!("matches_in_line: {:?}", matches_in_line);
+
                             let regular_spans = line.split(st).map(Span::from);
                             let all_spans = regular_spans.intersperse(
                                 Span::from(st).style(Style::default().bg(Color::Magenta)),
