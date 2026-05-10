@@ -4,6 +4,7 @@ use crate::uicmd::{KeyBindings, UiCmd, to_ui_command};
 use crossterm::event::Event::Key;
 use crossterm::event::{Event, KeyCode};
 use itertools::Itertools;
+use log::debug;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Direction, Layout, Position, Rect};
 use ratatui::prelude::Color::Red;
@@ -74,7 +75,10 @@ impl OutputWidget {
                 .flatten()
                 .collect::<Vec<(usize, Range<usize>)>>();
 
+            debug!("search positions: {:?}", positions);
+
             self.search_positions = positions;
+
             // self.search_index = 0; // todo first index after offset
         }
     }
@@ -287,9 +291,13 @@ impl Widget for &mut OutputWidget {
                         let matches_in_line: Vec<&Range<usize>> = self
                             .search_positions
                             .iter()
-                            .filter_map(
-                                |(row, col)| if *row == logical_line { Some(col) } else { None },
-                            )
+                            .filter_map(|(row, range)| {
+                                if *row == logical_line {
+                                    Some(range)
+                                } else {
+                                    None
+                                }
+                            })
                             .collect();
 
                         let spans = split_by_ranges(line, matches_in_line)
