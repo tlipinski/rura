@@ -217,14 +217,14 @@ impl Widget for &mut OutputWidget {
                 let block = Block::bordered()
                     .title(format!(" Error: {} ", err_output.status_code.unwrap_or(0)))
                     .border_style(Style::default().fg(Red));
-                let mut output_par = Paragraph::new(err_output.lines.join("\n"))
+                let mut err_output_par = Paragraph::new(err_output.lines.join("\n"))
                     .scroll((0, self.offset.x))
                     .block(block);
 
                 if self.wrap {
-                    output_par = output_par.wrap(Wrap::default())
+                    err_output_par = err_output_par.wrap(Wrap::default())
                 };
-                output_par.render(errors_area, buf);
+                err_output_par.render(errors_area, buf);
             }
         }
 
