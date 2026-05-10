@@ -362,7 +362,7 @@ impl Widget for &mut OutputWidget {
                         let spans = split_by_ranges(line, line_highlight_ranges, current_match_num)
                             .into_iter()
                             .map(|part| match part {
-                                Part::InsideRangeX(value) => {
+                                Part::InsideRangeCurrent(value) => {
                                     Span::from(value).style(theme.output_highlight_current)
                                 }
                                 Part::InsideRange(value) => {
@@ -596,11 +596,11 @@ mod tests {
         assert_eq!(
             spans,
             vec![
-                Part::InsideRangeX("01".into()),
+                Part::InsideRangeCurrent("01".into()),
                 Part::OutsideRange("23456".into()),
-                Part::InsideRangeX("7890".into()),
+                Part::InsideRangeCurrent("7890".into()),
                 Part::OutsideRange("123".into()),
-                Part::InsideRangeX("4567".into()),
+                Part::InsideRangeCurrent("4567".into()),
                 Part::OutsideRange("89".into())
             ]
         );
@@ -623,12 +623,12 @@ mod tests {
 
 #[derive(Debug, PartialEq)]
 enum Part {
-    InsideRangeX(String),
+    InsideRangeCurrent(String),
     InsideRange(String),
     OutsideRange(String),
 }
 
-fn split_by_ranges(str: &str, ranges: Vec<&Range<usize>>, c: Option<usize>) -> Vec<Part> {
+fn split_by_ranges(str: &str, ranges: Vec<&Range<usize>>, current_opt: Option<usize>) -> Vec<Part> {
     let mut results = vec![];
     let mut last_end = 0;
 
@@ -637,10 +637,10 @@ fn split_by_ranges(str: &str, ranges: Vec<&Range<usize>>, c: Option<usize>) -> V
             results.push(Part::OutsideRange(str[last_end..range.start].to_string()));
         }
 
-        if let Some(ccc) = c
-            && ccc == i
+        if let Some(current) = current_opt
+            && current == i
         {
-            results.push(Part::InsideRangeX(str[range.start..range.end].to_string()));
+            results.push(Part::InsideRangeCurrent(str[range.start..range.end].to_string()));
         } else {
             results.push(Part::InsideRange(str[range.start..range.end].to_string()));
         }
