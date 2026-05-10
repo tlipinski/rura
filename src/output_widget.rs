@@ -1,7 +1,8 @@
 use crate::config::{KeyBindingsConfig, ThemeConfig};
 use crate::theme::Theme;
 use crate::uicmd::{KeyBindings, UiCmd, to_ui_command};
-use crossterm::event::Event;
+use crossterm::event::Event::Key;
+use crossterm::event::{Event, KeyCode};
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Direction, Layout, Position, Rect};
 use ratatui::prelude::Color::Red;
@@ -19,6 +20,8 @@ pub struct OutputWidget {
     key_bindings: KeyBindings,
     output_height: u16,
     error_pane_placement: ErrorPanePlacement,
+    search_positions: Vec<usize>,
+    search_index: usize,
     pub error_display_mode: ErrorDisplayMode,
 }
 
@@ -39,6 +42,8 @@ impl OutputWidget {
             error_display_mode,
             output_height: 0u16,
             error_pane_placement,
+            search_positions: vec![0, 5, 20, 40],
+            search_index: 0,
         }
     }
 
@@ -66,9 +71,20 @@ impl OutputWidget {
                 let mods = key_event.modifiers;
                 let key_bindings = &self.key_bindings;
 
-                match to_ui_command(key_bindings, code, mods) {
-                    Some(ui_cmd) => self.handle_ui_command(ui_cmd),
-                    None => {}
+                match key_event.code {
+                    KeyCode::F(3) => {
+                        self.search_index = (self.search_index + 1) % self.search_positions.len();
+                        self.offset.y = self.search_positions[self.search_index] as u16;
+                    }
+                    KeyCode::F(4) => {
+                        self.search_index = (self.search_index + self.search_positions.len() - 1)
+                            % self.search_positions.len();
+                        self.offset.y = self.search_positions[self.search_index] as u16;
+                    }
+                    _ => match to_ui_command(key_bindings, code, mods) {
+                        Some(ui_cmd) => self.handle_ui_command(ui_cmd),
+                        None => {}
+                    },
                 }
             }
             _ => {}

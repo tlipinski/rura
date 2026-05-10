@@ -233,6 +233,9 @@ impl App {
                             self.input_mode = InputMode::LiveFull;
                         }
                     },
+                    (KeyCode::F(3), KeyModifiers::NONE) => {
+                        self.output_widget.handle_event(event);
+                    }
                     _ => match to_ui_command(key_bindings, code, mods) {
                         None => {
                             if self.rura_widget.handle_event(event) {
