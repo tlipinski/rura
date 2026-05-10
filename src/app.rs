@@ -359,8 +359,13 @@ impl App {
             };
 
         if self.searching {
-            let par = Paragraph::new(self.search_input.value())
-                .block(Block::bordered().title(" Search "));
+            let (current, total) = self.output_widget.search_info();
+            let par =
+                Paragraph::new(self.search_input.value()).block(Block::bordered().title(format!(
+                    " Search: {} of {} ",
+                    if total == 0 { 0 } else { current + 1 },
+                    total
+                )));
             par.render(search_input_area, frame.buffer_mut());
         }
 

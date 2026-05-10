@@ -56,6 +56,10 @@ impl OutputWidget {
         }
     }
 
+    pub fn search_info(&self) -> (usize, usize) {
+        (self.search_index, self.search_positions.len())
+    }
+
     pub fn search_next(&mut self, search_str: &str) {
         if self.search == search_str {
             if !self.search_positions.is_empty() {
