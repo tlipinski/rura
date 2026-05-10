@@ -1,11 +1,9 @@
 use crate::config::{KeyBindingsConfig, ThemeConfig};
 use crate::theme::Theme;
 use crate::uicmd::{KeyBindings, UiCmd, to_ui_command};
-use clap::error::ContextValue::StyledStr;
 use crossterm::event::Event::Key;
 use crossterm::event::{Event, KeyCode};
 use itertools::Itertools;
-use log::{debug, info};
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Direction, Layout, Position, Rect};
 use ratatui::prelude::Color::Red;
@@ -288,7 +286,7 @@ impl Widget for &mut OutputWidget {
         let output_par = {
             let mut par = match &self.highlight {
                 Some(st) => {
-                    let z = (&output.lines[range.clone()])
+                    let lines = (&output.lines[range.clone()])
                         .iter()
                         .enumerate()
                         .map(|(line_index, line)| {
@@ -317,7 +315,7 @@ impl Widget for &mut OutputWidget {
                         })
                         .collect::<Vec<Line>>();
 
-                    Paragraph::new(Text::from(z))
+                    Paragraph::new(Text::from(lines))
                         .scroll((0, self.offset.x))
                         .block(Block::default())
                 }
