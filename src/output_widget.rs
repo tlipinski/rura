@@ -295,22 +295,28 @@ impl Widget for &mut OutputWidget {
                         .enumerate()
                         .map(|(line_index, line)| {
                             let logical_line = line_index + range.start;
-                            let matches_in_line = self
+                            let matches_in_line: Vec<Range<usize>> = self
                                 .search_positions
                                 .iter()
                                 .filter_map(
-                                    |(x, y)| if *x == logical_line { Some(y) } else { None },
+                                    |(row, col)| if *row == logical_line { Some(col) } else { None },
                                 )
-                                .collect_vec();
+                                .map(|c| (*c)..(*c + st.len()))
+                                .collect();
                             debug!("matches_in_line: {:?}", matches_in_line);
 
-                            let regular_spans = line.split(st).map(Span::from);
-                            let all_spans = regular_spans.intersperse(
-                                Span::from(st).style(Style::default().bg(Color::Magenta)),
-                            );
-                            let sp = all_spans.collect::<Vec<_>>();
-                            let line: Line = Line::from(sp);
-                            line
+                            let spans = split_by_ranges(line, matches_in_line).iter().map(|part| {
+                                match part {
+                                    Part::InsideRange(value) => {
+                                        Span::from(value).style(Style::default().bg(Color::Magenta))
+                                    }
+                                    Part::OutsideRange(value) => {
+                                        Span::from(value).style(Style::default())
+                                    }
+                                }
+                            }).collect_vec();
+
+                            Line::from(spans)
                         })
                         .collect::<Vec<Line>>();
 
