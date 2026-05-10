@@ -305,8 +305,11 @@ impl Widget for &mut OutputWidget {
                             .search_positions
                             .iter()
                             .filter(|(row, _)| *row == logical_line_num)
-                            .find_or_first(|(_, range)| range == current_match_range)
+                            .find_position(|(_, range)| range == current_match_range)
                             .map(|(i, _)| i);
+
+                        debug!("current_match_range: {:?}", current_match_range);
+                        debug!("current_match_num: {:?}", current_match_num);
 
                         let spans = split_by_ranges(line, line_highlight_ranges, current_match_num)
                             .into_iter()
@@ -540,10 +543,10 @@ mod tests {
     fn split_line_into_parts_by_ranges_test() {
         let str = "01234567890123456789";
 
-        let spans = split_by_ranges(str, vec![]);
+        let spans = split_by_ranges(str, vec![], None);
         assert_eq!(spans, vec![Part::OutsideRange(str.to_string())]);
 
-        let spans = split_by_ranges(str, vec![0..2, 7..11, 14..18]);
+        let spans = split_by_ranges(str, vec![0..2, 7..11, 14..18], None);
         assert_eq!(
             spans,
             vec![
@@ -579,7 +582,7 @@ enum Part {
     OutsideRange(String),
 }
 
-fn split_by_ranges(str: &str, ranges: Vec<&Range<usize>>, c: Option<&usize>) -> Vec<Part> {
+fn split_by_ranges(str: &str, ranges: Vec<&Range<usize>>, c: Option<usize>) -> Vec<Part> {
     let mut results = vec![];
     let mut last_end = 0;
 
@@ -589,7 +592,7 @@ fn split_by_ranges(str: &str, ranges: Vec<&Range<usize>>, c: Option<&usize>) -> 
         }
 
         if let Some(ccc) = c
-            && *ccc == i
+            && ccc == i
         {
             results.push(Part::InsideRangeX(str[range.start..range.end].to_string()));
         } else {
