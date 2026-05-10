@@ -138,7 +138,7 @@ impl App {
             input_mode: InputMode::Normal,
             confirming_live: None,
             search_input: Input::from(""),
-            searching: true,
+            searching: false,
         }
     }
 
@@ -369,6 +369,7 @@ impl App {
 
         frame.render_widget(command_input_block, command_input_area);
         frame.render_widget(&self.rura_widget, command_input_area.inner(margin));
+
         if self.searching {
             frame.render_widget(Block::default().on_gray(), command_input_area.inner(margin));
         }
