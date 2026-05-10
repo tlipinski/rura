@@ -25,7 +25,7 @@ pub struct OutputWidget {
     output_height: u16,
     error_pane_placement: ErrorPanePlacement,
     highlight: Option<String>,
-    search_positions: Vec<(usize, usize)>,
+    search_positions: Vec<(usize, Range<usize>)>,
     search_index: usize,
     pub error_display_mode: ErrorDisplayMode,
 }
@@ -69,7 +69,7 @@ impl OutputWidget {
                 .filter_map(|(i, line)| {
                     let matches = pattern
                         .find_iter(&line.to_lowercase())
-                        .map(|m| (i, m.start()))
+                        .map(|m| (i, (m.start()..m.start() + search_str.len())))
                         .collect_vec();
                     if !matches.is_empty() {
                         Some(matches)
@@ -78,7 +78,7 @@ impl OutputWidget {
                     }
                 })
                 .flatten()
-                .collect::<Vec<(usize, usize)>>();
+                .collect::<Vec<(usize, Range<usize>)>>();
 
             self.search_positions = positions;
             // self.search_index = 0; // todo first index after offset
@@ -293,23 +293,24 @@ impl Widget for &mut OutputWidget {
                             let logical_line = line_index + range.start;
                             let matches_in_line: Vec<Range<usize>> = self
                                 .search_positions
-                                .iter()
+                                .clone()
+                                .into_iter()
                                 .filter_map(
-                                    |(row, col)| if *row == logical_line { Some(col) } else { None },
+                                    |(row, col)| if row == logical_line { Some(col) } else { None },
                                 )
-                                .map(|c| (*c)..(*c + st.len()))
                                 .collect();
 
-                            let spans = split_by_ranges(line, matches_in_line).into_iter().map(|part| {
-                                match part {
+                            let spans = split_by_ranges(line, matches_in_line)
+                                .into_iter()
+                                .map(|part| match part {
                                     Part::InsideRange(value) => {
                                         Span::from(value).style(Style::default().bg(Color::Magenta))
                                     }
                                     Part::OutsideRange(value) => {
                                         Span::from(value).style(Style::default())
                                     }
-                                }
-                            }).collect_vec();
+                                })
+                                .collect_vec();
 
                             Line::from(spans)
                         })
@@ -556,7 +557,6 @@ mod tests {
             ]
         );
     }
-
 }
 
 #[derive(Debug, PartialEq)]
