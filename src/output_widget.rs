@@ -82,8 +82,6 @@ impl OutputWidget {
                 .flatten()
                 .collect::<Vec<(usize, usize)>>();
 
-            info!("positions: {:?}", positions);
-
             self.search_positions = positions;
             // self.search_index = 0; // todo first index after offset
         }
@@ -303,9 +301,8 @@ impl Widget for &mut OutputWidget {
                                 )
                                 .map(|c| (*c)..(*c + st.len()))
                                 .collect();
-                            debug!("matches_in_line: {:?}", matches_in_line);
 
-                            let spans = split_by_ranges(line, matches_in_line).iter().map(|part| {
+                            let spans = split_by_ranges(line, matches_in_line).into_iter().map(|part| {
                                 match part {
                                     Part::InsideRange(value) => {
                                         Span::from(value).style(Style::default().bg(Color::Magenta))
