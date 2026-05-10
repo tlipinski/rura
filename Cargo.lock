@@ -1339,6 +1339,7 @@ dependencies = [
  "itertools",
  "log",
  "ratatui",
+ "regex",
  "serde",
  "toml",
  "tui-input",

@@ -14,6 +14,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap};
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
+use regex::Regex;
 
 pub struct OutputWidget {
     output: Output,
@@ -66,7 +67,9 @@ impl OutputWidget {
                 .enumerate()
                 .filter_map(|(i, line)| {
                     let z = line.match_indices(search_str).collect_vec();
-                    debug!("searching for {} in line {}: {:?}", search_str, i, z);
+                    if !z.is_empty() {
+                        debug!("matches {} {:?}", i, z);
+                    }
                     if line.contains(search_str) { Some(i) } else { None }
                 })
                 .collect::<Vec<usize>>();
