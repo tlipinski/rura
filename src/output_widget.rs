@@ -77,11 +77,8 @@ impl OutputWidget {
                 .flatten()
                 .collect::<Vec<(usize, Range<usize>)>>();
 
-            debug!("search positions: {:?}", positions);
-
+            self.search_index = self.search_index.min(positions.len() - 1); // todo first index after offset
             self.search_positions = positions;
-
-            // self.search_index = 0; // todo first index after offset
         } else {
             self.search_positions = vec![];
         }
