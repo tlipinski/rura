@@ -292,12 +292,7 @@ impl App {
                                 }
                             }
                             _ => {
-                                if self.searching {
-                                    self.search_input.handle_event(event);
-                                    self.output_widget.search(self.search_input.value());
-                                } else {
-                                    self.output_widget.handle_event(event);
-                                }
+                                self.output_widget.handle_event(event);
                             }
                         },
                     },
