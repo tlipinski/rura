@@ -525,7 +525,7 @@ mod tests {
     fn split_line_into_highlights() {
         let str = "abcdefghijklmnopqrstu";
 
-        let spans = split_line_into_highlights(str, vec![0, 7, 14], 3);
+        let spans = split_line_into_highlights(str, vec![(0, 3), (7, 10), (14, 17)]);
 
         assert_eq!(
             spans,
@@ -540,11 +540,12 @@ mod tests {
         );
     }
 
-    fn split_line_into_highlights(str: &str, at: Vec<usize>, len: usize) -> Vec<Highlight> {
+    fn split_line_into_highlights(str: &str, ranges: Vec<(usize, usize)>) -> Vec<Highlight> {
         todo!()
     }
 }
 
+#[derive(Debug)]
 enum Highlight {
     Yes(String),
     No(String),
