@@ -528,7 +528,7 @@ mod tests {
         let spans = split_line_into_highlights(str, vec![]);
         assert_eq!(spans, vec![Highlight::No(str.to_string())]);
 
-        let spans = split_line_into_highlights(str, vec![(0, 1), (7, 10), (14, 17)]);
+        let spans = split_line_into_highlights(str, vec![0..2, 7..11, 14..18]);
         assert_eq!(
             spans,
             vec![
@@ -542,22 +542,28 @@ mod tests {
         );
     }
 
-    fn split_line_into_highlights(str: &str, ranges: Vec<(usize, usize)>) -> Vec<Highlight> {
-        if ranges.is_empty() {
-            vec![Highlight::No(str.to_string())]
-        } else {
-            let mut i = 0;
+    fn split_line_into_highlights(str: &str, ranges: Vec<Range<usize>>) -> Vec<Highlight> {
+        let mut results = vec![];
+        let mut last_end = 0;
 
-            for (i, c) in str.chars().enumerate() {
-
+        for range in ranges.iter() {
+            if last_end < range.start {
+                results.push(Highlight::No(str[last_end..range.start].to_string()));
             }
-            todo!()
+
+            results.push(Highlight::Yes(str[range.clone()].to_string()));
+            last_end = range.end;
         }
+
+        if last_end < str.len() {
+            results.push(Highlight::No(str[last_end..].to_string()));
+        }
+
+        results
     }
 }
 
-#[derive(Debug)]
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 enum Highlight {
     Yes(String),
     No(String),
