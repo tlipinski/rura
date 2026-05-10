@@ -80,6 +80,8 @@ impl OutputWidget {
             self.search_positions = positions;
 
             // self.search_index = 0; // todo first index after offset
+        } else {
+            self.search_positions = vec![];
         }
     }
 

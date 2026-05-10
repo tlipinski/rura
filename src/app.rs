@@ -210,7 +210,12 @@ impl App {
                 match (code, mods) {
                     (KeyCode::Esc, KeyModifiers::NONE) => {
                         self.help = false;
-                        self.searching = false;
+                        if self.searching {
+                            self.searching = false;
+                        } else {
+                            self.searching = false;
+                            self.output_widget.search("");
+                        }
                     }
                     (KeyCode::F(1), KeyModifiers::NONE) => {
                         self.help = !self.help;
