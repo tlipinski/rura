@@ -383,7 +383,7 @@ impl App {
                     " Search: {} / {} | {} ",
                     if total == 0 { 0 } else { current + 1 },
                     total,
-                    if self.case_sensitive  { "[Cc]" } else { "Cc" }
+                    if self.case_sensitive { "[Cc]" } else { "Cc" }
                 )));
             par.render(search_input_area, frame.buffer_mut());
         }
@@ -540,7 +540,7 @@ impl App {
                 spans.push("Live UC".into());
             }
             InputMode::LiveUntilCursor => {
-                spans.push("Live UC".on_yellow());
+                spans.push("Live UC".reversed());
             }
         }
 
@@ -551,7 +551,7 @@ impl App {
                 spans.push("Live".into());
             }
             InputMode::LiveFull => {
-                spans.push("Live".on_yellow());
+                spans.push("Live".reversed());
             }
         }
 
