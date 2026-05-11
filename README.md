@@ -23,7 +23,7 @@ Check the [Releases](https://github.com/tlipinski/rura/releases) page for pre-co
 Alternatively, you can install Rura from source using Cargo:
 
 ```bash
-cargo install --path .
+cargo install --git https://github.com/tlipinski/rura
 ```
 
 ## Usage
