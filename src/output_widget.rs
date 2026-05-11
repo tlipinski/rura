@@ -5,7 +5,7 @@ use crossterm::event::Event;
 use crossterm::event::Event::Key;
 use itertools::Itertools;
 use ratatui::buffer::Buffer;
-use ratatui::layout::{Constraint, Direction, Layout, Position, Rect};
+use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::prelude::Color::Red;
 use ratatui::prelude::{StatefulWidget, Style, Text, Widget};
 use ratatui::text::{Line, Span};
@@ -13,6 +13,12 @@ use ratatui::widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, Scroll
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
+
+#[derive(Debug, Default)]
+struct Position {
+    x: usize,
+    y: usize,
+}
 
 pub struct OutputWidget {
     output: Output,
@@ -67,7 +73,7 @@ impl OutputWidget {
         if !self.highlight_positions.is_empty() {
             self.highlight_index = (self.highlight_index + 1) % self.highlight_positions.len();
             let (line, _) = self.highlight_positions[self.highlight_index];
-            self.offset.y = line.saturating_sub(self.visible_range.len() / 2) as u16;
+            self.offset.y = line.saturating_sub(self.visible_range.len() / 2);
         }
     }
 
@@ -81,7 +87,7 @@ impl OutputWidget {
 
             let (line, _) = self.highlight_positions[self.highlight_index];
 
-            self.offset.y = line.saturating_sub(self.visible_range.len() / 2) as u16;
+            self.offset.y = line.saturating_sub(self.visible_range.len() / 2);
         }
     }
 
@@ -124,7 +130,7 @@ impl OutputWidget {
             // focus on the first match
             if !self.highlight_positions.is_empty() {
                 let (line, _) = self.highlight_positions[self.highlight_index];
-                self.offset.y = line.saturating_sub(self.visible_range.len() / 2) as u16;
+                self.offset.y = line.saturating_sub(self.visible_range.len() / 2);
             }
         } else {
             self.highlight_positions = vec![];
@@ -178,7 +184,7 @@ impl OutputWidget {
                     .lines
                     .len()
                     .saturating_sub(self.output_height as usize);
-                self.offset.y = self.offset.y.saturating_add(1).min(max_offset as u16);
+                self.offset.y = self.offset.y.saturating_add(1).min(max_offset);
             }
             UiCmd::ScrollDownPage => {
                 let max_offset = self
@@ -186,18 +192,15 @@ impl OutputWidget {
                     .lines
                     .len()
                     .saturating_sub(self.output_height as usize);
-                let page_size = self.output_height / 2;
-                self.offset.y = self
-                    .offset
-                    .y
-                    .saturating_add(page_size)
-                    .min(max_offset as u16);
+
+                let page_size = self.output_height as usize / 2;
+                self.offset.y = self.offset.y.saturating_add(page_size).min(max_offset);
             }
             UiCmd::ScrollUp => {
                 self.offset.y = self.offset.y.saturating_sub(1);
             }
             UiCmd::ScrollUpPage => {
-                let page_size = self.output_height / 2;
+                let page_size = self.output_height as usize / 2;
                 self.offset.y = self.offset.y.saturating_sub(page_size);
             }
             UiCmd::ScrollLeft => {
@@ -272,8 +275,10 @@ impl Widget for &mut OutputWidget {
         self.output_height = output_content_area.height; // save this value for scroll logic
 
         // it screen was resized (height increased) then adjust current offset
-        let current_max_y_offset =
-            (self.main_output().lines.len() as u16).saturating_sub(output_content_area.height);
+        let current_max_y_offset = self
+            .main_output()
+            .len()
+            .saturating_sub(output_content_area.height as usize);
         if self.offset.y > current_max_y_offset {
             self.offset.y = current_max_y_offset
         }
@@ -284,7 +289,7 @@ impl Widget for &mut OutputWidget {
                     .title(format!(" Error: {} ", err_output.status_code.unwrap_or(0)))
                     .border_style(Style::default().fg(Red));
                 let mut err_output_par = Paragraph::new(err_output.lines.join("\n"))
-                    .scroll((0, self.offset.x))
+                    .scroll((0, self.offset.x as u16))
                     .block(block);
 
                 if self.wrap {
@@ -379,11 +384,11 @@ impl Widget for &mut OutputWidget {
                     .collect::<Vec<Line>>();
 
                 Paragraph::new(Text::from(lines))
-                    .scroll((0, self.offset.x))
+                    .scroll((0, self.offset.x as u16)) // todo
                     .block(Block::default())
             } else {
                 Paragraph::new(output.lines[visible_range].join("\n"))
-                    .scroll((0, self.offset.x))
+                    .scroll((0, self.offset.x as u16)) // todo
                     .block(Block::default())
             };
 
@@ -640,7 +645,9 @@ fn split_by_ranges(str: &str, ranges: Vec<&Range<usize>>, current_opt: Option<us
         if let Some(current) = current_opt
             && current == i
         {
-            results.push(Part::InsideRangeCurrent(str[range.start..range.end].to_string()));
+            results.push(Part::InsideRangeCurrent(
+                str[range.start..range.end].to_string(),
+            ));
         } else {
             results.push(Part::InsideRange(str[range.start..range.end].to_string()));
         }
