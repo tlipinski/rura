@@ -39,7 +39,7 @@ use tui_popup::Popup;
 pub struct App {
     rura_widget: RuraWidget,
     output_widget: OutputWidget,
-    stdin: Output,
+    stdin: String,
     exit: bool,
     action_rx: Receiver<Action>,
     command_tx: Sender<(String, String)>,
@@ -128,7 +128,7 @@ impl App {
                 },
                 error_display_mode,
             ),
-            stdin: Output::ok(""),
+            stdin: "".into(),
             action_rx,
             command_tx,
             debouncer_tx,
@@ -162,12 +162,9 @@ impl App {
             CommandCompleted(output) => self.output_widget.handle_command_output(output),
             ResetHighlight => self.rura_widget.highlight_until = None,
             StdinRead(output) => {
-                if output.ok {
-                    self.stdin = output.clone();
-                } else {
-                    self.stdin = Output::ok("");
-                }
-                self.output_widget.handle_command_output(output)
+                self.output_widget
+                    .handle_command_output(Output::ok(&output));
+                self.stdin = output;
             }
             Debounced => {
                 match self.input_mode {
@@ -299,8 +296,8 @@ impl App {
                                 self.handle_execute(ExecuteType::UntilCurrentPrev)
                             }
                             UiCmd::ResetInput if !self.searching => {
-                                let stdin = self.stdin.clone();
-                                self.output_widget.handle_command_output(stdin);
+                                self.output_widget
+                                    .handle_command_output(Output::ok(&self.stdin));
                             }
                             UiCmd::SubcommandNext | UiCmd::SubcommandPrev if !self.searching => {
                                 self.rura_widget.handle_event(event);
@@ -329,14 +326,10 @@ impl App {
 
     fn handle_execute(&mut self, kind: ExecuteType) {
         match self.rura_widget.execute(kind) {
-            Some(command) if command.is_empty() => {
-                let stdin = self.stdin.clone();
-                self.output_widget.handle_command_output(stdin)
-            }
-            Some(c) => self
-                .command_tx
-                .send((c, self.stdin.lines.join("\n")))
-                .unwrap(),
+            Some(command) if command.is_empty() => self
+                .output_widget
+                .handle_command_output(Output::ok(&self.stdin)),
+            Some(c) => self.command_tx.send((c, self.stdin.clone())).unwrap(),
             None => {}
         }
     }
@@ -620,10 +613,10 @@ fn read_stdin_task(file_opt: Option<String>, tx: Sender<Action>) -> Result<(), B
         let file_content = std::fs::read_to_string(file);
         match file_content {
             Ok(content) => {
-                tx.send(StdinRead(Output::ok(&content)))?;
+                tx.send(StdinRead(content))?;
             }
-            Err(err) => {
-                tx.send(StdinRead(Output::err(&err.to_string(), None)))?;
+            Err(e) => {
+                tx.send(StdinRead(e.to_string()))?;
             }
         }
         Ok(())
@@ -635,10 +628,10 @@ fn read_stdin_task(file_opt: Option<String>, tx: Sender<Action>) -> Result<(), B
 
             match result {
                 Ok(_) => {
-                    tx.send(StdinRead(Output::ok(&buff)))?;
+                    tx.send(StdinRead(buff))?;
                 }
                 Err(e) => {
-                    tx.send(StdinRead(Output::err(e.to_string().as_str(), None)))?;
+                    tx.send(StdinRead(e.to_string()))?;
                 }
             }
             Ok(())
@@ -664,7 +657,7 @@ fn reset_highlight_task(
 enum Action {
     UserInput(Event),
     CommandCompleted(Output),
-    StdinRead(Output),
+    StdinRead(String),
     ResetHighlight,
     Debounced,
 }
@@ -730,7 +723,7 @@ mod tests {
                 ),
                 search_input: Input::new("".into()),
                 searching: false,
-                stdin: Output::ok(""),
+                stdin: "".into(),
                 action_rx,
                 command_tx,
                 debouncer_tx,
@@ -813,6 +806,10 @@ mod tests {
 
         assert_snapshot!(terminal.backend());
     }
+
+    // todo
+    // add test checking that whatever was piped in through stdin
+    // goes in exactly the same form out - jq input_line_number
 
     fn input_text(app: &mut App, text: &str) {
         for c in text.chars() {
