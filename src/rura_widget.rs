@@ -4,13 +4,15 @@ use crate::rura::{ExecuteType, Part, Rura};
 use crate::theme::Theme;
 use crate::uicmd::{KeyBindings, UiCmd, to_ui_command};
 use crossterm::event::Event;
+use error::Error;
 use itertools::Itertools;
-use log::warn;
+use log::info;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
 use ratatui::prelude::{Line, Style, Widget};
 use ratatui::style::Styled;
 use ratatui::text::StyledGrapheme;
+use std::error;
 use std::sync::mpsc::Sender;
 use tui_input::backend::crossterm::EventHandler;
 use tui_input::{Input, InputRequest};
@@ -181,31 +183,30 @@ impl RuraWidget {
         }
     }
 
-    pub fn execute(&mut self, execute_type: ExecuteType) -> Option<String> {
+    pub fn execute(&mut self, execute_type: ExecuteType) -> Result<Option<String>, Box<dyn Error>> {
         if self.command_input.value().is_empty() {
-            return Some(String::new()); // todo replace with enum?
+            return Ok(None);
         }
         match Rura::new(
             self.command_input.value(),
             self.command_input.visual_cursor(),
         ) {
             Ok(r) => match r.command(&execute_type) {
-                None => Some(String::new()),
-                Some((cmd, cmd_index)) => {
+                None => Ok(None),
+                Some(command) => {
                     if !matches!(
                         execute_type,
                         ExecuteType::FullLive | ExecuteType::UntilCurrentLive
                     ) {
-                        self.highlight_until = Some(cmd_index);
+                        self.highlight_until = Some(command.until);
                         let _ = self.highlight_reset_tx.send(());
-                        self.history.push(self.command_input.value());
                     }
-                    Some(cmd)
+                    Ok(Some(command.to_run))
                 }
             },
-            Err(_) => {
-                warn!("Invalid command: {}", self.command_input.value());
-                None
+            Err(e) => {
+                info!("invalid command: '{}'", self.command_input.value());
+                Err(e.into())
             }
         }
     }
@@ -350,9 +351,11 @@ mod tests {
         let mut widget = RuraWidget::default();
 
         input_text(&mut widget, "cmd1");
-        widget.execute(ExecuteType::Full);
+        widget.history.push("cmd1");
+
         input_text(&mut widget, " | cmd2");
-        widget.execute(ExecuteType::Full);
+        widget.history.push("cmd1 | cmd2");
+
         assert_eq!(widget.command_input.value(), "cmd1 | cmd2");
 
         widget.handle_ui_command(UiCmd::HistoryPrev);

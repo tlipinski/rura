@@ -45,7 +45,7 @@ impl OutputWidget {
     ) -> Self {
         Self {
             offset: Position::default(),
-            output: Output::ok(""),
+            output: Output::ok_stdin(""),
             error_output_opt: None,
             wrap: false,
             theme: Theme::from_config(theme_config),
@@ -427,22 +427,43 @@ pub enum ErrorPanePlacement {
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct Output {
+    pub command: Option<String>,
     pub lines: Vec<String>,
     pub status_code: Option<i32>,
     pub ok: bool,
 }
 
 impl Output {
-    pub fn ok(str: &str) -> Self {
+    pub fn ok_command(command: &str, str: &str) -> Self {
         Self {
+            command: Some(command.into()),
             lines: Self::lines(str),
             status_code: Some(0),
             ok: true,
         }
     }
 
-    pub fn err(str: &str, status_code: Option<i32>) -> Self {
+    pub fn err_command(command: &str, str: &str, status_code: Option<i32>) -> Self {
         Self {
+            command: Some(command.into()),
+            lines: Self::lines(str),
+            status_code,
+            ok: false,
+        }
+    }
+
+    pub fn ok_stdin(str: &str) -> Self {
+        Self {
+            command: None,
+            lines: Self::lines(str),
+            status_code: Some(0),
+            ok: true,
+        }
+    }
+
+    pub fn err_stdin(str: &str, status_code: Option<i32>) -> Self {
+        Self {
+            command: None,
             lines: Self::lines(str),
             status_code,
             ok: false,
@@ -495,8 +516,8 @@ mod tests {
         widget.error_pane_placement = ErrorPanePlacement::Top;
         widget.error_display_mode = ErrorDisplayMode::Pane;
 
-        widget.handle_command_output(Output::ok("out1\nout2\nout3"));
-        widget.handle_command_output(Output::err("errors1\nerrors2\nerrors3", Some(1)));
+        widget.handle_command_output(Output::ok_stdin("out1\nout2\nout3"));
+        widget.handle_command_output(Output::err_stdin("errors1\nerrors2\nerrors3", Some(1)));
 
         terminal
             .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
@@ -513,8 +534,8 @@ mod tests {
         widget.error_pane_placement = ErrorPanePlacement::Bottom;
         widget.error_display_mode = ErrorDisplayMode::Pane;
 
-        widget.handle_command_output(Output::ok("out1\nout2\nout3"));
-        widget.handle_command_output(Output::err("errors1\nerrors2\nerrors3", Some(1)));
+        widget.handle_command_output(Output::ok_stdin("out1\nout2\nout3"));
+        widget.handle_command_output(Output::err_stdin("errors1\nerrors2\nerrors3", Some(1)));
 
         terminal
             .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
@@ -537,15 +558,15 @@ mod tests {
         let mut widget = OutputWidget::default();
         widget.error_display_mode = ErrorDisplayMode::Inline;
 
-        widget.handle_command_output(Output::ok("out1\nout2\nout3"));
+        widget.handle_command_output(Output::ok_stdin("out1\nout2\nout3"));
         terminal
             .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
             .unwrap();
         assert_snapshot!("after ok", terminal.backend());
 
-        widget.handle_command_output(Output::ok(&generate_lines(3)));
+        widget.handle_command_output(Output::ok_stdin(&generate_lines(3)));
 
-        widget.handle_command_output(Output::err("errors1\nerrors2\nerrors3", Some(1)));
+        widget.handle_command_output(Output::err_stdin("errors1\nerrors2\nerrors3", Some(1)));
         terminal
             .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
             .unwrap();
@@ -559,7 +580,7 @@ mod tests {
         let mut widget = OutputWidget::default();
         widget.error_display_mode = ErrorDisplayMode::Inline;
 
-        widget.handle_command_output(Output::ok(&generate_lines(10)));
+        widget.handle_command_output(Output::ok_stdin(&generate_lines(10)));
         terminal
             .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
             .unwrap();

@@ -52,45 +52,37 @@ impl Rura {
         })
     }
 
-    pub fn command(&self, execute_type: &ExecuteType) -> Option<(String, usize)> {
-        let join_parts = |parts: &[Vec<Part>]| -> String {
-            parts
-                .iter()
-                .map(|p| p.iter().map(|part| part.content()).collect::<String>())
-                .collect::<Vec<String>>()
-                .join("|")
-        };
-
+    pub fn command(&self, execute_type: &ExecuteType) -> Option<RuraCommand> {
         match execute_type {
             Full | FullLive => {
                 if self.subcommands.is_empty() {
                     None
                 } else {
-                    Some((join_parts(&self.subcommands), self.subcommands.len() - 1))
+                    let full_command = join_parts(&self.subcommands);
+                    Some(RuraCommand {
+                        to_run: full_command,
+                        until: self.subcommands.len() - 1,
+                    })
                 }
             }
             UntilCurrent | UntilCurrentLive => {
                 if !self.subcommands.is_empty() {
-                    Some((
-                        join_parts(&self.subcommands[0..self.current + 1]),
-                        self.current,
-                    ))
+                    Some(RuraCommand {
+                        to_run: join_parts(&self.subcommands[0..self.current + 1]),
+                        until: self.current,
+                    })
                 } else {
                     None
                 }
             }
             UntilCurrentPrev => {
-                if !self.subcommands.is_empty() {
-                    if self.current == 0 {
-                        None
-                    } else {
-                        Some((
-                            join_parts(&self.subcommands[0..self.current]),
-                            self.current - 1,
-                        ))
-                    }
-                } else {
+                if self.subcommands.is_empty() || self.current == 0 {
                     None
+                } else {
+                    Some(RuraCommand {
+                        to_run: join_parts(&self.subcommands[0..self.current]),
+                        until: self.current - 1,
+                    })
                 }
             }
         }
@@ -424,6 +416,20 @@ impl fmt::Display for ParseError {
 
 impl std::error::Error for ParseError {}
 
+fn join_parts(parts: &[Vec<Part>]) -> String {
+    parts
+        .iter()
+        .map(|p| p.iter().map(|part| part.content()).collect::<String>())
+        .collect::<Vec<String>>()
+        .join("|")
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct RuraCommand {
+    pub to_run: String,
+    pub until: usize,
+}
+
 #[cfg(test)]
 mod tests {
     use crate::rura::ExecuteType::{Full, UntilCurrent, UntilCurrentPrev};
@@ -432,29 +438,107 @@ mod tests {
     #[test]
     fn commands() {
         let rura = Rura::new("a|b|c", 0).unwrap();
-        assert_eq!(rura.command(&Full), Some(("a|b|c".into(), 2)));
-        assert_eq!(rura.command(&UntilCurrent), Some(("a".into(), 0)));
+        assert_eq!(
+            rura.command(&Full),
+            Some(RuraCommand {
+                to_run: "a|b|c".into(),
+                until: 2
+            })
+        );
+        assert_eq!(
+            rura.command(&UntilCurrent),
+            Some(RuraCommand {
+                to_run: "a".into(),
+                until: 0
+            })
+        );
         assert_eq!(rura.command(&UntilCurrentPrev), None);
 
         let rura = Rura::new("a|b|c", 1).unwrap();
-        assert_eq!(rura.command(&Full), Some(("a|b|c".into(), 2)));
-        assert_eq!(rura.command(&UntilCurrent), Some(("a".into(), 0)));
+        assert_eq!(
+            rura.command(&Full),
+            Some(RuraCommand {
+                to_run: "a|b|c".into(),
+                until: 2
+            })
+        );
+        assert_eq!(
+            rura.command(&UntilCurrent),
+            Some(RuraCommand {
+                to_run: "a".into(),
+                until: 0
+            })
+        );
         assert_eq!(rura.command(&UntilCurrentPrev), None);
 
         let rura = Rura::new("a|b|c", 2).unwrap();
-        assert_eq!(rura.command(&Full), Some(("a|b|c".into(), 2)));
-        assert_eq!(rura.command(&UntilCurrent), Some(("a|b".into(), 1)));
-        assert_eq!(rura.command(&UntilCurrentPrev), Some(("a".into(), 0)));
+        assert_eq!(
+            rura.command(&Full),
+            Some(RuraCommand {
+                to_run: "a|b|c".into(),
+                until: 2
+            })
+        );
+        assert_eq!(
+            rura.command(&UntilCurrent),
+            Some(RuraCommand {
+                to_run: "a|b".into(),
+                until: 1
+            })
+        );
+        assert_eq!(
+            rura.command(&UntilCurrentPrev),
+            Some(RuraCommand {
+                to_run: "a".into(),
+                until: 0
+            })
+        );
 
         let rura = Rura::new("a|b|c", 3).unwrap();
-        assert_eq!(rura.command(&Full), Some(("a|b|c".into(), 2)));
-        assert_eq!(rura.command(&UntilCurrent), Some(("a|b".into(), 1)));
-        assert_eq!(rura.command(&UntilCurrentPrev), Some(("a".into(), 0)));
+        assert_eq!(
+            rura.command(&Full),
+            Some(RuraCommand {
+                to_run: "a|b|c".into(),
+                until: 2
+            })
+        );
+        assert_eq!(
+            rura.command(&UntilCurrent),
+            Some(RuraCommand {
+                to_run: "a|b".into(),
+                until: 1
+            })
+        );
+        assert_eq!(
+            rura.command(&UntilCurrentPrev),
+            Some(RuraCommand {
+                to_run: "a".into(),
+                until: 0
+            })
+        );
 
         let rura = Rura::new("a|b|c", 4).unwrap();
-        assert_eq!(rura.command(&Full), Some(("a|b|c".into(), 2)));
-        assert_eq!(rura.command(&UntilCurrent), Some(("a|b|c".into(), 2)));
-        assert_eq!(rura.command(&UntilCurrentPrev), Some(("a|b".into(), 1)));
+        assert_eq!(
+            rura.command(&Full),
+            Some(RuraCommand {
+                to_run: "a|b|c".into(),
+                until: 2
+            })
+        );
+        assert_eq!(
+            rura.command(&UntilCurrent),
+            Some(RuraCommand {
+                to_run: "a|b|c".into(),
+                until: 2
+            })
+        );
+        assert_eq!(
+            rura.command(&UntilCurrentPrev),
+            Some(RuraCommand {
+                to_run: "a|b".into(),
+                until: 1
+            })
+        );
     }
 
     #[test]

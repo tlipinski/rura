@@ -159,11 +159,18 @@ impl App {
     fn handle_action(&mut self, action: Action) {
         match action {
             UserInput(event) => self.handle_event(&event),
-            CommandCompleted(output) => self.output_widget.handle_command_output(output),
+            CommandCompleted(output) => {
+                if output.ok {
+                    if let Some(c) = &output.command {
+                        self.rura_widget.history.push(c)
+                    }
+                }
+                self.output_widget.handle_command_output(output)
+            }
             ResetHighlight => self.rura_widget.highlight_until = None,
             StdinRead(output) => {
                 self.output_widget
-                    .handle_command_output(Output::ok(&output));
+                    .handle_command_output(Output::ok_stdin(&output));
                 self.stdin = output;
             }
             Debounced => {
@@ -297,7 +304,7 @@ impl App {
                             }
                             UiCmd::ResetInput if !self.searching => {
                                 self.output_widget
-                                    .handle_command_output(Output::ok(&self.stdin));
+                                    .handle_command_output(Output::ok_stdin(&self.stdin));
                             }
                             UiCmd::SubcommandNext | UiCmd::SubcommandPrev if !self.searching => {
                                 self.rura_widget.handle_event(event);
@@ -326,11 +333,11 @@ impl App {
 
     fn handle_execute(&mut self, kind: ExecuteType) {
         match self.rura_widget.execute(kind) {
-            Some(command) if command.is_empty() => self
+            Ok(Some(c)) => self.command_tx.send((c, self.stdin.clone())).unwrap(),
+            Ok(None) => self
                 .output_widget
-                .handle_command_output(Output::ok(&self.stdin)),
-            Some(c) => self.command_tx.send((c, self.stdin.clone())).unwrap(),
-            None => {}
+                .handle_command_output(Output::ok_stdin(&self.stdin)),
+            Err(_) => {}
         }
     }
 
@@ -558,7 +565,7 @@ fn handle_command_task(
 ) -> Result<(), Box<dyn Error>> {
     loop {
         if let Ok((command, stdin)) = command_rx.recv() {
-            info!("executing command: {command}");
+            info!("executing command: '{command}'");
 
             let mut cmd = Command::new("sh");
             cmd.args(["-c", &command]);
@@ -582,14 +589,19 @@ fn handle_command_task(
                 if output.status.success() {
                     let stdout = output.stdout.as_slice();
                     let str = String::from_utf8_lossy(stdout);
-                    action_tx.send(CommandCompleted(Output::ok(&str)))?;
+                    action_tx.send(CommandCompleted(Output::ok_command(&command, &str)))?;
                 } else {
                     let stderr = output.stderr.as_slice();
                     let str = String::from_utf8_lossy(stderr);
-                    action_tx.send(CommandCompleted(Output::err(&str, output.status.code())))?;
+                    action_tx.send(CommandCompleted(Output::err_command(
+                        &command,
+                        &str,
+                        output.status.code(),
+                    )))?;
                 }
             } else {
-                action_tx.send(CommandCompleted(Output::err(
+                action_tx.send(CommandCompleted(Output::err_command(
+                    &command,
                     "Failed to execute command",
                     None,
                 )))?;

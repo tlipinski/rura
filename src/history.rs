@@ -75,7 +75,7 @@ impl History {
         self.position = None;
         self.current = Some("".to_string());
         match self.history.front() {
-            Some(most_recent) if most_recent != &value => {
+            Some(most_recent) if most_recent.trim() != value.trim() => {
                 self.history.push_front(value.into());
                 if self.save_to_file {
                     save_to_history(value.into());
