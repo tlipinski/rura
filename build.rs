@@ -9,17 +9,15 @@ fn main() {
 fn get_git_version() -> String {
     let tag = git_output(&["describe", "--tags", "--exact-match"]);
 
-    tag.unwrap_or(
-        {
-            match (
-                git_output(&["rev-list", "--count", "HEAD"]),
-                git_output(&["rev-parse", "--short=7", "HEAD"]),
-            ) {
-                (Some(rev_count), Some(short_hash)) => format!("r{rev_count}.{short_hash}"),
-                _ => env!("CARGO_PKG_VERSION").to_string(),
-            }
+    tag.unwrap_or({
+        match (
+            git_output(&["rev-list", "--count", "HEAD"]),
+            git_output(&["rev-parse", "--short=7", "HEAD"]),
+        ) {
+            (Some(rev_count), Some(short_hash)) => format!("r{rev_count}.{short_hash}"),
+            _ => env!("CARGO_PKG_VERSION").to_string(),
         }
-    )
+    })
 }
 
 fn git_output(args: &[&str]) -> Option<String> {
