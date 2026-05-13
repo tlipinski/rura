@@ -135,9 +135,9 @@ mod tests {
     use super::*;
 
     #[derive(Default)]
-    struct NoopHistoryStore;
+    struct NoOpHistoryStore;
 
-    impl HistoryStore for NoopHistoryStore {
+    impl HistoryStore for NoOpHistoryStore {
         fn save(&mut self, _value: &str) -> Result<(), Error> {
             Ok(())
         }
@@ -149,7 +149,7 @@ mod tests {
             history: VecDeque::new(),
             position: None,
             current: None,
-            store: Box::new(NoopHistoryStore::default()),
+            store: Box::new(NoOpHistoryStore::default()),
         };
 
         assert_eq!(history.previous("current"), "current");
@@ -162,7 +162,7 @@ mod tests {
             history: VecDeque::from(vec!["test1".into(), "test2".into(), "test3".into()]),
             position: None,
             current: None,
-            store: Box::new(NoopHistoryStore::default()),
+            store: Box::new(NoOpHistoryStore::default()),
         };
 
         assert_eq!(history.history.len(), 3);
