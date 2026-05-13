@@ -53,6 +53,7 @@ pub struct App {
     search_input: Input,
     searching: bool,
     case_sensitive: bool,
+    debounce_input: bool
 }
 
 impl App {
@@ -142,6 +143,7 @@ impl App {
             search_input: Input::from(""),
             searching: false,
             case_sensitive: false,
+            debounce_input: false
         }
     }
 
@@ -283,7 +285,12 @@ impl App {
                                     match self.input_mode {
                                         InputMode::Normal => {}
                                         InputMode::LiveFull | InputMode::LiveUntilCursor => {
-                                            self.debouncer_tx.send(()).unwrap();
+                                            if self.debounce_input {
+                                                self.debouncer_tx.send(()).unwrap();
+                                            } else {
+                                                // bypass debouncer and execute immediately
+                                                self.handle_action(Debounced)
+                                            }
                                         }
                                     }
                                 }
@@ -810,6 +817,21 @@ mod tests {
         let mut app = App::default();
 
         input_text(&mut app, "ls -la | grep a");
+
+        let mut terminal = TestTerminal::default().0;
+        terminal
+            .draw(|frame| app.render(frame, frame.area()))
+            .unwrap();
+
+        assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn saving_history_on_ok_only() {
+        let mut app = App::default();
+        app.input_mode = InputMode::LiveFull;
+
+        input_text(&mut app, "grep 'abc'");
 
         let mut terminal = TestTerminal::default().0;
         terminal
