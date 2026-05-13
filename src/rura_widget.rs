@@ -309,7 +309,7 @@ mod tests {
                 command_input: Input::from(""),
                 highlight_until: None,
                 theme: Theme::from_config(&theme_config),
-                history: History::default(),
+                history: History::in_mem(),
                 key_bindings: KeyBindings::from_config(&kb_config),
                 highlight_reset_tx,
                 completions: None,

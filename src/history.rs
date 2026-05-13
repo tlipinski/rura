@@ -3,19 +3,40 @@ use std::collections::VecDeque;
 use std::io::{Error, Write};
 
 pub struct History {
-    history: VecDeque<String>,
+    store: Box<dyn HistoryStore>,
     position: Option<usize>,
     current: Option<String>,
-    store: Box<dyn HistoryStore>,
 }
 
 trait HistoryStore {
+    fn load(&mut self) -> Result<VecDeque<String>, Error>;
     fn save(&mut self, item: &str) -> Result<(), Error>;
 }
 
-struct FileHistoryStore;
+#[derive(Default)]
+struct FileHistoryStore {
+    items: Option<VecDeque<String>>,
+}
 
 impl HistoryStore for FileHistoryStore {
+    fn load(&mut self) -> Result<VecDeque<String>, Error> {
+        if let Some(items) = self.items.clone() {
+            Ok(items)
+        } else {
+            let mut history = VecDeque::new();
+            if let Some(path) = history_path() {
+                if let Ok(content) = std::fs::read_to_string(path) {
+                    for line in content.lines() {
+                        if !line.is_empty() {
+                            history.push_front(line.to_string());
+                        }
+                    }
+                }
+            }
+            Ok(history)
+        }
+    }
+
     fn save(&mut self, value: &str) -> Result<(), Error> {
         if let Some(path) = history_path() {
             if let Some(parent) = path.parent() {
@@ -44,36 +65,24 @@ impl HistoryStore for FileHistoryStore {
 }
 
 impl History {
-    pub fn load() -> Self {
-        let mut history = VecDeque::new();
-        if let Some(path) = history_path() {
-            if let Ok(content) = std::fs::read_to_string(path) {
-                for line in content.lines() {
-                    if !line.is_empty() {
-                        history.push_front(line.to_string());
-                    }
-                }
-            }
-        }
+    pub fn using_file() -> Self {
+        let store = Box::new(FileHistoryStore::default());
 
         History {
-            history,
             position: None,
             current: None,
-            store: Box::new(FileHistoryStore {}),
+            store,
         }
     }
-}
 
-impl Default for History {
-    fn default() -> Self {
-        Self::load()
+    fn history(&mut self) -> VecDeque<String> {
+        self.store.load().unwrap_or_default()
     }
 }
 
 impl History {
     pub fn previous(&mut self, current: &str) -> String {
-        if self.history.is_empty() {
+        if self.history().is_empty() {
             return current.to_string();
         }
 
@@ -81,18 +90,18 @@ impl History {
             None => {
                 self.current = Some(current.to_string());
                 let mut new_pos = 0;
-                if let Some(front) = self.history.front() {
-                    if front == current && self.history.len() > 1 {
+                if let Some(front) = self.history().front() {
+                    if front == current && self.history().len() > 1 {
                         new_pos = 1;
                     }
                 }
                 self.position = Some(new_pos);
-                self.history[new_pos].clone()
+                self.history()[new_pos].clone()
             }
             Some(pos) => {
-                let new_pos = (pos + 1).min(self.history.len() - 1);
+                let new_pos = (pos + 1).min(self.history().len() - 1);
                 self.position = Some(new_pos);
-                self.history[new_pos].clone()
+                self.history()[new_pos].clone()
             }
         }
     }
@@ -107,7 +116,7 @@ impl History {
                 } else {
                     let new_pos = pos - 1;
                     self.position = Some(new_pos);
-                    self.history[new_pos].clone()
+                    self.history()[new_pos].clone()
                 }
             }
         }
@@ -116,14 +125,14 @@ impl History {
     pub fn push(&mut self, value: &str) {
         self.position = None;
         self.current = Some("".to_string());
-        match self.history.front() {
+        match self.history().front() {
             Some(most_recent) if most_recent.trim() != value.trim() => {
-                self.history.push_front(value.into());
+                self.history().push_front(value.into());
                 let _ = self.store.save(value);
             }
             Some(_duplicate) => {}
             None => {
-                self.history.push_front(value.into());
+                self.history().push_front(value.into());
                 let _ = self.store.save(value);
             }
         };
@@ -135,21 +144,43 @@ mod tests {
     use super::*;
 
     #[derive(Default)]
-    struct NoOpHistoryStore;
+    struct InMemHistoryStore {
+        items: VecDeque<String>,
+    }
 
-    impl HistoryStore for NoOpHistoryStore {
-        fn save(&mut self, _value: &str) -> Result<(), Error> {
+    impl History {
+        pub fn in_mem() -> History {
+            History {
+                store: Box::new(InMemHistoryStore::default()),
+                position: None,
+                current: None,
+            }
+        }
+    }
+
+    impl HistoryStore for InMemHistoryStore {
+        fn load(&mut self) -> Result<VecDeque<String>, Error> {
+            Ok(self.items.clone())
+        }
+
+        fn save(&mut self, value: &str) -> Result<(), Error> {
+            self.items.push_front(value.into());
             Ok(())
+        }
+    }
+
+    impl InMemHistoryStore {
+        fn stub(items: VecDeque<String>) -> Self {
+            Self { items }
         }
     }
 
     #[test]
     fn test_empty_history() {
         let mut history = History {
-            history: VecDeque::new(),
+            store: Box::new(InMemHistoryStore::stub(VecDeque::new())),
             position: None,
             current: None,
-            store: Box::new(NoOpHistoryStore::default()),
         };
 
         assert_eq!(history.previous("current"), "current");
@@ -159,13 +190,16 @@ mod tests {
     #[test]
     fn test_history_init() {
         let mut history = History {
-            history: VecDeque::from(vec!["test1".into(), "test2".into(), "test3".into()]),
+            store: Box::new(InMemHistoryStore::stub(VecDeque::from(vec![
+                "test1".into(),
+                "test2".into(),
+                "test3".into(),
+            ]))),
             position: None,
             current: None,
-            store: Box::new(NoOpHistoryStore::default()),
         };
 
-        assert_eq!(history.history.len(), 3);
+        assert_eq!(history.history().len(), 3);
 
         let item = history.next("current");
         assert_eq!(item, "current");

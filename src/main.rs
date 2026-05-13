@@ -45,7 +45,7 @@ fn main() {
     let args = Args::parse();
 
     if args.last {
-        println!("{}", History::load().previous(""));
+        println!("{}", History::using_file().previous(""));
         exit(0)
     }
 
