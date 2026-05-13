@@ -10,27 +10,12 @@ pub struct History {
 }
 
 trait HistoryStore {
-    fn load(&mut self) -> Result<VecDeque<String>, Error>;
     fn save(&mut self, item: &str) -> Result<(), Error>;
 }
 
 struct FileHistoryStore;
 
 impl HistoryStore for FileHistoryStore {
-    fn load(&mut self) -> Result<VecDeque<String>, Error> {
-        let mut history = VecDeque::new();
-        if let Some(path) = history_path() {
-            if let Ok(content) = std::fs::read_to_string(path) {
-                for line in content.lines() {
-                    if !line.is_empty() {
-                        history.push_front(line.to_string());
-                    }
-                }
-            }
-        }
-        Ok(history)
-    }
-
     fn save(&mut self, value: &str) -> Result<(), Error> {
         if let Some(path) = history_path() {
             if let Some(parent) = path.parent() {
@@ -60,14 +45,22 @@ impl HistoryStore for FileHistoryStore {
 
 impl History {
     pub fn load() -> Self {
-        let mut store = FileHistoryStore {};
-        let history = store.load().unwrap();
+        let mut history = VecDeque::new();
+        if let Some(path) = history_path() {
+            if let Ok(content) = std::fs::read_to_string(path) {
+                for line in content.lines() {
+                    if !line.is_empty() {
+                        history.push_front(line.to_string());
+                    }
+                }
+            }
+        }
 
         History {
             history,
             position: None,
             current: None,
-            store: Box::new(store),
+            store: Box::new(FileHistoryStore {}),
         }
     }
 }
@@ -147,10 +140,6 @@ mod tests {
     }
 
     impl HistoryStore for InMemHistoryStore {
-        fn load(&mut self) -> Result<VecDeque<String>, Error> {
-            Ok(self.history.clone())
-        }
-
         fn save(&mut self, value: &str) -> Result<(), Error> {
             self.history.push_front(value.into());
             Ok(())
