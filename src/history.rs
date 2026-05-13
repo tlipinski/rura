@@ -17,6 +17,20 @@ trait HistoryStore {
 struct FileHistoryStore;
 
 impl HistoryStore for FileHistoryStore {
+    fn load(&mut self) -> Result<VecDeque<String>, Error> {
+        let mut history = VecDeque::new();
+        if let Some(path) = history_path() {
+            if let Ok(content) = std::fs::read_to_string(path) {
+                for line in content.lines() {
+                    if !line.is_empty() {
+                        history.push_front(line.to_string());
+                    }
+                }
+            }
+        }
+        Ok(history)
+    }
+
     fn save(&mut self, value: &str) -> Result<(), Error> {
         if let Some(path) = history_path() {
             if let Some(parent) = path.parent() {
@@ -41,20 +55,6 @@ impl HistoryStore for FileHistoryStore {
                 "History path not found",
             ))
         }
-    }
-
-    fn load(&mut self) -> Result<VecDeque<String>, Error> {
-        let mut history = VecDeque::new();
-        if let Some(path) = history_path() {
-            if let Ok(content) = std::fs::read_to_string(path) {
-                for line in content.lines() {
-                    if !line.is_empty() {
-                        history.push_front(line.to_string());
-                    }
-                }
-            }
-        }
-        Ok(history)
     }
 }
 
