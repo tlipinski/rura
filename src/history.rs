@@ -67,7 +67,7 @@ impl History {
             history,
             position: None,
             current: None,
-            store: Box::new(store)
+            store: Box::new(store),
         }
     }
 }
