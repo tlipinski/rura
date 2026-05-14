@@ -820,7 +820,6 @@ mod tests {
     fn saving_to_history_only_ok_outputs() {
         let mut app = App::default();
 
-        // mimic live mode
         app.handle_action(CommandCompleted(Output::err_command("g", "", None)));
         app.handle_action(CommandCompleted(Output::err_command("gr", "", None)));
         app.handle_action(CommandCompleted(Output::err_command("gre", "", None)));
