@@ -141,7 +141,7 @@ impl RuraWidget {
                     self.command_input.value(),
                     self.command_input.visual_cursor(),
                 ) {
-                    if let Some(cursor) = r.cursor_next() {
+                    if let Some(cursor) = r.cursor_next(false) {
                         self.command_input.handle(InputRequest::SetCursor(cursor));
                     }
                 }
@@ -155,7 +155,7 @@ impl RuraWidget {
                     self.command_input.value(),
                     self.command_input.visual_cursor(),
                 ) {
-                    if let Some(cursor) = r.cursor_prev() {
+                    if let Some(cursor) = r.cursor_prev(false) {
                         self.command_input.handle(InputRequest::SetCursor(cursor));
                     }
                 }
