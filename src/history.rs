@@ -1,6 +1,7 @@
 use crate::config::history_path;
 use std::collections::VecDeque;
 use std::io::{Error, Write};
+use log::debug;
 
 pub struct History {
     store: Box<dyn HistoryStore>,
@@ -20,9 +21,11 @@ struct FileHistoryStore {
 
 impl HistoryStore for FileHistoryStore {
     fn load(&mut self) -> Result<&VecDeque<String>, Error> {
-        if self.items.is_none() {
+        let items_mut = self.items.get_or_insert_with(|| {
             let mut history = VecDeque::new();
             if let Some(path) = history_path() {
+                debug!("initializing history from file: {:?}", path);
+
                 if let Ok(content) = std::fs::read_to_string(path) {
                     for line in content.lines() {
                         if !line.is_empty() {
@@ -31,9 +34,9 @@ impl HistoryStore for FileHistoryStore {
                     }
                 }
             }
-            self.items = Some(history)
-        }
-        Ok(self.items.as_mut().unwrap())
+            history
+        });
+        Ok(items_mut)
     }
 
     fn save(&mut self, value: &str) -> Result<(), Error> {
