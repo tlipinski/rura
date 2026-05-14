@@ -1,6 +1,7 @@
 use crate::config::history_path;
 use std::collections::VecDeque;
 use std::io::{Error, Write};
+use log::debug;
 
 pub struct History {
     store: Box<dyn HistoryStore>,
@@ -15,13 +16,15 @@ trait HistoryStore {
 
 #[derive(Default)]
 struct FileHistoryStore {
-    items: Option<VecDeque<String>>,
+    items: VecDeque<String>,
+    loaded: bool,
 }
 
 impl HistoryStore for FileHistoryStore {
     fn load(&mut self) -> Result<VecDeque<String>, Error> {
-        if let Some(items) = self.items.clone() {
-            Ok(items)
+        debug!("items {:?}", self.items);
+        if self.loaded {
+            Ok(self.items.clone())
         } else {
             let mut history = VecDeque::new();
             if let Some(path) = history_path() {
@@ -33,11 +36,16 @@ impl HistoryStore for FileHistoryStore {
                     }
                 }
             }
+            self.items = history.clone();
             Ok(history)
         }
     }
 
     fn save(&mut self, value: &str) -> Result<(), Error> {
+        debug!("items before push {:?}", self.items);
+        self.items.push_front(value.into());
+        debug!("items after push {:?}", self.items);
+
         if let Some(path) = history_path() {
             if let Some(parent) = path.parent() {
                 std::fs::create_dir_all(parent)?;
