@@ -127,12 +127,10 @@ impl History {
         self.current = Some("".to_string());
         match self.history().front() {
             Some(most_recent) if most_recent.trim() != value.trim() => {
-                self.history().push_front(value.into());
                 let _ = self.store.save(value);
             }
             Some(_duplicate) => {}
             None => {
-                self.history().push_front(value.into());
                 let _ = self.store.save(value);
             }
         };
