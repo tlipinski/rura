@@ -1,7 +1,6 @@
 use crate::config::history_path;
 use std::collections::VecDeque;
 use std::io::{Error, Write};
-use log::debug;
 
 pub struct History {
     store: Box<dyn HistoryStore>,
@@ -10,7 +9,7 @@ pub struct History {
 }
 
 trait HistoryStore {
-    fn load(&mut self) -> Result<VecDeque<String>, Error>;
+    fn load(&mut self) -> Result<&VecDeque<String>, Error>;
     fn save(&mut self, item: &str) -> Result<(), Error>;
 }
 
@@ -20,11 +19,8 @@ struct FileHistoryStore {
 }
 
 impl HistoryStore for FileHistoryStore {
-    fn load(&mut self) -> Result<VecDeque<String>, Error> {
-        debug!("items {:?}", self.items);
-        if let Some(loaded) = self.items.clone() {
-            Ok(loaded)
-        } else {
+    fn load(&mut self) -> Result<&VecDeque<String>, Error> {
+        if self.items.is_none() {
             let mut history = VecDeque::new();
             if let Some(path) = history_path() {
                 if let Ok(content) = std::fs::read_to_string(path) {
@@ -35,17 +31,15 @@ impl HistoryStore for FileHistoryStore {
                     }
                 }
             }
-            self.items = Some(history.clone());
-            Ok(history)
+            self.items = Some(history)
         }
+        Ok(self.items.as_mut().unwrap())
     }
 
     fn save(&mut self, value: &str) -> Result<(), Error> {
-        debug!("items before push {:?}", self.items);
         self.items.as_mut().map(|items_mut| {
             items_mut.push_front(value.into());
         });
-        debug!("items after push {:?}", self.items);
 
         if let Some(path) = history_path() {
             if let Some(parent) = path.parent() {
@@ -84,8 +78,8 @@ impl History {
         }
     }
 
-    fn history(&mut self) -> VecDeque<String> {
-        self.store.load().unwrap_or_default()
+    fn history(&mut self) -> &VecDeque<String> {
+        self.store.load().unwrap()
     }
 }
 
@@ -166,8 +160,8 @@ mod tests {
     }
 
     impl HistoryStore for InMemHistoryStore {
-        fn load(&mut self) -> Result<VecDeque<String>, Error> {
-            Ok(self.items.clone())
+        fn load(&mut self) -> Result<&VecDeque<String>, Error> {
+            Ok(&self.items)
         }
 
         fn save(&mut self, value: &str) -> Result<(), Error> {
