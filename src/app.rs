@@ -828,9 +828,8 @@ mod tests {
         app.handle_action(CommandCompleted(Output::ok_command("grep 'abc'", "")));
         app.handle_action(CommandCompleted(Output::err_command("gp 'abc'", "", None)));
 
-        let history = app.rura_widget.history.history();
         assert_eq!(
-            history.to_owned(),
+            *app.rura_widget.history.history(),
             VecDeque::from(vec!["grep 'abc'".into(), "grep".into(),])
         );
     }
