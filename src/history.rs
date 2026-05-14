@@ -42,8 +42,8 @@ impl HistoryStore for FileHistoryStore {
 
     fn save(&mut self, value: &str) -> Result<(), Error> {
         debug!("items before push {:?}", self.items);
-        self.items.as_mut().map(|it| {
-            it.push_front(value.into());
+        self.items.as_mut().map(|items_mut| {
+            items_mut.push_front(value.into());
         });
         debug!("items after push {:?}", self.items);
 
