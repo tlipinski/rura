@@ -81,7 +81,7 @@ impl History {
         }
     }
 
-    fn history(&mut self) -> &VecDeque<String> {
+    pub fn history(&mut self) -> &VecDeque<String> {
         self.store.load().unwrap()
     }
 }
@@ -169,6 +169,7 @@ mod tests {
 
         fn save(&mut self, value: &str) -> Result<(), Error> {
             self.items.push_front(value.into());
+            println!("Saving history item: {}", value);
             Ok(())
         }
     }

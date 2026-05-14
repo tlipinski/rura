@@ -692,6 +692,7 @@ mod tests {
     use insta::assert_snapshot;
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
+    use std::collections::VecDeque;
 
     struct TestTerminal(Terminal<TestBackend>);
 
@@ -703,20 +704,34 @@ mod tests {
 
     impl Default for App {
         fn default() -> Self {
-            let (_, action_rx) = std::sync::mpsc::channel::<Action>();
-            let (command_tx, _) = std::sync::mpsc::channel::<(String, String)>();
+            let (action_tx, action_rx) = std::sync::mpsc::channel::<Action>();
+            let (command_tx, command_rx) = std::sync::mpsc::channel::<(String, String)>();
             let (highlight_reset_tx, _) = std::sync::mpsc::channel::<()>();
             let (debouncer_tx, _) = std::sync::mpsc::channel::<()>();
 
             let theme_config = ThemeConfig::default();
             let kb_config = KeyBindingsConfig::default();
 
+            // todo move it somewhere else?
+            thread::spawn(move || {
+                loop {
+                    if let Ok((command, _)) = command_rx.recv() {
+                        if command.starts_with("grep ") {
+                            let _ = action_tx.send(CommandCompleted(Output::ok_command("", "")));
+                        } else {
+                            let _ =
+                                action_tx.send(CommandCompleted(Output::err_command("", "", None)));
+                        }
+                    }
+                }
+            });
+
             Self {
                 rura_widget: RuraWidget {
                     command_input: Input::from(""),
                     highlight_until: None,
                     theme: Theme::from_config(&theme_config),
-                    history: History::using_file(),
+                    history: History::in_mem(),
                     key_bindings: KeyBindings::from_config(&kb_config),
                     highlight_reset_tx,
                     completions: None,
@@ -822,12 +837,11 @@ mod tests {
 
         input_text(&mut app, "grep 'abc'");
 
-        let mut terminal = TestTerminal::default().0;
-        terminal
-            .draw(|frame| app.render(frame, frame.area()))
-            .unwrap();
-
-        assert_snapshot!(terminal.backend());
+        let history = app.rura_widget.history.history();
+        assert_eq!(
+            history.to_owned(),
+            VecDeque::from(vec!["grep".into(), "grep 'abc'".into()])
+        );
     }
 
     // todo
