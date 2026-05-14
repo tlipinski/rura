@@ -425,7 +425,7 @@ pub enum ErrorPanePlacement {
     Bottom,
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Output {
     pub command: Option<String>,
     pub lines: Vec<String>,

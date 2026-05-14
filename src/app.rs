@@ -689,7 +689,9 @@ mod tests {
     use super::*;
     use crossterm::event::Event::Key;
     use crossterm::event::{KeyEvent, KeyEventKind, KeyEventState};
+    use env_logger::{Builder, Target};
     use insta::assert_snapshot;
+    use log::LevelFilter;
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
     use std::collections::VecDeque;
@@ -716,6 +718,7 @@ mod tests {
             thread::spawn(move || {
                 loop {
                     if let Ok((command, _)) = command_rx.recv() {
+                        debug!("Received command: {}", command);
                         if command.starts_with("grep ") {
                             let _ = action_tx.send(CommandCompleted(Output::ok_command("", "")));
                         } else {
@@ -831,16 +834,22 @@ mod tests {
     }
 
     #[test]
-    fn saving_history_on_ok_only() {
+    fn saving_to_history_only_ok_outputs() {
         let mut app = App::default();
-        app.input_mode = InputMode::LiveFull;
 
-        input_text(&mut app, "grep 'abc'");
+        // mimic live mode
+        app.handle_action(CommandCompleted(Output::err_command("g", "", None)));
+        app.handle_action(CommandCompleted(Output::err_command("gr", "", None)));
+        app.handle_action(CommandCompleted(Output::err_command("gre", "", None)));
+        app.handle_action(CommandCompleted(Output::ok_command("grep", "")));
+        app.handle_action(CommandCompleted(Output::ok_command("grep ", "")));
+        app.handle_action(CommandCompleted(Output::ok_command("grep 'abc'", "")));
+        app.handle_action(CommandCompleted(Output::err_command("gp 'abc'", "", None)));
 
         let history = app.rura_widget.history.history();
         assert_eq!(
             history.to_owned(),
-            VecDeque::from(vec!["grep".into(), "grep 'abc'".into()])
+            VecDeque::from(vec!["grep 'abc'".into(), "grep".into(),])
         );
     }
 
