@@ -16,15 +16,14 @@ trait HistoryStore {
 
 #[derive(Default)]
 struct FileHistoryStore {
-    items: VecDeque<String>,
-    loaded: bool,
+    items: Option<VecDeque<String>>,
 }
 
 impl HistoryStore for FileHistoryStore {
     fn load(&mut self) -> Result<VecDeque<String>, Error> {
         debug!("items {:?}", self.items);
-        if self.loaded {
-            Ok(self.items.clone())
+        if let Some(loaded) = self.items.clone() {
+            Ok(loaded)
         } else {
             let mut history = VecDeque::new();
             if let Some(path) = history_path() {
@@ -36,14 +35,16 @@ impl HistoryStore for FileHistoryStore {
                     }
                 }
             }
-            self.items = history.clone();
+            self.items = Some(history.clone());
             Ok(history)
         }
     }
 
     fn save(&mut self, value: &str) -> Result<(), Error> {
         debug!("items before push {:?}", self.items);
-        self.items.push_front(value.into());
+        self.items.as_mut().map(|it| {
+            it.push_front(value.into());
+        });
         debug!("items after push {:?}", self.items);
 
         if let Some(path) = history_path() {
