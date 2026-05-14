@@ -3,8 +3,8 @@ use crate::history::History;
 use crate::rura::{ExecuteType, Part, Rura};
 use crate::theme::Theme;
 use crate::uicmd::{KeyBindings, UiCmd, to_ui_command};
+use anyhow::Result;
 use crossterm::event::Event;
-use error::Error;
 use itertools::Itertools;
 use log::info;
 use ratatui::buffer::Buffer;
@@ -12,7 +12,6 @@ use ratatui::layout::{Position, Rect};
 use ratatui::prelude::{Line, Style, Widget};
 use ratatui::style::Styled;
 use ratatui::text::StyledGrapheme;
-use std::error;
 use std::sync::mpsc::Sender;
 use tui_input::backend::crossterm::EventHandler;
 use tui_input::{Input, InputRequest};
@@ -183,7 +182,7 @@ impl RuraWidget {
         }
     }
 
-    pub fn execute(&mut self, execute_type: ExecuteType) -> Result<Option<String>, Box<dyn Error>> {
+    pub fn execute(&mut self, execute_type: ExecuteType) -> Result<Option<String>> {
         if self.command_input.value().is_empty() {
             return Ok(None);
         }

@@ -13,11 +13,11 @@ mod uicmd;
 use crate::app::App;
 use crate::config::load_config;
 use crate::history::History;
+use anyhow::Result;
 use clap::Parser;
 use env_logger::{Builder, Target};
 use log::{LevelFilter, error, info};
 use props::APP_NAME;
-use std::error::Error;
 use std::fs;
 use std::fs::OpenOptions;
 use std::process::exit;
@@ -76,7 +76,7 @@ struct Args {
     last: bool,
 }
 
-fn run(args: Args, config: config::Config) -> Result<(), Box<dyn Error>> {
+fn run(args: Args, config: config::Config) -> Result<()> {
     info!("Starting TUI");
     let mut terminal = ratatui::init();
 

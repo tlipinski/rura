@@ -1,14 +1,10 @@
+use anyhow::Result;
 use log::{debug, error};
-use std::error::Error;
 use std::sync::mpsc::{Receiver, TryRecvError};
 use std::thread::sleep;
 use std::time::Duration;
 
-pub fn debouncer_task<F>(
-    rx: Receiver<()>,
-    duration: Duration,
-    on_debounce: F,
-) -> Result<(), Box<dyn Error + Send + Sync>>
+pub fn debouncer_task<F>(rx: Receiver<()>, duration: Duration, on_debounce: F) -> Result<()>
 where
     F: Fn() -> () + Send + 'static,
 {

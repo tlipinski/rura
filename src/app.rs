@@ -10,6 +10,7 @@ use crate::rura_widget::RuraWidget;
 use crate::theme::Theme;
 use crate::uicmd::{KeyBindings, UiCmd, to_ui_command};
 use KeyCode::{Enter, Esc, F};
+use anyhow::Result;
 use crossterm::event::KeyCode::Char;
 use crossterm::event::{KeyCode, KeyModifiers};
 use crossterm::tty::IsTty;
@@ -25,7 +26,6 @@ use ratatui::text::{Line, Text};
 use ratatui::widgets::{Block, BorderType, Paragraph, Widget};
 use ratatui::{DefaultTerminal, Frame};
 use serde::{Deserialize, Serialize};
-use std::error::Error;
 use std::io::{Read, Write, stdin};
 use std::process::{Command, Stdio};
 use std::sync::mpsc::{Receiver, Sender};
@@ -133,7 +133,7 @@ impl App {
         }
     }
 
-    pub fn run(mut self, terminal: &mut DefaultTerminal) -> Result<String, Box<dyn Error>> {
+    pub fn run(mut self, terminal: &mut DefaultTerminal) -> Result<String> {
         while !self.exit {
             terminal.draw(|frame| self.render(frame, frame.area()))?;
 
@@ -550,7 +550,7 @@ impl App {
 fn handle_command_task(
     command_rx: Receiver<(String, String)>,
     action_tx: Sender<Action>,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<()> {
     loop {
         if let Ok((command, stdin)) = command_rx.recv() {
             info!("executing command: '{command}'");
@@ -598,7 +598,7 @@ fn handle_command_task(
     }
 }
 
-fn handle_input_task(tx: Sender<Action>) -> Result<(), Box<dyn Error>> {
+fn handle_input_task(tx: Sender<Action>) -> Result<()> {
     loop {
         if let Ok(event) = event::read() {
             debug!("event: {:?}", event);
@@ -607,7 +607,7 @@ fn handle_input_task(tx: Sender<Action>) -> Result<(), Box<dyn Error>> {
     }
 }
 
-fn read_stdin_task(file_opt: Option<String>, tx: Sender<Action>) -> Result<(), Box<dyn Error>> {
+fn read_stdin_task(file_opt: Option<String>, tx: Sender<Action>) -> Result<()> {
     if let Some(file) = file_opt {
         info!("reading file {file}");
         let file_content = std::fs::read_to_string(file);
@@ -641,11 +641,7 @@ fn read_stdin_task(file_opt: Option<String>, tx: Sender<Action>) -> Result<(), B
     }
 }
 
-fn reset_highlight_task(
-    rx: Receiver<()>,
-    tx: Sender<Action>,
-    duration_ms: u64,
-) -> Result<(), Box<dyn Error>> {
+fn reset_highlight_task(rx: Receiver<()>, tx: Sender<Action>, duration_ms: u64) -> Result<()> {
     loop {
         if let Ok(_) = rx.recv() {
             thread::sleep(Duration::from_millis(duration_ms));
