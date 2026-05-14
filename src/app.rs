@@ -52,7 +52,7 @@ pub struct App {
     search_input: Input,
     searching: bool,
     case_sensitive: bool,
-    debounce_input: bool
+    debounce_input: bool,
 }
 
 impl App {
@@ -131,7 +131,7 @@ impl App {
             search_input: Input::from(""),
             searching: false,
             case_sensitive: false,
-            debounce_input: false
+            debounce_input: true,
         }
     }
 
@@ -742,6 +742,7 @@ mod tests {
                 input_mode: InputMode::Normal,
                 confirming_live: None,
                 case_sensitive: true,
+                debounce_input: false,
             }
         }
     }
