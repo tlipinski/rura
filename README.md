@@ -20,6 +20,16 @@ Rura transforms the tedious "edit, up-arrow, rerun" shell cycle into a fluid, in
 
 Check the [Releases](https://github.com/tlipinski/rura/releases) page for pre-compiled binaries for your platform.
 
+**Arch Linux (AUR)**: Install via your AUR helper:
+
+```bash
+# Pre-compiled binary
+yay -S rura-bin
+
+# Build from latest git source
+yay -S rura-git
+```
+
 Alternatively, you can install Rura from source using Cargo:
 
 ```bash
