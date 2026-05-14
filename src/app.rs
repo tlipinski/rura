@@ -106,6 +106,7 @@ impl App {
                 highlight_reset_tx,
                 completions: None,
                 completer: Box::new(ShCompleter {}),
+                subcommand_cursor_cycle: false
             },
             output_widget: OutputWidget::new(
                 theme_config,
@@ -711,6 +712,7 @@ mod tests {
                     highlight_reset_tx,
                     completions: None,
                     completer: Box::new(ShCompleter {}),
+                    subcommand_cursor_cycle: true,
                 },
                 output_widget: OutputWidget::new(
                     &theme_config,

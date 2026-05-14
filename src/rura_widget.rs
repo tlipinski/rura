@@ -26,6 +26,7 @@ pub struct RuraWidget {
     pub highlight_reset_tx: Sender<()>,
     pub completions: Option<(CompletionResult, usize)>,
     pub completer: Box<dyn Completer>,
+    pub subcommand_cursor_cycle: bool,
 }
 
 impl Widget for &RuraWidget {
@@ -141,7 +142,7 @@ impl RuraWidget {
                     self.command_input.value(),
                     self.command_input.visual_cursor(),
                 ) {
-                    if let Some(cursor) = r.cursor_next() {
+                    if let Some(cursor) = r.cursor_next(self.subcommand_cursor_cycle) {
                         self.command_input.handle(InputRequest::SetCursor(cursor));
                     }
                 }
@@ -155,7 +156,7 @@ impl RuraWidget {
                     self.command_input.value(),
                     self.command_input.visual_cursor(),
                 ) {
-                    if let Some(cursor) = r.cursor_prev() {
+                    if let Some(cursor) = r.cursor_prev(self.subcommand_cursor_cycle) {
                         self.command_input.handle(InputRequest::SetCursor(cursor));
                     }
                 }
@@ -313,6 +314,7 @@ mod tests {
                 highlight_reset_tx,
                 completions: None,
                 completer: Box::new(TestCompleter {}),
+                subcommand_cursor_cycle: false,
             }
         }
     }
