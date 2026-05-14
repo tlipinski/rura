@@ -1,7 +1,7 @@
 use crate::config::history_path;
+use log::debug;
 use std::collections::VecDeque;
 use std::io::{Error, Write};
-use log::debug;
 
 pub struct History {
     store: Box<dyn HistoryStore>,
@@ -189,6 +189,30 @@ mod tests {
 
         assert_eq!(history.previous("current"), "current");
         assert_eq!(history.next("current"), "current");
+    }
+
+    #[test]
+    fn test_preloaded_history() {
+        let mut history = History {
+            store: Box::new(InMemHistoryStore::stub(VecDeque::from(vec![
+                "cmd1".into(),
+                "cmd2".into(),
+            ]))),
+            position: None,
+            current: None,
+        };
+
+        let item = history.previous("current");
+        assert_eq!(item, "cmd1");
+
+        let item = history.previous(&item);
+        assert_eq!(item, "cmd2");
+
+        let item = history.next(&item);
+        assert_eq!(item, "cmd1");
+
+        let item = history.next(&item);
+        assert_eq!(item, "current");
     }
 
     #[test]
