@@ -179,19 +179,12 @@ impl OutputWidget {
     pub fn handle_ui_command(&mut self, ui_cmd: UiCmd) {
         match ui_cmd {
             UiCmd::ScrollDown => {
-                let max_offset = self
-                    .main_output()
-                    .lines
-                    .len()
-                    .saturating_sub(self.output_height as usize);
+                let max_offset = self.main_output().lines.len().saturating_sub(1); // keep at least one line visible
+
                 self.offset.y = self.offset.y.saturating_add(1).min(max_offset);
             }
             UiCmd::ScrollDownPage => {
-                let max_offset = self
-                    .main_output()
-                    .lines
-                    .len()
-                    .saturating_sub(self.output_height as usize);
+                let max_offset = self.main_output().lines.len().saturating_sub(1); // keep at least one line visible
 
                 let page_size = self.output_height as usize / 2;
                 self.offset.y = self.offset.y.saturating_add(page_size).min(max_offset);
@@ -273,15 +266,6 @@ impl Widget for &mut OutputWidget {
             .areas(output_area);
 
         self.output_height = output_content_area.height; // save this value for scroll logic
-
-        // it screen was resized (height increased) then adjust current offset
-        let current_max_y_offset = self
-            .main_output()
-            .len()
-            .saturating_sub(output_content_area.height as usize);
-        if self.offset.y > current_max_y_offset {
-            self.offset.y = current_max_y_offset
-        }
 
         if matches!(self.error_display_mode, ErrorDisplayMode::Pane) {
             if let Some(err_output) = &self.error_output_opt {
