@@ -689,9 +689,7 @@ mod tests {
     use super::*;
     use crossterm::event::Event::Key;
     use crossterm::event::{KeyEvent, KeyEventKind, KeyEventState};
-    use env_logger::{Builder, Target};
     use insta::assert_snapshot;
-    use log::LevelFilter;
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
     use std::collections::VecDeque;
@@ -706,28 +704,13 @@ mod tests {
 
     impl Default for App {
         fn default() -> Self {
-            let (action_tx, action_rx) = std::sync::mpsc::channel::<Action>();
-            let (command_tx, command_rx) = std::sync::mpsc::channel::<(String, String)>();
+            let (_, action_rx) = std::sync::mpsc::channel::<Action>();
+            let (command_tx, _) = std::sync::mpsc::channel::<(String, String)>();
             let (highlight_reset_tx, _) = std::sync::mpsc::channel::<()>();
             let (debouncer_tx, _) = std::sync::mpsc::channel::<()>();
 
             let theme_config = ThemeConfig::default();
             let kb_config = KeyBindingsConfig::default();
-
-            // todo move it somewhere else?
-            thread::spawn(move || {
-                loop {
-                    if let Ok((command, _)) = command_rx.recv() {
-                        debug!("Received command: {}", command);
-                        if command.starts_with("grep ") {
-                            let _ = action_tx.send(CommandCompleted(Output::ok_command("", "")));
-                        } else {
-                            let _ =
-                                action_tx.send(CommandCompleted(Output::err_command("", "", None)));
-                        }
-                    }
-                }
-            });
 
             Self {
                 rura_widget: RuraWidget {
