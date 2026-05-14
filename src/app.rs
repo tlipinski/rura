@@ -1,7 +1,7 @@
 use crate::Args;
 use crate::app::Action::{CommandCompleted, Debounced, ResetHighlight, StdinRead, UserInput};
 use crate::completion::ShCompleter;
-use crate::config::{KeyBindingsConfig, ThemeConfig, history_path};
+use crate::config::{KeyBindingsConfig, ThemeConfig};
 use crate::debouncer::debouncer_task;
 use crate::history::History;
 use crate::output_widget::{ErrorDisplayMode, ErrorPanePlacement, Output, OutputWidget};
@@ -25,7 +25,6 @@ use ratatui::text::{Line, Text};
 use ratatui::widgets::{Block, BorderType, Paragraph, Widget};
 use ratatui::{DefaultTerminal, Frame};
 use serde::{Deserialize, Serialize};
-use std::collections::VecDeque;
 use std::error::Error;
 use std::io::{Read, Write, stdin};
 use std::process::{Command, Stdio};
@@ -97,23 +96,12 @@ impl App {
             .unwrap()
         });
 
-        let mut history = VecDeque::new();
-        if let Some(path) = history_path() {
-            if let Ok(content) = std::fs::read_to_string(path) {
-                for line in content.lines() {
-                    if !line.is_empty() {
-                        history.push_front(line.to_string());
-                    }
-                }
-            }
-        }
-
         Self {
             rura_widget: RuraWidget {
                 command_input: Input::from(args.command.unwrap_or_default()),
                 highlight_until: None,
                 theme: Theme::from_config(theme_config),
-                history: History::load(),
+                history: History::using_file(),
                 key_bindings: KeyBindings::from_config(&kb_config),
                 highlight_reset_tx,
                 completions: None,
@@ -697,6 +685,7 @@ mod tests {
     use insta::assert_snapshot;
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
+    use std::collections::VecDeque;
 
     struct TestTerminal(Terminal<TestBackend>);
 
@@ -721,7 +710,7 @@ mod tests {
                     command_input: Input::from(""),
                     highlight_until: None,
                     theme: Theme::from_config(&theme_config),
-                    history: History::load(),
+                    history: History::in_mem(),
                     key_bindings: KeyBindings::from_config(&kb_config),
                     highlight_reset_tx,
                     completions: None,
@@ -817,6 +806,23 @@ mod tests {
             .unwrap();
 
         assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn saving_to_history_only_ok_outputs() {
+        let mut app = App::default();
+
+        app.handle_action(CommandCompleted(Output::err_command("g", "", None)));
+        app.handle_action(CommandCompleted(Output::err_command("gr", "", None)));
+        app.handle_action(CommandCompleted(Output::err_command("gre", "", None)));
+        app.handle_action(CommandCompleted(Output::ok_command("grep", "")));
+        app.handle_action(CommandCompleted(Output::ok_command("grep 'abc'", "")));
+        app.handle_action(CommandCompleted(Output::err_command("gp 'abc'", "", None)));
+
+        assert_eq!(
+            *app.rura_widget.history.history(),
+            VecDeque::from(vec!["grep 'abc'".into(), "grep".into(),])
+        );
     }
 
     // todo

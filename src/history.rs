@@ -1,37 +1,94 @@
 use crate::config::history_path;
+use log::debug;
 use std::collections::VecDeque;
-use std::io::Write;
+use std::io::{Error, Write};
 
-#[derive(Default)]
 pub struct History {
-    history: VecDeque<String>,
+    store: Box<dyn HistoryStore>,
     position: Option<usize>,
     current: Option<String>,
-    save_to_file: bool,
 }
 
-impl History {
-    pub fn load() -> Self {
-        let mut history = VecDeque::new();
-        if let Some(path) = history_path() {
-            if let Ok(content) = std::fs::read_to_string(path) {
-                for line in content.lines() {
-                    if !line.is_empty() {
-                        history.push_front(line.to_string());
+trait HistoryStore {
+    fn load(&mut self) -> Result<&VecDeque<String>, Error>;
+    fn save(&mut self, item: &str) -> Result<(), Error>;
+}
+
+#[derive(Default)]
+struct FileHistoryStore {
+    items: Option<VecDeque<String>>,
+}
+
+impl HistoryStore for FileHistoryStore {
+    fn load(&mut self) -> Result<&VecDeque<String>, Error> {
+        let items_mut = self.items.get_or_insert_with(|| {
+            let mut history = VecDeque::new();
+            if let Some(path) = history_path() {
+                debug!("initializing history from file: {:?}", path);
+
+                if let Ok(content) = std::fs::read_to_string(path) {
+                    for line in content.lines() {
+                        if !line.is_empty() {
+                            history.push_front(line.to_string());
+                        }
                     }
                 }
             }
+            history
+        });
+        Ok(items_mut)
+    }
+
+    fn save(&mut self, value: &str) -> Result<(), Error> {
+        self.items.as_mut().map(|items_mut| {
+            items_mut.push_front(value.into());
+        });
+
+        if let Some(path) = history_path() {
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            if let Ok(mut file) = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(path)
+            {
+                let _ = writeln!(file, "{}", value);
+                Ok(())
+            } else {
+                Err(Error::new(
+                    std::io::ErrorKind::Other,
+                    "Failed to open history file for writing",
+                ))
+            }
+        } else {
+            Err(Error::new(
+                std::io::ErrorKind::Other,
+                "History path not found",
+            ))
         }
+    }
+}
+
+impl History {
+    pub fn using_file() -> Self {
+        let store = Box::new(FileHistoryStore::default());
+
         History {
-            history,
             position: None,
             current: None,
-            save_to_file: true,
+            store,
         }
     }
 
+    pub fn history(&mut self) -> &VecDeque<String> {
+        self.store.load().unwrap()
+    }
+}
+
+impl History {
     pub fn previous(&mut self, current: &str) -> String {
-        if self.history.is_empty() {
+        if self.history().is_empty() {
             return current.to_string();
         }
 
@@ -39,18 +96,18 @@ impl History {
             None => {
                 self.current = Some(current.to_string());
                 let mut new_pos = 0;
-                if let Some(front) = self.history.front() {
-                    if front == current && self.history.len() > 1 {
+                if let Some(front) = self.history().front() {
+                    if front == current && self.history().len() > 1 {
                         new_pos = 1;
                     }
                 }
                 self.position = Some(new_pos);
-                self.history[new_pos].clone()
+                self.history()[new_pos].clone()
             }
             Some(pos) => {
-                let new_pos = (pos + 1).min(self.history.len() - 1);
+                let new_pos = (pos + 1).min(self.history().len() - 1);
                 self.position = Some(new_pos);
-                self.history[new_pos].clone()
+                self.history()[new_pos].clone()
             }
         }
     }
@@ -65,7 +122,7 @@ impl History {
                 } else {
                     let new_pos = pos - 1;
                     self.position = Some(new_pos);
-                    self.history[new_pos].clone()
+                    self.history()[new_pos].clone()
                 }
             }
         }
@@ -74,36 +131,15 @@ impl History {
     pub fn push(&mut self, value: &str) {
         self.position = None;
         self.current = Some("".to_string());
-        match self.history.front() {
+        match self.history().front() {
             Some(most_recent) if most_recent.trim() != value.trim() => {
-                self.history.push_front(value.into());
-                if self.save_to_file {
-                    save_to_history(value.into());
-                }
+                let _ = self.store.save(value);
             }
             Some(_duplicate) => {}
             None => {
-                self.history.push_front(value.into());
-                if self.save_to_file {
-                    save_to_history(value.into());
-                }
+                let _ = self.store.save(value);
             }
         };
-    }
-}
-
-fn save_to_history(value: String) {
-    if let Some(path) = history_path() {
-        if let Some(parent) = path.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-        if let Ok(mut file) = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)
-        {
-            let _ = writeln!(file, "{}", value);
-        }
     }
 }
 
@@ -111,13 +147,45 @@ fn save_to_history(value: String) {
 mod tests {
     use super::*;
 
+    #[derive(Default)]
+    struct InMemHistoryStore {
+        items: VecDeque<String>,
+    }
+
+    impl History {
+        pub fn in_mem() -> History {
+            History {
+                store: Box::new(InMemHistoryStore::default()),
+                position: None,
+                current: None,
+            }
+        }
+    }
+
+    impl HistoryStore for InMemHistoryStore {
+        fn load(&mut self) -> Result<&VecDeque<String>, Error> {
+            Ok(&self.items)
+        }
+
+        fn save(&mut self, value: &str) -> Result<(), Error> {
+            self.items.push_front(value.into());
+            println!("Saving history item: {}", value);
+            Ok(())
+        }
+    }
+
+    impl InMemHistoryStore {
+        fn stub(items: VecDeque<String>) -> Self {
+            Self { items }
+        }
+    }
+
     #[test]
     fn test_empty_history() {
         let mut history = History {
-            history: VecDeque::new(),
+            store: Box::new(InMemHistoryStore::stub(VecDeque::new())),
             position: None,
             current: None,
-            save_to_file: false,
         };
 
         assert_eq!(history.previous("current"), "current");
@@ -125,15 +193,42 @@ mod tests {
     }
 
     #[test]
-    fn test_history_init() {
+    fn test_preloaded_history() {
         let mut history = History {
-            history: VecDeque::from(vec!["test1".into(), "test2".into(), "test3".into()]),
+            store: Box::new(InMemHistoryStore::stub(VecDeque::from(vec![
+                "cmd1".into(),
+                "cmd2".into(),
+            ]))),
             position: None,
             current: None,
-            save_to_file: false,
         };
 
-        assert_eq!(history.history.len(), 3);
+        let item = history.previous("current");
+        assert_eq!(item, "cmd1");
+
+        let item = history.previous(&item);
+        assert_eq!(item, "cmd2");
+
+        let item = history.next(&item);
+        assert_eq!(item, "cmd1");
+
+        let item = history.next(&item);
+        assert_eq!(item, "current");
+    }
+
+    #[test]
+    fn test_history_init() {
+        let mut history = History {
+            store: Box::new(InMemHistoryStore::stub(VecDeque::from(vec![
+                "test1".into(),
+                "test2".into(),
+                "test3".into(),
+            ]))),
+            position: None,
+            current: None,
+        };
+
+        assert_eq!(history.history().len(), 3);
 
         let item = history.next("current");
         assert_eq!(item, "current");
