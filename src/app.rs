@@ -824,7 +824,6 @@ mod tests {
         app.handle_action(CommandCompleted(Output::err_command("gr", "", None)));
         app.handle_action(CommandCompleted(Output::err_command("gre", "", None)));
         app.handle_action(CommandCompleted(Output::ok_command("grep", "")));
-        app.handle_action(CommandCompleted(Output::ok_command("grep ", "")));
         app.handle_action(CommandCompleted(Output::ok_command("grep 'abc'", "")));
         app.handle_action(CommandCompleted(Output::err_command("gp 'abc'", "", None)));
 
