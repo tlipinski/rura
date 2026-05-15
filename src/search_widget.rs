@@ -7,12 +7,11 @@ use ratatui::widgets::{Block, Paragraph};
 use tui_input::Input;
 use tui_input::backend::crossterm::EventHandler;
 
-#[derive(Default)]
 pub struct SearchWidget {
     pub input: Input,
     pub case_sensitive: bool,
-    current: usize,
-    total: usize,
+    pub current: usize,
+    pub total: usize,
 }
 
 impl Widget for &SearchWidget {
@@ -48,10 +47,5 @@ impl SearchWidget {
             }
             _ => {}
         }
-    }
-
-    pub fn update_highlight_info(&mut self, info: (usize, usize)) {
-        self.current = info.0;
-        self.total = info.1;
     }
 }
