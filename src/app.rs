@@ -184,6 +184,13 @@ impl App {
                 let key_bindings = &self.key_bindings;
 
                 // global
+                match to_ui_command(key_bindings, code, mods) {
+                    Some(UiCmd::Quit) => {
+                        self.exit = true;
+                        return
+                    }
+                    _ => {}
+                }
 
                 // widget specific
                 match &self.active_widget {
@@ -248,10 +255,7 @@ impl App {
 
                     ActiveWidget::Rura => {
                         match to_ui_command(key_bindings, code, mods) {
-                            Some(a) => match a {
-                                UiCmd::Quit => {
-                                    self.exit = true;
-                                }
+                            Some(ui_cmd) => match ui_cmd {
                                 UiCmd::ExecuteFull => {
                                     self.handle_execute(ExecuteType::Full);
                                 }
