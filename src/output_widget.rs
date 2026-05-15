@@ -1,3 +1,4 @@
+use crate::cmd_runner::Output;
 use crate::config::{KeyBindingsConfig, ThemeConfig};
 use crate::theme::Theme;
 use crate::uicmd::{KeyBindings, UiCmd, to_ui_command};
@@ -13,7 +14,6 @@ use ratatui::widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, Scroll
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
-use crate::cmd_runner::Output;
 
 #[derive(Debug, Default)]
 struct Position {
@@ -74,7 +74,9 @@ impl OutputWidget {
         if !self.highlight_positions.is_empty() {
             self.highlight_index = (self.highlight_index + 1) % self.highlight_positions.len();
             let (line, _) = self.highlight_positions[self.highlight_index];
-            self.offset.y = line.saturating_sub(self.visible_range.len() / 2);
+            if !self.visible_range.contains(&line) {
+                self.offset.y = line.saturating_sub(self.visible_range.len() / 2);
+            }
         }
     }
 
@@ -88,7 +90,9 @@ impl OutputWidget {
 
             let (line, _) = self.highlight_positions[self.highlight_index];
 
-            self.offset.y = line.saturating_sub(self.visible_range.len() / 2);
+            if !self.visible_range.contains(&line) {
+                self.offset.y = line.saturating_sub(self.visible_range.len() / 2);
+            }
         }
     }
 
@@ -125,13 +129,23 @@ impl OutputWidget {
                 .flatten()
                 .collect::<Vec<(usize, Range<usize>)>>();
 
-            self.highlight_index = self.highlight_index.min(positions.len().saturating_sub(1)); // todo first index after offset
+            // find the first match in the visible range otherwise start from the beginning
+            match positions
+                .iter()
+                .find_position(|(line, _range)| line >= &self.visible_range.start)
+            {
+                Some((z, _)) => self.highlight_index = z,
+                None => self.highlight_index = 0,
+            }
+
             self.highlight_positions = positions;
 
             // focus on the first match
             if !self.highlight_positions.is_empty() {
                 let (line, _) = self.highlight_positions[self.highlight_index];
-                self.offset.y = line.saturating_sub(self.visible_range.len() / 2);
+                if !self.visible_range.contains(&line) {
+                    self.offset.y = line.saturating_sub(self.visible_range.len() / 2);
+                }
             }
         } else {
             self.highlight_positions = vec![];
@@ -410,15 +424,13 @@ pub enum ErrorPanePlacement {
     Bottom,
 }
 
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cmd_runner::Output;
     use insta::assert_snapshot;
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
-    use crate::cmd_runner::Output;
 
     struct TestTerminal(Terminal<TestBackend>);
 
