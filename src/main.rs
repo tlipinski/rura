@@ -1,4 +1,5 @@
 mod app;
+mod cmd_runner;
 mod completion;
 mod config;
 mod debouncer;

@@ -1,5 +1,6 @@
 use crate::Args;
 use crate::app::Action::{CommandCompleted, Debounced, ResetHighlight, StdinRead, UserInput};
+use crate::cmd_runner::CmdRunner;
 use crate::completion::ShCompleter;
 use crate::config::{KeyBindingsConfig, ThemeConfig};
 use crate::debouncer::debouncer_task;
@@ -14,7 +15,7 @@ use anyhow::Result;
 use crossterm::event::KeyCode::Char;
 use crossterm::event::{KeyCode, KeyModifiers};
 use crossterm::tty::IsTty;
-use log::{debug, info};
+use log::{debug, error, info};
 use ratatui::crossterm::event;
 use ratatui::crossterm::event::Event;
 use ratatui::layout::{Constraint, Direction, Layout, Margin, Rect};
@@ -26,8 +27,7 @@ use ratatui::text::{Line, Text};
 use ratatui::widgets::{Block, BorderType, Paragraph, Widget};
 use ratatui::{DefaultTerminal, Frame};
 use serde::{Deserialize, Serialize};
-use std::io::{Read, Write, stdin};
-use std::process::{Command, Stdio};
+use std::io::{Read, stdin};
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 use std::time::Duration;
@@ -73,7 +73,7 @@ impl App {
         thread::spawn(move || handle_input_task(s1).unwrap());
 
         let s2 = action_tx.clone();
-        thread::spawn(move || handle_command_task(command_rx, s2).unwrap());
+        thread::spawn(move || handle_command_task(CmdRunner::default(), command_rx, s2).unwrap());
 
         let s3 = action_tx.clone();
         thread::spawn(move || read_stdin_task(args.file, s3).unwrap());
@@ -548,51 +548,24 @@ impl App {
 }
 
 fn handle_command_task(
+    cmd_runner: CmdRunner,
     command_rx: Receiver<(String, String)>,
     action_tx: Sender<Action>,
 ) -> Result<()> {
     loop {
         if let Ok((command, stdin)) = command_rx.recv() {
-            info!("executing command: '{command}'");
-
-            let mut cmd = Command::new("sh");
-            cmd.args(["-c", &command]);
-
-            let mut child = cmd
-                .stdin(Stdio::piped())
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .spawn()
-                .expect("Failed to spawn command");
-
-            let mut child_stdin = child.stdin.take().expect("handle present");
-
-            let owned_stdin = stdin.to_owned();
-
-            thread::spawn(move || {
-                let _ = child_stdin.write_all(owned_stdin.as_bytes());
-            });
-
-            if let Ok(output) = child.wait_with_output() {
-                if output.status.success() {
-                    let stdout = output.stdout.as_slice();
-                    let str = String::from_utf8_lossy(stdout);
-                    action_tx.send(CommandCompleted(Output::ok_command(&command, &str)))?;
-                } else {
-                    let stderr = output.stderr.as_slice();
-                    let str = String::from_utf8_lossy(stderr);
-                    action_tx.send(CommandCompleted(Output::err_command(
-                        &command,
-                        &str,
-                        output.status.code(),
-                    )))?;
+            match cmd_runner.run(&command, &stdin) {
+                Ok(output) => {
+                    let _ = action_tx.send(CommandCompleted(output));
                 }
-            } else {
-                action_tx.send(CommandCompleted(Output::err_command(
-                    &command,
-                    "Failed to execute command",
-                    None,
-                )))?;
+                Err(e) => {
+                    // todo use dedicated status widget for such errors?
+                    action_tx.send(CommandCompleted(Output::err_stdin(
+                        "Failed running command, check logs",
+                        None,
+                    )))?;
+                    error!("{}", e)
+                }
             }
         }
     }
