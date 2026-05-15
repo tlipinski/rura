@@ -570,6 +570,56 @@ mod tests {
     }
 
     #[test]
+    fn highlighting() {
+        let mut terminal = Terminal::new(TestBackend::new(20, 10)).unwrap();
+
+        let mut widget = OutputWidget::default();
+
+        widget.handle_command_output(Output::ok_stdin(&generate_lines(50)));
+        terminal
+            .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
+            .unwrap();
+        assert_snapshot!("highlight base", terminal.backend());
+
+        widget.highlight("line2", false);
+        terminal
+            .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
+            .unwrap();
+        assert_snapshot!("highlight", terminal.backend());
+
+        widget.highlight_next();
+        widget.highlight_next();
+        widget.highlight_next();
+        widget.highlight_next();
+        terminal
+            .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
+            .unwrap();
+        assert_snapshot!("highlight next 4x", terminal.backend());
+
+        // in visible area - should not move offset
+        widget.highlight_next();
+        terminal
+            .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
+            .unwrap();
+        assert_snapshot!("highlight next 1x", terminal.backend());
+
+        widget.highlight_prev();
+        widget.highlight_prev();
+        widget.highlight_prev();
+        widget.highlight_prev();
+        terminal
+            .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
+            .unwrap();
+        assert_snapshot!("highlight prev 4x", terminal.backend());
+
+        widget.highlight("line50", false);
+        terminal
+            .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
+            .unwrap();
+        assert_snapshot!("highlight another highlight", terminal.backend());
+    }
+
+    #[test]
     fn split_line_into_parts_by_ranges_test() {
         let str = "01234567890123456789";
 

@@ -1,0 +1,14 @@
+---
+source: src/output_widget.rs
+expression: terminal.backend()
+---
+"45 line45          ▲"
+"46 line46          ║"
+"47 line47          ║"
+"48 line48          ║"
+"49 line49          ║"
+"50 line50          ║"
+"                   ║"
+"                   █"
+"                   █"
+"                   ▼"
