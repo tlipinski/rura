@@ -273,6 +273,8 @@ impl App {
                             self.search_widget.input.value(),
                             self.search_widget.case_sensitive,
                         );
+                        self.search_widget
+                            .update_highlight_info(self.output_widget.highlight_info());
                     }
                     _ => match to_ui_command(key_bindings, code, mods) {
                         None => {
