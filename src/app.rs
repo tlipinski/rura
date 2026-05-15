@@ -42,17 +42,15 @@ pub struct App {
     output_widget: OutputWidget,
     search_widget: SearchWidget,
     stdin: String,
+    active_widget: ActiveWidget,
     exit: bool,
     action_rx: Receiver<Action>,
     command_tx: Sender<(String, String)>,
     key_bindings: KeyBindings,
     command_line_placement: CommandLinePlacement,
     kb_config: KeyBindingsConfig,
-    help: bool,
     input_mode: InputMode,
     debouncer_tx: Sender<()>,
-    confirming_live: Option<InputMode>,
-    searching: bool,
 }
 
 impl App {
@@ -118,6 +116,7 @@ impl App {
                 error_display_mode,
             ),
             search_widget: SearchWidget::default(),
+            active_widget: ActiveWidget::Rura,
             stdin: "".into(),
             action_rx,
             command_tx,
@@ -126,10 +125,7 @@ impl App {
             key_bindings: KeyBindings::from_config(&kb_config),
             command_line_placement,
             kb_config,
-            help: false,
             input_mode: InputMode::Normal,
-            confirming_live: None,
-            searching: false,
         }
     }
 
@@ -187,150 +183,163 @@ impl App {
                 let mods = key_event.modifiers;
                 let key_bindings = &self.key_bindings;
 
-                if let Some(confirming_live) = self.confirming_live.clone() {
-                    match (code, mods) {
-                        (Esc | Char('n'), KeyModifiers::NONE) => self.confirming_live = None,
-                        (Char('y'), KeyModifiers::NONE) => {
-                            self.confirming_live = None;
-                            self.input_mode = confirming_live;
+                match &self.active_widget {
+                    ActiveWidget::Help => match (code, mods) {
+                        (Esc, KeyModifiers::NONE) => {
+                            self.active_widget = ActiveWidget::default();
                         }
-                        _ => match to_ui_command(key_bindings, code, mods) {
-                            Some(UiCmd::Quit) => {
-                                self.exit = true;
-                            }
-                            _ => {}
-                        },
-                    }
-                    return;
-                }
+                        (F(1), KeyModifiers::NONE) => {
+                            self.active_widget = ActiveWidget::default();
+                        }
+                        _ => {}
+                    },
 
-                match (code, mods) {
-                    (Esc, KeyModifiers::NONE) => {
-                        self.help = false;
-                        if self.searching {
-                            self.searching = false;
-                        } else {
-                            self.searching = false;
-                            self.output_widget.clear_highlight();
+                    ActiveWidget::LiveConfirmation(mode) => {
+                        match (code, mods) {
+                            (Esc | Char('n'), KeyModifiers::NONE) => {
+                                self.active_widget = ActiveWidget::default()
+                            }
+                            (Char('y'), KeyModifiers::NONE) => {
+                                self.input_mode = mode.clone();
+                                self.active_widget = ActiveWidget::default()
+                            }
+                            _ => match to_ui_command(key_bindings, code, mods) {
+                                Some(UiCmd::Quit) => {
+                                    // todo move to global
+                                    self.exit = true;
+                                }
+                                _ => {}
+                            },
                         }
                     }
-                    (F(1), KeyModifiers::NONE) => {
-                        self.help = !self.help;
-                    }
-                    (F(11), KeyModifiers::NONE) => match self.input_mode {
-                        InputMode::Normal => {
-                            // self.input_mode = InputMode::LiveUntilCursor;
-                            self.confirming_live = Some(InputMode::LiveUntilCursor);
+
+                    ActiveWidget::Search => match (code, mods) {
+                        (Esc, KeyModifiers::NONE) => self.active_widget = ActiveWidget::default(),
+                        (Enter, KeyModifiers::NONE) => {
+                            self.output_widget.highlight(
+                                self.search_widget.input.value(),
+                                self.search_widget.case_sensitive,
+                            );
+                            self.search_widget
+                                .update_highlight_info(self.output_widget.highlight_info());
                         }
-                        InputMode::LiveFull => {
-                            self.input_mode = InputMode::LiveUntilCursor;
-                        }
-                        InputMode::LiveUntilCursor => {
-                            self.input_mode = InputMode::Normal;
-                        }
-                    },
-                    (F(12), KeyModifiers::NONE) => match self.input_mode {
-                        InputMode::Normal => {
-                            // self.input_mode = InputMode::LiveFull;
-                            self.confirming_live = Some(InputMode::LiveFull);
-                        }
-                        InputMode::LiveFull => {
-                            self.input_mode = InputMode::Normal;
-                        }
-                        InputMode::LiveUntilCursor => {
-                            self.input_mode = InputMode::LiveFull;
-                        }
-                    },
-                    (Enter, KeyModifiers::NONE) if self.searching => {
-                        self.output_widget.highlight(
-                            self.search_widget.input.value(),
-                            self.search_widget.case_sensitive,
-                        );
-                        self.search_widget
-                            .update_highlight_info(self.output_widget.highlight_info());
-                    }
-                    (F(3), KeyModifiers::NONE) => {
-                        if self.searching {
+                        (F(3), KeyModifiers::NONE) => {
                             self.output_widget.highlight_next();
-                        } else {
-                            self.searching = true;
+                            self.search_widget
+                                .update_highlight_info(self.output_widget.highlight_info());
                         }
-                        self.search_widget
-                            .update_highlight_info(self.output_widget.highlight_info());
-                    }
-                    (F(4), KeyModifiers::NONE) => {
-                        if self.searching {
+                        (F(4), KeyModifiers::NONE) => {
                             self.output_widget.highlight_prev();
-                        } else {
-                            self.searching = true;
+                            self.search_widget
+                                .update_highlight_info(self.output_widget.highlight_info());
                         }
-                        self.search_widget
-                            .update_highlight_info(self.output_widget.highlight_info());
-                    }
-                    (Char('c'), KeyModifiers::ALT) => {
-                        self.search_widget.handle_event(event);
-                        self.output_widget.highlight(
-                            self.search_widget.input.value(),
-                            self.search_widget.case_sensitive,
-                        );
-                    }
-                    _ => match to_ui_command(key_bindings, code, mods) {
-                        None => {
-                            if self.searching {
+                        _ => {
+                            self.search_widget.handle_event(event);
+                            self.output_widget.highlight(
+                                self.search_widget.input.value(),
+                                self.search_widget.case_sensitive,
+                            );
+                            self.search_widget
+                                .update_highlight_info(self.output_widget.highlight_info());
+                        }
+                    },
+
+                    ActiveWidget::Rura => {
+                        match (code, mods) {
+                            (Esc, KeyModifiers::NONE) => {
+                                self.output_widget.clear_highlight();
+                            }
+                            (F(1), KeyModifiers::NONE) => {
+                                self.active_widget = ActiveWidget::Help;
+                            }
+                            (F(11), KeyModifiers::NONE) => match self.input_mode {
+                                InputMode::Normal => {
+                                    self.active_widget =
+                                        ActiveWidget::LiveConfirmation(InputMode::LiveUntilCursor);
+                                }
+                                InputMode::LiveFull => {
+                                    self.input_mode = InputMode::LiveUntilCursor;
+                                }
+                                InputMode::LiveUntilCursor => {
+                                    self.input_mode = InputMode::Normal;
+                                }
+                            },
+                            (F(12), KeyModifiers::NONE) => match self.input_mode {
+                                InputMode::Normal => {
+                                    self.active_widget =
+                                        ActiveWidget::LiveConfirmation(InputMode::LiveFull);
+                                }
+                                InputMode::LiveFull => {
+                                    self.input_mode = InputMode::Normal;
+                                }
+                                InputMode::LiveUntilCursor => {
+                                    self.input_mode = InputMode::LiveFull;
+                                }
+                            },
+                            (F(3), KeyModifiers::NONE) => {
+                                self.active_widget = ActiveWidget::Search;
+                                self.search_widget
+                                    .update_highlight_info(self.output_widget.highlight_info());
+                            }
+                            (F(4), KeyModifiers::NONE) => {
+                                self.active_widget = ActiveWidget::Search;
+                                self.search_widget
+                                    .update_highlight_info(self.output_widget.highlight_info());
+                            }
+                            (Char('c'), KeyModifiers::ALT) => {
                                 self.search_widget.handle_event(event);
                                 self.output_widget.highlight(
                                     self.search_widget.input.value(),
                                     self.search_widget.case_sensitive,
                                 );
-                                self.search_widget
-                                    .update_highlight_info(self.output_widget.highlight_info());
-                            } else {
-                                if self.rura_widget.handle_event(event) {
-                                    match self.input_mode {
-                                        InputMode::Normal => {}
-                                        InputMode::LiveFull | InputMode::LiveUntilCursor => {
-                                            self.debouncer_tx.send(()).unwrap();
+                            }
+                            _ => match to_ui_command(key_bindings, code, mods) {
+                                None => {
+                                    if self.rura_widget.handle_event(event) {
+                                        match self.input_mode {
+                                            InputMode::Normal => {}
+                                            InputMode::LiveFull | InputMode::LiveUntilCursor => {
+                                                self.debouncer_tx.send(()).unwrap();
+                                            }
                                         }
                                     }
                                 }
-                            }
+                                Some(a) => match a {
+                                    UiCmd::Quit => {
+                                        self.exit = true;
+                                    }
+                                    UiCmd::ExecuteFull => {
+                                        self.handle_execute(ExecuteType::Full);
+                                    }
+                                    UiCmd::ExecuteUntilCurrent => {
+                                        self.handle_execute(ExecuteType::UntilCurrent)
+                                    }
+                                    UiCmd::ExecuteUntilPrev => {
+                                        self.handle_execute(ExecuteType::UntilCurrentPrev)
+                                    }
+                                    UiCmd::ResetInput => {
+                                        self.output_widget
+                                            .handle_command_output(Output::ok_stdin(&self.stdin));
+                                    }
+                                    UiCmd::SubcommandNext | UiCmd::SubcommandPrev => {
+                                        self.rura_widget.handle_event(event);
+                                    }
+                                    UiCmd::HistoryNext
+                                    | UiCmd::HistoryPrev
+                                    | UiCmd::Complete
+                                    | UiCmd::CompletePrev => {
+                                        // disable history and completions in live mode
+                                        if matches!(self.input_mode, InputMode::Normal) {
+                                            self.rura_widget.handle_event(event);
+                                        }
+                                    }
+                                    _ => {
+                                        self.output_widget.handle_event(event);
+                                    }
+                                },
+                            },
                         }
-                        Some(a) => match a {
-                            UiCmd::Quit => {
-                                self.exit = true;
-                            }
-                            UiCmd::ExecuteFull if !self.searching => {
-                                self.handle_execute(ExecuteType::Full);
-                            }
-                            UiCmd::ExecuteUntilCurrent if !self.searching => {
-                                self.handle_execute(ExecuteType::UntilCurrent)
-                            }
-                            UiCmd::ExecuteUntilPrev if !self.searching => {
-                                self.handle_execute(ExecuteType::UntilCurrentPrev)
-                            }
-                            UiCmd::ResetInput if !self.searching => {
-                                self.output_widget
-                                    .handle_command_output(Output::ok_stdin(&self.stdin));
-                            }
-                            UiCmd::SubcommandNext | UiCmd::SubcommandPrev if !self.searching => {
-                                self.rura_widget.handle_event(event);
-                            }
-                            UiCmd::HistoryNext
-                            | UiCmd::HistoryPrev
-                            | UiCmd::Complete
-                            | UiCmd::CompletePrev
-                                if !self.searching =>
-                            {
-                                // disable history and completions in live mode
-                                if matches!(self.input_mode, InputMode::Normal) {
-                                    self.rura_widget.handle_event(event);
-                                }
-                            }
-                            _ => {
-                                self.output_widget.handle_event(event);
-                            }
-                        },
-                    },
+                    }
                 }
             }
             _ => {}
@@ -352,6 +361,12 @@ impl App {
 
         let inner_area = area.inner(margin);
 
+        let search_height = if matches!(self.active_widget, ActiveWidget::Search) {
+            3
+        } else {
+            0
+        };
+
         let (command_input_area, search_input_area, output_area, status_area) =
             match self.command_line_placement {
                 CommandLinePlacement::Top => {
@@ -359,9 +374,9 @@ impl App {
                         .direction(Direction::Vertical)
                         .constraints(vec![
                             Constraint::Length(self.rura_widget.height(inner_area.width) + 2), // command
-                            Constraint::Length(if self.searching { 3 } else { 0 }), // search
-                            Constraint::Fill(1),                                    // output
-                            Constraint::Length(1),                                  // status
+                            Constraint::Length(search_height), // search
+                            Constraint::Fill(1),   // output
+                            Constraint::Length(1), // status
                         ])
                         .split(area);
 
@@ -372,7 +387,7 @@ impl App {
                         .direction(Direction::Vertical)
                         .constraints(vec![
                             Constraint::Fill(1),                                               // output
-                            Constraint::Length(if self.searching { 3 } else { 0 }), // search
+                            Constraint::Length(search_height), // search
                             Constraint::Length(self.rura_widget.height(inner_area.width) + 2), // command
                             Constraint::Length(1), // status
                         ])
@@ -382,7 +397,7 @@ impl App {
                 }
             };
 
-        if self.searching {
+        if matches!(self.active_widget, ActiveWidget::Search) {
             self.search_widget
                 .render(search_input_area, frame.buffer_mut());
         }
@@ -398,14 +413,14 @@ impl App {
         frame.render_widget(command_input_block, command_input_area);
         frame.render_widget(&self.rura_widget, command_input_area.inner(margin));
 
-        if self.searching {
+        if matches!(self.active_widget, ActiveWidget::Search) {
             frame.render_widget(
                 Block::default().reversed(),
                 command_input_area.inner(margin),
             );
         }
 
-        if self.searching {
+        if matches!(self.active_widget, ActiveWidget::Search) {
             let x = self.search_widget.input.visual_cursor() as u16;
             frame.set_cursor_position((search_input_area.x + 1 + x, search_input_area.y + 1));
         } else {
@@ -455,33 +470,34 @@ impl App {
             lines_area,
         );
 
-        self.render_help(frame);
-        self.render_live_confirm(frame);
-    }
-
-    fn render_live_confirm(&self, frame: &mut Frame) {
-        if self.confirming_live.is_some() {
-            let body = Text::from(vec![
-                Line::from("").centered(),
-                Line::from("   Warning: This might be dangerous!   ")
-                    .centered()
-                    .bold(),
-                Line::from("").centered(),
-                Line::from("   Commands will be executed automatically as you type.   ").centered(),
-                Line::from("").centered(),
-                Line::from("[Y]es / [N]o").centered(),
-                Line::from("").centered(),
-            ]);
-            let popup = Popup::new(body)
-                .title(" Confirm entering LIVE mode ")
-                .style(Style::new().white().on_yellow());
-            frame.render_widget(popup, frame.area());
+        if matches!(self.active_widget, ActiveWidget::Help) {
+            self.render_help(frame);
+        }
+        if matches!(self.active_widget, ActiveWidget::LiveConfirmation(_)) {
+            self.render_live_confirm(frame);
         }
     }
 
+    fn render_live_confirm(&self, frame: &mut Frame) {
+        let body = Text::from(vec![
+            Line::from("").centered(),
+            Line::from("   Warning: This might be dangerous!   ")
+                .centered()
+                .bold(),
+            Line::from("").centered(),
+            Line::from("   Commands will be executed automatically as you type.   ").centered(),
+            Line::from("").centered(),
+            Line::from("[Y]es / [N]o").centered(),
+            Line::from("").centered(),
+        ]);
+        let popup = Popup::new(body)
+            .title(" Confirm entering LIVE mode ")
+            .style(Style::new().white().on_yellow());
+        frame.render_widget(popup, frame.area());
+    }
+
     fn render_help(&self, frame: &mut Frame) {
-        if self.help {
-            #[rustfmt::skip]
+        #[rustfmt::skip]
         let lines = Text::from(vec![
             Line::from(format!("{:09} - Execute full command", self.kb_config.execute_full.first().unwrap().to_string())),
             Line::from(format!("{:09} - Execute until cursor", self.kb_config.execute_until_current.first().unwrap().to_string())),
@@ -512,11 +528,10 @@ impl App {
             Line::from(format!("{:09} - Wrap output lines", self.kb_config.toggle_wrap.first().unwrap().to_string())),
         ]);
 
-            let popup = Popup::new(lines)
-                .title(" Keys ")
-                .style(Style::new().white().on_blue());
-            frame.render_widget(popup, frame.area());
-        }
+        let popup = Popup::new(lines)
+            .title(" Keys ")
+            .style(Style::new().white().on_blue());
+        frame.render_widget(popup, frame.area());
     }
 
     fn hints_widget(&self) -> Line<'_> {
@@ -664,6 +679,15 @@ enum InputMode {
     LiveUntilCursor,
 }
 
+#[derive(Default)]
+enum ActiveWidget {
+    #[default]
+    Rura,
+    Search,
+    Help,
+    LiveConfirmation(InputMode),
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -710,7 +734,7 @@ mod tests {
                     ErrorDisplayMode::Pane,
                 ),
                 search_widget: SearchWidget::default(),
-                searching: false,
+                active_widget: ActiveWidget::default(),
                 stdin: "".into(),
                 action_rx,
                 command_tx,
@@ -719,9 +743,7 @@ mod tests {
                 key_bindings: KeyBindings::from_config(&kb_config),
                 command_line_placement: CommandLinePlacement::Bottom,
                 kb_config,
-                help: false,
                 input_mode: InputMode::Normal,
-                confirming_live: None,
             }
         }
     }
