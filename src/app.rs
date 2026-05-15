@@ -183,6 +183,9 @@ impl App {
                 let mods = key_event.modifiers;
                 let key_bindings = &self.key_bindings;
 
+                // global
+
+                // widget specific
                 match &self.active_widget {
                     ActiveWidget::Help => match (code, mods) {
                         (Esc, KeyModifiers::NONE) => {
@@ -203,13 +206,7 @@ impl App {
                                 self.input_mode = mode.clone();
                                 self.active_widget = ActiveWidget::default()
                             }
-                            _ => match to_ui_command(key_bindings, code, mods) {
-                                Some(UiCmd::Quit) => {
-                                    // todo move to global
-                                    self.exit = true;
-                                }
-                                _ => {}
-                            },
+                            _ => {}
                         }
                     }
 
@@ -232,6 +229,13 @@ impl App {
                             self.output_widget.highlight_prev();
                             self.search_widget
                                 .update_highlight_info(self.output_widget.highlight_info());
+                        }
+                        (Char('c'), KeyModifiers::ALT) => {
+                            self.search_widget.handle_event(event);
+                            self.output_widget.highlight(
+                                self.search_widget.input.value(),
+                                self.search_widget.case_sensitive,
+                            );
                         }
                         _ => {
                             self.search_widget.handle_event(event);
@@ -285,13 +289,6 @@ impl App {
                                 self.active_widget = ActiveWidget::Search;
                                 self.search_widget
                                     .update_highlight_info(self.output_widget.highlight_info());
-                            }
-                            (Char('c'), KeyModifiers::ALT) => {
-                                self.search_widget.handle_event(event);
-                                self.output_widget.highlight(
-                                    self.search_widget.input.value(),
-                                    self.search_widget.case_sensitive,
-                                );
                             }
                             _ => match to_ui_command(key_bindings, code, mods) {
                                 None => {
