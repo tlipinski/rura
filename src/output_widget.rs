@@ -445,11 +445,11 @@ impl Output {
         }
     }
 
-    pub fn err_stdin(str: &str, status_code: Option<i32>) -> Self {
+    pub fn err_stdin(str: &str) -> Self {
         Self {
             command: None,
             lines: Self::lines(str),
-            status_code,
+            status_code: None,
             ok: false,
         }
     }
@@ -500,8 +500,12 @@ mod tests {
         widget.error_pane_placement = ErrorPanePlacement::Top;
         widget.error_display_mode = ErrorDisplayMode::Pane;
 
-        widget.handle_command_output(Output::ok_stdin("out1\nout2\nout3"));
-        widget.handle_command_output(Output::err_stdin("errors1\nerrors2\nerrors3", Some(1)));
+        widget.handle_command_output(Output::ok_command("", "out1\nout2\nout3"));
+        widget.handle_command_output(Output::err_command(
+            "",
+            "errors1\nerrors2\nerrors3",
+            Some(1),
+        ));
 
         terminal
             .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
@@ -518,8 +522,12 @@ mod tests {
         widget.error_pane_placement = ErrorPanePlacement::Bottom;
         widget.error_display_mode = ErrorDisplayMode::Pane;
 
-        widget.handle_command_output(Output::ok_stdin("out1\nout2\nout3"));
-        widget.handle_command_output(Output::err_stdin("errors1\nerrors2\nerrors3", Some(1)));
+        widget.handle_command_output(Output::ok_command("", "out1\nout2\nout3"));
+        widget.handle_command_output(Output::err_command(
+            "",
+            "errors1\nerrors2\nerrors3",
+            Some(1),
+        ));
 
         terminal
             .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
@@ -550,7 +558,11 @@ mod tests {
 
         widget.handle_command_output(Output::ok_stdin(&generate_lines(3)));
 
-        widget.handle_command_output(Output::err_stdin("errors1\nerrors2\nerrors3", Some(1)));
+        widget.handle_command_output(Output::err_command(
+            "",
+            "errors1\nerrors2\nerrors3",
+            Some(1),
+        ));
         terminal
             .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
             .unwrap();

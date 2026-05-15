@@ -1,5 +1,7 @@
 use crate::Args;
-use crate::app::Action::{CommandCompleted, Debounced, ResetHighlight, StdinRead, UserInput};
+use crate::app::Action::{
+    CommandCompleted, Debounced, ResetHighlight, StdinRead, StdinReadFailed, UserInput,
+};
 use crate::cmd_runner::CmdRunner;
 use crate::completion::ShCompleter;
 use crate::config::{KeyBindingsConfig, ThemeConfig};
@@ -160,6 +162,10 @@ impl App {
                 self.output_widget
                     .handle_command_output(Output::ok_stdin(&output));
                 self.stdin = output;
+            }
+            StdinReadFailed(output) => {
+                self.output_widget
+                    .handle_command_output(Output::err_stdin(&output));
             }
             Debounced => {
                 match self.input_mode {
@@ -562,7 +568,6 @@ fn handle_command_task(
                     // todo use dedicated status widget for such errors?
                     action_tx.send(CommandCompleted(Output::err_stdin(
                         "Failed running command, check logs",
-                        None,
                     )))?;
                     error!("{}", e)
                 }
@@ -580,16 +585,20 @@ fn handle_input_task(tx: Sender<Action>) -> Result<()> {
     }
 }
 
-fn read_stdin_task(file_opt: Option<String>, tx: Sender<Action>) -> Result<()> {
+fn read_stdin_task(file_opt: Option<String>, action_tx: Sender<Action>) -> Result<()> {
     if let Some(file) = file_opt {
-        info!("reading file {file}");
-        let file_content = std::fs::read_to_string(file);
+        info!("reading input file {file}");
+        let file_content = std::fs::read_to_string(file.clone());
         match file_content {
             Ok(content) => {
-                tx.send(StdinRead(content))?;
+                action_tx.send(StdinRead(content))?;
             }
             Err(e) => {
-                tx.send(StdinRead(e.to_string()))?;
+                action_tx.send(StdinReadFailed(format!(
+                    "Failed reading input file {}: {}",
+                    file,
+                    e.to_string()
+                )))?;
             }
         }
         Ok(())
@@ -601,10 +610,13 @@ fn read_stdin_task(file_opt: Option<String>, tx: Sender<Action>) -> Result<()> {
 
             match result {
                 Ok(_) => {
-                    tx.send(StdinRead(buff))?;
+                    action_tx.send(StdinRead(buff))?;
                 }
                 Err(e) => {
-                    tx.send(StdinRead(e.to_string()))?;
+                    action_tx.send(StdinReadFailed(format!(
+                        "Failed reading stdin: {}",
+                        e.to_string()
+                    )))?;
                 }
             }
             Ok(())
@@ -627,6 +639,7 @@ enum Action {
     UserInput(Event),
     CommandCompleted(Output),
     StdinRead(String),
+    StdinReadFailed(String),
     ResetHighlight,
     Debounced,
 }
