@@ -1,4 +1,3 @@
-use crate::output_widget::Output;
 use anyhow::{Result, anyhow};
 use log::info;
 use std::io::Write;
@@ -55,5 +54,59 @@ impl CmdRunner {
                 None,
             ))
         }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub struct Output {
+    pub command: Option<String>,
+    pub lines: Vec<String>,
+    pub status_code: Option<i32>,
+    pub ok: bool,
+}
+
+impl Output {
+    pub fn ok_command(command: &str, str: &str) -> Self {
+        Self {
+            command: Some(command.into()),
+            lines: Self::lines(str),
+            status_code: Some(0),
+            ok: true,
+        }
+    }
+
+    pub fn err_command(command: &str, str: &str, status_code: Option<i32>) -> Self {
+        Self {
+            command: Some(command.into()),
+            lines: Self::lines(str),
+            status_code,
+            ok: false,
+        }
+    }
+
+    pub fn ok_stdin(str: &str) -> Self {
+        Self {
+            command: None,
+            lines: Self::lines(str),
+            status_code: Some(0),
+            ok: true,
+        }
+    }
+
+    pub fn err_stdin(str: &str) -> Self {
+        Self {
+            command: None,
+            lines: Self::lines(str),
+            status_code: None,
+            ok: false,
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.lines.len()
+    }
+
+    fn lines(input: &str) -> Vec<String> {
+        input.lines().map(|a| a.into()).collect()
     }
 }

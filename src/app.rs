@@ -2,12 +2,12 @@ use crate::Args;
 use crate::app::Action::{
     CommandCompleted, Debounced, ResetHighlight, StdinRead, StdinReadFailed, UserInput,
 };
-use crate::cmd_runner::CmdRunner;
+use crate::cmd_runner::{CmdRunner, Output};
 use crate::completion::ShCompleter;
 use crate::config::{KeyBindingsConfig, ThemeConfig};
 use crate::debouncer::debouncer_task;
 use crate::history::History;
-use crate::output_widget::{ErrorDisplayMode, ErrorPanePlacement, Output, OutputWidget};
+use crate::output_widget::{ErrorDisplayMode, ErrorPanePlacement, OutputWidget};
 use crate::rura::ExecuteType;
 use crate::rura_widget::RuraWidget;
 use crate::theme::Theme;
