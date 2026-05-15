@@ -117,12 +117,7 @@ impl App {
                 },
                 error_display_mode,
             ),
-            search_widget: SearchWidget {
-                input: Input::from(""),
-                case_sensitive: false,
-                current: 0,
-                total: 0,
-            },
+            search_widget: SearchWidget::default(),
             stdin: "".into(),
             action_rx,
             command_tx,
@@ -251,9 +246,8 @@ impl App {
                             self.search_widget.input.value(),
                             self.search_widget.case_sensitive,
                         );
-                        let (current, total) = self.output_widget.highlight_info();
-                        self.search_widget.total = total;
-                        self.search_widget.current = current;
+                        self.search_widget
+                            .update_highlight_info(self.output_widget.highlight_info());
                     }
                     (F(3), KeyModifiers::NONE) => {
                         if self.searching {
@@ -261,9 +255,8 @@ impl App {
                         } else {
                             self.searching = true;
                         }
-                        let (current, total) = self.output_widget.highlight_info();
-                        self.search_widget.total = total;
-                        self.search_widget.current = current;
+                        self.search_widget
+                            .update_highlight_info(self.output_widget.highlight_info());
                     }
                     (F(4), KeyModifiers::NONE) => {
                         if self.searching {
@@ -271,9 +264,8 @@ impl App {
                         } else {
                             self.searching = true;
                         }
-                        let (current, total) = self.output_widget.highlight_info();
-                        self.search_widget.total = total;
-                        self.search_widget.current = current;
+                        self.search_widget
+                            .update_highlight_info(self.output_widget.highlight_info());
                     }
                     (Char('c'), KeyModifiers::ALT) => {
                         self.search_widget.handle_event(event);
@@ -290,9 +282,8 @@ impl App {
                                     self.search_widget.input.value(),
                                     self.search_widget.case_sensitive,
                                 );
-                                let (current, total) = self.output_widget.highlight_info();
-                                self.search_widget.total = total;
-                                self.search_widget.current = current;
+                                self.search_widget
+                                    .update_highlight_info(self.output_widget.highlight_info());
                             } else {
                                 if self.rura_widget.handle_event(event) {
                                     match self.input_mode {
@@ -718,12 +709,7 @@ mod tests {
                     ErrorPanePlacement::Bottom,
                     ErrorDisplayMode::Pane,
                 ),
-                search_widget: SearchWidget {
-                    input: Input::new("".into()),
-                    case_sensitive: true,
-                    current: 0,
-                    total: 0,
-                },
+                search_widget: SearchWidget::default(),
                 searching: false,
                 stdin: "".into(),
                 action_rx,
