@@ -251,6 +251,9 @@ impl App {
                             self.search_widget.input.value(),
                             self.search_widget.case_sensitive,
                         );
+                        let (current, total) = self.output_widget.highlight_info();
+                        self.search_widget.total = total;
+                        self.search_widget.current = current;
                     }
                     (F(3), KeyModifiers::NONE) => {
                         if self.searching {
@@ -258,6 +261,9 @@ impl App {
                         } else {
                             self.searching = true;
                         }
+                        let (current, total) = self.output_widget.highlight_info();
+                        self.search_widget.total = total;
+                        self.search_widget.current = current;
                     }
                     (F(4), KeyModifiers::NONE) => {
                         if self.searching {
@@ -265,6 +271,9 @@ impl App {
                         } else {
                             self.searching = true;
                         }
+                        let (current, total) = self.output_widget.highlight_info();
+                        self.search_widget.total = total;
+                        self.search_widget.current = current;
                     }
                     (Char('c'), KeyModifiers::ALT) => {
                         self.search_widget.handle_event(event);
@@ -281,6 +290,9 @@ impl App {
                                     self.search_widget.input.value(),
                                     self.search_widget.case_sensitive,
                                 );
+                                let (current, total) = self.output_widget.highlight_info();
+                                self.search_widget.total = total;
+                                self.search_widget.current = current;
                             } else {
                                 if self.rura_widget.handle_event(event) {
                                     match self.input_mode {
@@ -380,9 +392,6 @@ impl App {
             };
 
         if self.searching {
-            let (current, total) = self.output_widget.highlight_info();
-            self.search_widget.total = total;
-            self.search_widget.current = current;
             self.search_widget
                 .render(search_input_area, frame.buffer_mut());
         }
