@@ -10,6 +10,7 @@ use crate::history::History;
 use crate::output_widget::{ErrorDisplayMode, ErrorPanePlacement, OutputWidget};
 use crate::rura::ExecuteType;
 use crate::rura_widget::RuraWidget;
+use crate::search_widget::SearchWidget;
 use crate::theme::Theme;
 use crate::uicmd::{KeyBindings, UiCmd, to_ui_command};
 use KeyCode::{Enter, Esc, F};
@@ -26,7 +27,7 @@ use ratatui::prelude::Stylize;
 use ratatui::style::Color::Yellow;
 use ratatui::style::Style;
 use ratatui::text::{Line, Text};
-use ratatui::widgets::{Block, BorderType, Paragraph, Widget};
+use ratatui::widgets::{Block, BorderType, Widget};
 use ratatui::{DefaultTerminal, Frame};
 use serde::{Deserialize, Serialize};
 use std::io::{Read, stdin};
@@ -34,12 +35,12 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 use std::time::Duration;
 use tui_input::Input;
-use tui_input::backend::crossterm::EventHandler;
 use tui_popup::Popup;
 
 pub struct App {
     rura_widget: RuraWidget,
     output_widget: OutputWidget,
+    search_widget: SearchWidget,
     stdin: String,
     exit: bool,
     action_rx: Receiver<Action>,
@@ -51,9 +52,7 @@ pub struct App {
     input_mode: InputMode,
     debouncer_tx: Sender<()>,
     confirming_live: Option<InputMode>,
-    search_input: Input,
     searching: bool,
-    case_sensitive: bool,
 }
 
 impl App {
@@ -118,6 +117,7 @@ impl App {
                 },
                 error_display_mode,
             ),
+            search_widget: SearchWidget::default(),
             stdin: "".into(),
             action_rx,
             command_tx,
@@ -129,9 +129,7 @@ impl App {
             help: false,
             input_mode: InputMode::Normal,
             confirming_live: None,
-            search_input: Input::from(""),
             searching: false,
-            case_sensitive: false,
         }
     }
 
@@ -244,8 +242,12 @@ impl App {
                         }
                     },
                     (Enter, KeyModifiers::NONE) if self.searching => {
-                        self.output_widget
-                            .highlight(self.search_input.value(), self.case_sensitive);
+                        self.output_widget.highlight(
+                            self.search_widget.input.value(),
+                            self.search_widget.case_sensitive,
+                        );
+                        self.search_widget
+                            .update_highlight_info(self.output_widget.highlight_info());
                     }
                     (F(3), KeyModifiers::NONE) => {
                         if self.searching {
@@ -253,6 +255,8 @@ impl App {
                         } else {
                             self.searching = true;
                         }
+                        self.search_widget
+                            .update_highlight_info(self.output_widget.highlight_info());
                     }
                     (F(4), KeyModifiers::NONE) => {
                         if self.searching {
@@ -260,18 +264,26 @@ impl App {
                         } else {
                             self.searching = true;
                         }
+                        self.search_widget
+                            .update_highlight_info(self.output_widget.highlight_info());
                     }
                     (Char('c'), KeyModifiers::ALT) => {
-                        self.case_sensitive = !self.case_sensitive;
-                        self.output_widget
-                            .highlight(self.search_input.value(), self.case_sensitive);
+                        self.search_widget.handle_event(event);
+                        self.output_widget.highlight(
+                            self.search_widget.input.value(),
+                            self.search_widget.case_sensitive,
+                        );
                     }
                     _ => match to_ui_command(key_bindings, code, mods) {
                         None => {
                             if self.searching {
-                                self.search_input.handle_event(event);
-                                self.output_widget
-                                    .highlight(self.search_input.value(), self.case_sensitive);
+                                self.search_widget.handle_event(event);
+                                self.output_widget.highlight(
+                                    self.search_widget.input.value(),
+                                    self.search_widget.case_sensitive,
+                                );
+                                self.search_widget
+                                    .update_highlight_info(self.output_widget.highlight_info());
                             } else {
                                 if self.rura_widget.handle_event(event) {
                                     match self.input_mode {
@@ -371,15 +383,8 @@ impl App {
             };
 
         if self.searching {
-            let (current, total) = self.output_widget.highlight_info();
-            let par =
-                Paragraph::new(self.search_input.value()).block(Block::bordered().title(format!(
-                    " Search: {} / {} | {} ",
-                    if total == 0 { 0 } else { current + 1 },
-                    total,
-                    if self.case_sensitive { "[Cc]" } else { "Cc" }
-                )));
-            par.render(search_input_area, frame.buffer_mut());
+            self.search_widget
+                .render(search_input_area, frame.buffer_mut());
         }
 
         let command_input_block = if matches!(self.input_mode, InputMode::Normal) {
@@ -401,7 +406,7 @@ impl App {
         }
 
         if self.searching {
-            let x = self.search_input.visual_cursor() as u16;
+            let x = self.search_widget.input.visual_cursor() as u16;
             frame.set_cursor_position((search_input_area.x + 1 + x, search_input_area.y + 1));
         } else {
             let inner_rect = command_input_area.inner(margin);
@@ -704,7 +709,7 @@ mod tests {
                     ErrorPanePlacement::Bottom,
                     ErrorDisplayMode::Pane,
                 ),
-                search_input: Input::new("".into()),
+                search_widget: SearchWidget::default(),
                 searching: false,
                 stdin: "".into(),
                 action_rx,
@@ -717,7 +722,6 @@ mod tests {
                 help: false,
                 input_mode: InputMode::Normal,
                 confirming_live: None,
-                case_sensitive: true,
             }
         }
     }
