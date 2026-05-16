@@ -9,7 +9,7 @@ Rura transforms the tedious "edit, up-arrow, rerun" shell cycle into a fluid, in
 - **Partial Pipeline Execution**: Execute only up to the current subcommand to debug complex pipes.
 - **Context-aware Completion**: Tab-complete commands and file paths using your system's bash tools.
 - **Live Execution Modes**: Real-time feedback as you type, with optional "Live Until Cursor" or "Live Full" modes.
-- **Search**: Search and highlight text within the output pane with case-sensitivity control.
+- **Search**: Search and highlight text within the output pane with regex support.
 - **Syntax Highlighting**: Visual feedback for subcommand boundaries, quotes, and pipes.
 - **Persistent History**: Quickly access and reuse previous commands.
 - **Line Wrapping**: Toggle whether long output lines wrap to fit the view.
@@ -76,14 +76,17 @@ rura --last
 - **Arrows** or **Alt + h/j/k/l**: Scroll the output (Left, Down, Up, Right).
 - **PageUp / PageDown** or **Alt + Up / Down**: Scroll the output by page.
 - **Ctrl + u / Ctrl + d**: Scroll up or down quickly.
-- **F3 / F4**: Search forward or backward in the output.
-- **Alt + c**: Toggle case sensitivity for search.
 - **Alt + w**: Toggle line wrapping.
+
+### Search
+- **F3 / F4**: Search forward or backward in the output.
+- **Alt + x**: Toggle regex mode.
+- **Alt + c**: Toggle case sensitivity.
 
 ### Live Execution Modes
 
-- **F11**: Toggle "Live Until Cursor" mode. Executes the pipeline up to the cursor as you type.
-- **F12**: Toggle "Live Full" mode. Executes the entire pipeline as you type.
+- **F11**: Toggle "Live Until Cursor" mode. Executes the pipeline up to the cursor as you type (requires confirmation).
+- **F12**: Toggle "Live Full" mode. Executes the entire pipeline as you type (requires confirmation).
 
 ### Command Input & Subcommands
 
@@ -91,6 +94,7 @@ rura --last
 - **Shift + Tab**: Trigger backward command or file completion.
 - **Alt + Right**: Move cursor to the next subcommand.
 - **Alt + Left**: Move cursor to the previous subcommand.
+- **Home / End**: Move cursor to the beginning or end of the command line.
 - **Ctrl + p**: Previous command in history.
 - **Ctrl + n**: Next command in history.
 
