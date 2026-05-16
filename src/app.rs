@@ -245,6 +245,7 @@ impl App {
                         self.output_widget.highlight(
                             self.search_widget.input.value(),
                             self.search_widget.case_sensitive,
+                            self.search_widget.regex,
                         );
                         self.search_widget
                             .update_highlight_info(self.output_widget.highlight_info());
@@ -272,6 +273,7 @@ impl App {
                         self.output_widget.highlight(
                             self.search_widget.input.value(),
                             self.search_widget.case_sensitive,
+                            self.search_widget.regex,
                         );
                         self.search_widget
                             .update_highlight_info(self.output_widget.highlight_info());
@@ -279,13 +281,15 @@ impl App {
                     _ => match to_ui_command(key_bindings, code, mods) {
                         None => {
                             if self.searching {
-                                self.search_widget.handle_event(event);
-                                self.output_widget.highlight(
-                                    self.search_widget.input.value(),
-                                    self.search_widget.case_sensitive,
-                                );
-                                self.search_widget
-                                    .update_highlight_info(self.output_widget.highlight_info());
+                                if self.search_widget.handle_event(event) {
+                                    self.output_widget.highlight(
+                                        self.search_widget.input.value(),
+                                        self.search_widget.case_sensitive,
+                                        self.search_widget.regex,
+                                    );
+                                    self.search_widget
+                                        .update_highlight_info(self.output_widget.highlight_info());
+                                };
                             } else {
                                 if self.rura_widget.handle_event(event) {
                                     match self.input_mode {

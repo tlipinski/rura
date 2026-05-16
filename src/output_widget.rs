@@ -32,7 +32,6 @@ pub struct OutputWidget {
     error_pane_placement: ErrorPanePlacement,
     visible_range_x: Range<usize>,
     visible_range_y: Range<usize>,
-    highlight: String,
     highlight_positions: Vec<(usize, Range<usize>)>,
     highlight_index: usize,
     pub error_display_mode: ErrorDisplayMode,
@@ -55,7 +54,6 @@ impl OutputWidget {
             error_display_mode,
             output_height: 0u16,
             error_pane_placement,
-            highlight: String::new(),
             highlight_positions: vec![],
             visible_range_x: 0..0,
             visible_range_y: 0..0,
@@ -94,57 +92,66 @@ impl OutputWidget {
         }
     }
 
-    pub fn highlight(&mut self, search_str: &str, case_sensitive: bool) {
-        self.highlight = search_str.to_string();
-        if !search_str.is_empty() {
-            let pattern = if case_sensitive {
-                Regex::new(&regex::escape(&search_str)).unwrap()
+    pub fn highlight(&mut self, search_str: &str, case_sensitive: bool, regex: bool) {
+        if search_str.is_empty() {
+            self.highlight_positions = vec![];
+        } else {
+            let mut search_str = String::from(search_str);
+
+            if !case_sensitive {
+                search_str = search_str.to_lowercase();
+            }
+
+            let pattern_res = if regex {
+                Regex::new(&search_str)
             } else {
-                Regex::new(&regex::escape(&search_str.to_lowercase())).unwrap()
+                Regex::new(&regex::escape(&search_str))
             };
 
-            let positions = self
-                .output
-                .lines
-                .iter()
-                .enumerate()
-                .filter_map(|(i, line)| {
-                    let line_to_match = if case_sensitive {
-                        line
-                    } else {
-                        &line.to_lowercase()
-                    };
-                    let matches = pattern
-                        .find_iter(line_to_match)
-                        .map(|m| (i, m.start()..m.start() + search_str.len()))
-                        .collect_vec();
-                    if !matches.is_empty() {
-                        Some(matches)
-                    } else {
-                        None
-                    }
-                })
-                .flatten()
-                .collect::<Vec<(usize, Range<usize>)>>();
+            if let Ok(pattern) = pattern_res {
+                let positions = self
+                    .output
+                    .lines
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, line)| {
+                        let line_to_match = if case_sensitive {
+                            line
+                        } else {
+                            &line.to_lowercase()
+                        };
+                        let matches = pattern
+                            .find_iter(line_to_match)
+                            .map(|m| (i, m.start()..m.end()))
+                            .collect_vec();
+                        if !matches.is_empty() {
+                            Some(matches)
+                        } else {
+                            None
+                        }
+                    })
+                    .flatten()
+                    .collect::<Vec<(usize, Range<usize>)>>();
 
-            // find the first match in the visible range otherwise start from the beginning
-            match positions
-                .iter()
-                .find_position(|(line, _range)| line >= &self.visible_range_y.start)
-            {
-                Some((z, _)) => self.highlight_index = z,
-                None => self.highlight_index = 0,
+                // find the first match in the visible range otherwise start from the beginning
+                match positions
+                    .iter()
+                    .find_position(|(line, _range)| line >= &self.visible_range_y.start)
+                {
+                    Some((z, _)) => self.highlight_index = z,
+                    None => self.highlight_index = 0,
+                }
+
+                self.highlight_positions = positions;
+
+                // focus on the first match
+                if !self.highlight_positions.is_empty() {
+                    let (line, range) = self.highlight_positions[self.highlight_index].clone();
+                    self.adjust_viewport_for_highlight(line, range);
+                }
+            } else {
+                self.highlight_positions = vec![];
             }
-
-            self.highlight_positions = positions;
-
-            // focus on the first match
-            if !self.highlight_positions.is_empty() {
-                let (line, range) = self.highlight_positions[self.highlight_index].clone();
-                self.adjust_viewport_for_highlight(line, range);
-            }
-        } else {
-            self.highlight_positions = vec![];
         }
     }
 
@@ -155,7 +162,7 @@ impl OutputWidget {
 
         if !self.visible_range_x.contains(&range.start) {
             if range.start < self.visible_range_x.len() {
-                // scroll fully to the left if highligh is in the first "horizontal "page"
+                // scroll fully to the left if highlight is in the first "horizontal page"
                 self.offset.x = 0;
             } else {
                 self.offset.x = range.start.saturating_sub(self.visible_range_x.len() / 4);
@@ -181,7 +188,6 @@ impl OutputWidget {
 
         self.highlight_index = 0;
         self.highlight_positions = vec![];
-        self.highlight = String::new();
     }
 
     pub fn handle_event(&mut self, event: &Event) {
@@ -593,7 +599,7 @@ mod tests {
             .unwrap();
         assert_snapshot!("highlight base", terminal.backend());
 
-        widget.highlight("line2", false);
+        widget.highlight("line2", false, false);
         terminal
             .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
             .unwrap();
@@ -624,7 +630,7 @@ mod tests {
             .unwrap();
         assert_snapshot!("highlight prev 4x", terminal.backend());
 
-        widget.highlight("line50", false);
+        widget.highlight("line50", false, false);
         terminal
             .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
             .unwrap();
@@ -649,7 +655,7 @@ mod tests {
             .unwrap();
         assert_snapshot!("highlight horizontal base", terminal.backend());
 
-        widget.highlight("hl", false);
+        widget.highlight("hl", false, false);
         for i in 1..6 {
             widget.highlight_next();
             terminal

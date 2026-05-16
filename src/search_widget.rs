@@ -11,6 +11,7 @@ use tui_input::backend::crossterm::EventHandler;
 pub struct SearchWidget {
     pub input: Input,
     pub case_sensitive: bool,
+    pub regex: bool,
     current: usize,
     total: usize,
 }
@@ -21,17 +22,19 @@ impl Widget for &SearchWidget {
         Self: Sized,
     {
         let par = Paragraph::new(self.input.value()).block(Block::bordered().title(format!(
-            " Search: {} / {} | {} ",
+            " Search: {} / {} | {} {} ",
             if self.total == 0 { 0 } else { self.current + 1 },
             self.total,
-            if self.case_sensitive { "[Cc]" } else { "Cc" }
+            if self.regex { "[.*]" } else { ".*" },
+            if self.case_sensitive { "[Cc]" } else { "Cc" },
         )));
         par.render(area, buf);
     }
 }
 
 impl SearchWidget {
-    pub fn handle_event(&mut self, event: &Event) {
+    // returns boolean telling if the value was changed
+    pub fn handle_event(&mut self, event: &Event) -> bool {
         match event {
             Event::Key(key_event) => {
                 let code = key_event.code;
@@ -40,13 +43,20 @@ impl SearchWidget {
                 match (code, mods) {
                     (Char('c'), KeyModifiers::ALT) => {
                         self.case_sensitive = !self.case_sensitive;
+                        true
                     }
-                    _ => {
-                        self.input.handle_event(event);
+                    (Char('x'), KeyModifiers::ALT) => {
+                        self.regex = !self.regex;
+                        true
                     }
+                    _ => self
+                        .input
+                        .handle_event(event)
+                        .map(|change| change.value)
+                        .unwrap_or(false),
                 }
             }
-            _ => {}
+            _ => false,
         }
     }
 
