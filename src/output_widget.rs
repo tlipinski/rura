@@ -76,10 +76,8 @@ impl OutputWidget {
     pub fn highlight_next(&mut self) {
         if !self.highlight_positions.is_empty() {
             self.highlight_index = (self.highlight_index + 1) % self.highlight_positions.len();
-            let (line, _) = self.highlight_positions[self.highlight_index];
-            if !self.visible_lines.contains(&line) {
-                self.offset.y = line.saturating_sub(self.visible_lines.len() / 2);
-            }
+            let (line, range) = self.highlight_positions[self.highlight_index].clone();
+            self.adjust_viewport_for_highlight(line, range);
         }
     }
 
@@ -91,11 +89,9 @@ impl OutputWidget {
                 self.highlight_index = self.highlight_index.saturating_sub(1);
             }
 
-            let (line, _) = self.highlight_positions[self.highlight_index];
+            let (line, range) = self.highlight_positions[self.highlight_index].clone();
 
-            if !self.visible_lines.contains(&line) {
-                self.offset.y = line.saturating_sub(self.visible_lines.len() / 2);
-            }
+            self.adjust_viewport_for_highlight(line, range);
         }
     }
 
@@ -145,13 +141,17 @@ impl OutputWidget {
 
             // focus on the first match
             if !self.highlight_positions.is_empty() {
-                let (line, _) = self.highlight_positions[self.highlight_index];
-                if !self.visible_lines.contains(&line) {
-                    self.offset.y = line.saturating_sub(self.visible_lines.len() / 2);
-                }
+                let (line, range) = self.highlight_positions[self.highlight_index].clone();
+                self.adjust_viewport_for_highlight(line, range);
             }
         } else {
             self.highlight_positions = vec![];
+        }
+    }
+
+    fn adjust_viewport_for_highlight(&mut self, line_num: usize, range: Range<usize>) {
+        if !self.visible_lines.contains(&line_num) {
+            self.offset.y = line_num.saturating_sub(self.visible_lines.len() / 2);
         }
     }
 
