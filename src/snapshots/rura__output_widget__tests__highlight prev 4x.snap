@@ -2,13 +2,13 @@
 source: src/output_widget.rs
 expression: terminal.backend()
 ---
-"18 line18          ▲"
-"19 line19          ║"
+"15 line15          ▲"
+"16 line16          ║"
+"17 line17          ║"
+"18 line18          █"
+"19 line19          █"
 "20 line20          ║"
 "21 line21          ║"
-"22 line22          █"
+"22 line22          ║"
 "23 line23          ║"
-"24 line24          ║"
-"25 line25          ║"
-"26 line26          ║"
-"27 line27          ▼"
+"24 line24          ▼"

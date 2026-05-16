@@ -6,7 +6,7 @@ use crossterm::event::Event;
 use crossterm::event::Event::Key;
 use itertools::Itertools;
 use ratatui::buffer::Buffer;
-use ratatui::layout::{Constraint, Direction, Layout, Rect};
+use ratatui::layout::{Constraint, Direction, Layout, Rect, Size};
 use ratatui::prelude::Color::Red;
 use ratatui::prelude::{StatefulWidget, Style, Text, Widget};
 use ratatui::text::{Line, Span};
@@ -17,8 +17,13 @@ use std::ops::Range;
 
 #[derive(Debug, Default)]
 struct Position {
-    x: usize,
-    y: usize,
+    col: usize,
+    row: usize,
+}
+
+struct Viewport {
+    rows: Range<usize>,
+    cols: Range<usize>,
 }
 
 pub struct OutputWidget {
@@ -28,10 +33,8 @@ pub struct OutputWidget {
     wrap: bool,
     theme: Theme,
     key_bindings: KeyBindings,
-    output_height: u16,
+    output_content_area_size: Size,
     error_pane_placement: ErrorPanePlacement,
-    visible_range_x: Range<usize>,
-    visible_range_y: Range<usize>,
     highlight_positions: Vec<(usize, Range<usize>)>,
     highlight_index: usize,
     pub error_display_mode: ErrorDisplayMode,
@@ -52,11 +55,9 @@ impl OutputWidget {
             theme: Theme::from_config(theme_config),
             key_bindings: KeyBindings::from_config(&kb_config),
             error_display_mode,
-            output_height: 0u16,
+            output_content_area_size: Size::default(),
             error_pane_placement,
             highlight_positions: vec![],
-            visible_range_x: 0..0,
-            visible_range_y: 0..0,
             highlight_index: 0,
         }
     }
@@ -136,7 +137,7 @@ impl OutputWidget {
                 // find the first match in the visible range otherwise start from the beginning
                 match positions
                     .iter()
-                    .find_position(|(line, _range)| line >= &self.visible_range_y.start)
+                    .find_position(|(line, _range)| line >= &self.viewport().rows.start)
                 {
                     Some((z, _)) => self.highlight_index = z,
                     None => self.highlight_index = 0,
@@ -156,16 +157,16 @@ impl OutputWidget {
     }
 
     fn adjust_viewport_for_highlight(&mut self, line_num: usize, range: Range<usize>) {
-        if !self.visible_range_y.contains(&line_num) {
-            self.offset.y = line_num.saturating_sub(self.visible_range_y.len() / 2);
+        if !self.viewport().rows.contains(&line_num) {
+            self.offset.row = line_num.saturating_sub(self.viewport().rows.len() / 2);
         }
 
-        if !self.visible_range_x.contains(&range.start) {
-            if range.start < self.visible_range_x.len() {
+        if !self.viewport().cols.contains(&range.start) {
+            if range.start < self.viewport().cols.len() {
                 // scroll fully to the left if highlight is in the first "horizontal page"
-                self.offset.x = 0;
+                self.offset.col = 0;
             } else {
-                self.offset.x = range.start.saturating_sub(self.visible_range_x.len() / 4);
+                self.offset.col = range.start.saturating_sub(self.viewport().cols.len() / 4);
             }
         }
     }
@@ -176,7 +177,7 @@ impl OutputWidget {
 
     pub fn handle_command_output(&mut self, output: Output) {
         if self.output.len() != output.len() {
-            self.offset.y = 0;
+            self.offset.row = 0;
         }
 
         if output.ok {
@@ -211,30 +212,33 @@ impl OutputWidget {
     pub fn handle_ui_command(&mut self, ui_cmd: UiCmd) {
         match ui_cmd {
             UiCmd::ScrollDown => {
-                let max_offset = self.main_output().lines.len().saturating_sub(1); // keep at least one line visible
-
-                self.offset.y = self.offset.y.saturating_add(1).min(max_offset);
+                if self.main_output().len() > self.viewport().rows.len() {
+                    let max_offset = self.main_output().lines.len().saturating_sub(1); // keep at least one line visible
+                    self.offset.row = self.offset.row.saturating_add(1).min(max_offset);
+                }
             }
             UiCmd::ScrollDownPage => {
-                let max_offset = self.main_output().lines.len().saturating_sub(1); // keep at least one line visible
-
-                let page_size = self.output_height as usize / 2;
-                self.offset.y = self.offset.y.saturating_add(page_size).min(max_offset);
+                if self.main_output().len() > self.viewport().rows.len() {
+                    let max_offset = self.main_output().lines.len().saturating_sub(1); // keep at least one line visible
+                    let page_size = self.output_content_area_size.height as usize / 2;
+                    self.offset.row = self.offset.row.saturating_add(page_size).min(max_offset);
+                }
             }
             UiCmd::ScrollUp => {
-                self.offset.y = self.offset.y.saturating_sub(1);
+                self.offset.row = self.offset.row.saturating_sub(1);
             }
             UiCmd::ScrollUpPage => {
-                let page_size = self.output_height as usize / 2;
-                self.offset.y = self.offset.y.saturating_sub(page_size);
+                let page_size = self.output_content_area_size.height as usize / 2;
+                self.offset.row = self.offset.row.saturating_sub(page_size);
             }
             UiCmd::ScrollLeft => {
-                self.offset.x = self.offset.x.saturating_sub(1);
+                self.offset.col = self.offset.col.saturating_sub(1);
             }
             UiCmd::ScrollRight => {
-                let max_offset = self.main_output_width().saturating_sub(1); // keep at least one line visible
-
-                self.offset.x = self.offset.x.saturating_add(1).min(max_offset);
+                if self.main_output_width() > self.viewport().cols.len() {
+                    let max_offset = self.main_output_width().saturating_sub(1); // keep at least one line visible
+                    self.offset.col = self.offset.col.saturating_add(1).min(max_offset);
+                }
             }
             UiCmd::ToggleWrap => {
                 self.wrap = !self.wrap;
@@ -257,6 +261,13 @@ impl OutputWidget {
             max_len = max_len.max(line.len());
         }
         max_len
+    }
+
+    fn viewport(&self) -> Viewport {
+        Viewport {
+            cols: self.offset.col..self.offset.col + self.output_content_area_size.width as usize,
+            rows: self.offset.row..self.offset.row + self.output_content_area_size.height as usize,
+        }
     }
 
     pub fn layout(&self, area: Rect) -> [Rect; 5] {
@@ -296,8 +307,17 @@ impl OutputWidget {
 
         let line_nums_width = self.main_output().len().to_string().len();
 
-        let [output_area, h_scroll_area] =
-            if !self.wrap && self.main_output_width() > output_area.width as usize {
+        let lines_content_scroll_layout = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints(vec![
+                Constraint::Length((line_nums_width + 1) as u16),
+                Constraint::Fill(1),
+                Constraint::Length(1),
+            ]);
+
+        let [main_output_area, h_scroll_area] = {
+            let [_, content, _] = lines_content_scroll_layout.areas(output_area);
+            if !self.wrap && self.main_output_width() > content.width as usize {
                 Layout::default()
                     .direction(Direction::Vertical)
                     .constraints(vec![Constraint::Fill(1), Constraint::Length(1)])
@@ -307,19 +327,13 @@ impl OutputWidget {
                     .direction(Direction::Vertical)
                     .constraints(vec![Constraint::Fill(1), Constraint::Length(0)])
                     .areas(output_area)
-            };
+            }
+        };
 
-        let lines_content_scroll = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints(vec![
-                Constraint::Length((line_nums_width + 1) as u16),
-                Constraint::Fill(1),
-                Constraint::Length(1),
-            ]);
+        let [line_nums_area, output_content_area, v_scrollbar_area] =
+            lines_content_scroll_layout.areas(main_output_area);
 
-        let [line_nums_area, output_content_area, v_scrollbar_area] = lines_content_scroll.areas(output_area);
-
-        let [_, h_scrollbar_area, _] = lines_content_scroll.areas(h_scroll_area);
+        let [_, h_scrollbar_area, _] = lines_content_scroll_layout.areas(h_scroll_area);
 
         [
             line_nums_area,
@@ -345,7 +359,7 @@ impl Widget for &mut OutputWidget {
 
         let line_nums_width = self.output.len().to_string().len();
 
-        self.output_height = output_content_area.height; // save this value for scroll logic
+        self.output_content_area_size = output_content_area.into(); // save this value for scroll logic
 
         if matches!(self.error_display_mode, ErrorDisplayMode::Pane) {
             if let Some(err_output) = &self.error_output_opt {
@@ -353,7 +367,7 @@ impl Widget for &mut OutputWidget {
                     .title(format!(" Error: {} ", err_output.status_code.unwrap_or(0)))
                     .border_style(Style::default().fg(Red));
                 let mut err_output_par = Paragraph::new(err_output.lines.join("\n"))
-                    .scroll((0, self.offset.x as u16))
+                    .scroll((0, self.offset.col as u16))
                     .block(block);
 
                 if self.wrap {
@@ -367,16 +381,11 @@ impl Widget for &mut OutputWidget {
 
         let height = output_content_area.height.min(output_len as u16);
 
-        let visible_lines: Range<usize> = if height >= output_len as u16 {
-            0..output_len
-        } else {
-            let from = (self.offset.y as usize).min(output_len);
-            let to = (self.offset.y as usize + height as usize).min(output_len);
+        let visible_lines: Range<usize> = {
+            let from = (self.offset.row).min(output_len);
+            let to = (self.offset.row + height as usize).min(output_len);
             from..to
         };
-
-        self.visible_range_x = self.offset.x..self.offset.x + output_content_area.width as usize;
-        self.visible_range_y = self.offset.y..self.offset.y + output_content_area.height as usize;
 
         let output = self.main_output();
 
@@ -449,11 +458,11 @@ impl Widget for &mut OutputWidget {
                     .collect::<Vec<Line>>();
 
                 Paragraph::new(Text::from(lines))
-                    .scroll((0, self.offset.x as u16)) // todo
+                    .scroll((0, self.offset.col as u16)) // todo
                     .block(Block::default())
             } else {
                 Paragraph::new(output.lines[visible_lines].join("\n"))
-                    .scroll((0, self.offset.x as u16)) // todo
+                    .scroll((0, self.offset.col as u16)) // todo
                     .block(Block::default())
             };
 
@@ -470,14 +479,14 @@ impl Widget for &mut OutputWidget {
         let mut state = ScrollbarState::new(
             self.output
                 .len()
-                .saturating_sub(self.output_height as usize),
+                .saturating_sub(self.output_content_area_size.height as usize),
         );
-        state = state.position(self.offset.y.into());
+        state = state.position(self.offset.row.into());
         scroll_bar.render(vscrollbar_area, buf, &mut state);
 
         let scroll_bar_h = Scrollbar::new(ScrollbarOrientation::HorizontalTop);
         let mut state_h = ScrollbarState::new(self.main_output_width());
-        state_h = state_h.position(self.offset.x.into());
+        state_h = state_h.position(self.offset.col.into());
         scroll_bar_h.render(hscrollbar_area, buf, &mut state_h)
     }
 }
@@ -638,6 +647,30 @@ mod tests {
             .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
             .unwrap();
         assert_snapshot!("scroll up page", terminal.backend());
+    }
+
+    #[test]
+    fn no_scrolling_when_content_fits_viewport() {
+        let mut terminal = Terminal::new(TestBackend::new(10, 10)).unwrap();
+
+        let mut widget = OutputWidget::default();
+        widget.output_content_area_size = terminal.size().unwrap();
+
+        widget.handle_command_output(Output::ok_stdin(&generate_lines(8)));
+
+        terminal
+            .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
+            .unwrap();
+        assert_snapshot!("no scrolling base", terminal.backend());
+
+        // neither of this commands is supposed to move viewport if content fits it
+        widget.handle_ui_command(UiCmd::ScrollDown);
+        widget.handle_ui_command(UiCmd::ScrollDownPage);
+        widget.handle_ui_command(UiCmd::ScrollRight);
+        terminal
+            .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
+            .unwrap();
+        assert_snapshot!("no scrolling", terminal.backend());
     }
 
     #[test]
