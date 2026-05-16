@@ -20,6 +20,11 @@ Rura transforms the tedious "edit, up-arrow, rerun" shell cycle into a fluid, in
 
 Check the [Releases](https://github.com/tlipinski/rura/releases) page for pre-compiled binaries for your platform.
 
+**Homebrew (macOS/Linux)**:
+```bash
+brew install tlipinski/tap/rura
+```
+
 **Arch Linux (AUR)**: Install via your AUR helper:
 
 ```bash
@@ -30,9 +35,12 @@ yay -S rura-bin
 yay -S rura-git
 ```
 
-Alternatively, you can install Rura from source using Cargo:
-
+**Cargo**:
 ```bash
+# From crates.io
+cargo install rura
+
+# From source
 cargo install --git https://github.com/tlipinski/rura
 ```
 
