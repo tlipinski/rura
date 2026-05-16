@@ -1,0 +1,10 @@
+---
+source: src/output_widget.rs
+expression: terminal.backend()
+---
+"1   hl1        "
+"2              "
+"3   hl4        "
+"               "
+"               "
+"               "

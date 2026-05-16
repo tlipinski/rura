@@ -30,7 +30,8 @@ pub struct OutputWidget {
     key_bindings: KeyBindings,
     output_height: u16,
     error_pane_placement: ErrorPanePlacement,
-    visible_range: Range<usize>,
+    visible_range_x: Range<usize>,
+    visible_range_y: Range<usize>,
     highlight: String,
     highlight_positions: Vec<(usize, Range<usize>)>,
     highlight_index: usize,
@@ -56,7 +57,8 @@ impl OutputWidget {
             error_pane_placement,
             highlight: String::new(),
             highlight_positions: vec![],
-            visible_range: 0..0,
+            visible_range_x: 0..0,
+            visible_range_y: 0..0,
             highlight_index: 0,
         }
     }
@@ -73,10 +75,9 @@ impl OutputWidget {
     pub fn highlight_next(&mut self) {
         if !self.highlight_positions.is_empty() {
             self.highlight_index = (self.highlight_index + 1) % self.highlight_positions.len();
-            let (line, _) = self.highlight_positions[self.highlight_index];
-            if !self.visible_range.contains(&line) {
-                self.offset.y = line.saturating_sub(self.visible_range.len() / 2);
-            }
+
+            let (line, range) = self.highlight_positions[self.highlight_index].clone();
+            self.adjust_viewport_for_highlight(line, range);
         }
     }
 
@@ -88,11 +89,8 @@ impl OutputWidget {
                 self.highlight_index = self.highlight_index.saturating_sub(1);
             }
 
-            let (line, _) = self.highlight_positions[self.highlight_index];
-
-            if !self.visible_range.contains(&line) {
-                self.offset.y = line.saturating_sub(self.visible_range.len() / 2);
-            }
+            let (line, range) = self.highlight_positions[self.highlight_index].clone();
+            self.adjust_viewport_for_highlight(line, range);
         }
     }
 
@@ -132,7 +130,7 @@ impl OutputWidget {
             // find the first match in the visible range otherwise start from the beginning
             match positions
                 .iter()
-                .find_position(|(line, _range)| line >= &self.visible_range.start)
+                .find_position(|(line, _range)| line >= &self.visible_range_y.start)
             {
                 Some((z, _)) => self.highlight_index = z,
                 None => self.highlight_index = 0,
@@ -142,13 +140,26 @@ impl OutputWidget {
 
             // focus on the first match
             if !self.highlight_positions.is_empty() {
-                let (line, _) = self.highlight_positions[self.highlight_index];
-                if !self.visible_range.contains(&line) {
-                    self.offset.y = line.saturating_sub(self.visible_range.len() / 2);
-                }
+                let (line, range) = self.highlight_positions[self.highlight_index].clone();
+                self.adjust_viewport_for_highlight(line, range);
             }
         } else {
             self.highlight_positions = vec![];
+        }
+    }
+
+    fn adjust_viewport_for_highlight(&mut self, line_num: usize, range: Range<usize>) {
+        if !self.visible_range_y.contains(&line_num) {
+            self.offset.y = line_num.saturating_sub(self.visible_range_y.len() / 2);
+        }
+
+        if !self.visible_range_x.contains(&range.start) {
+            if range.start < self.visible_range_x.len() {
+                // scroll fully to the left if highligh is in the first "horizontal "page"
+                self.offset.x = 0;
+            } else {
+                self.offset.x = range.start.saturating_sub(self.visible_range_x.len() / 4);
+            }
         }
     }
 
@@ -302,7 +313,7 @@ impl Widget for &mut OutputWidget {
 
         let height = output_content_area.height.min(output_len as u16);
 
-        let visible_range: Range<usize> = if height >= output_len as u16 {
+        let visible_lines: Range<usize> = if height >= output_len as u16 {
             0..output_len
         } else {
             let from = (self.offset.y as usize).min(output_len);
@@ -310,11 +321,12 @@ impl Widget for &mut OutputWidget {
             from..to
         };
 
-        self.visible_range = visible_range.clone();
+        self.visible_range_x = self.offset.x..self.offset.x + output_content_area.width as usize;
+        self.visible_range_y = self.offset.y..self.offset.y + output_content_area.height as usize;
 
         let output = self.main_output();
 
-        let line_nums = visible_range
+        let line_nums = visible_lines
             .clone()
             .flat_map(|i| {
                 let visual_line_count = if self.wrap {
@@ -336,12 +348,12 @@ impl Widget for &mut OutputWidget {
 
         let output_par = {
             let mut par = if !self.highlight_positions.is_empty() {
-                let lines = (&output.lines[visible_range.clone()])
+                let lines = (&output.lines[visible_lines.clone()])
                     .iter()
                     .enumerate()
                     .map(|(line_index, line)| {
                         // todo simplify
-                        let logical_line_num = line_index + visible_range.start;
+                        let logical_line_num = line_index + visible_lines.start;
 
                         let (current_match_line, current_match_range) =
                             self.highlight_positions.get(self.highlight_index).unwrap();
@@ -386,7 +398,7 @@ impl Widget for &mut OutputWidget {
                     .scroll((0, self.offset.x as u16)) // todo
                     .block(Block::default())
             } else {
-                Paragraph::new(output.lines[visible_range].join("\n"))
+                Paragraph::new(output.lines[visible_lines].join("\n"))
                     .scroll((0, self.offset.x as u16)) // todo
                     .block(Block::default())
             };
@@ -617,6 +629,34 @@ mod tests {
             .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
             .unwrap();
         assert_snapshot!("highlight another highlight", terminal.backend());
+    }
+
+    #[test]
+    fn highlighting_horizontal_scroll() {
+        let mut terminal = Terminal::new(TestBackend::new(15, 6)).unwrap();
+
+        let mut widget = OutputWidget::default();
+
+        let out = vec![
+            "  hl1                          ",
+            "                hl2 hl3        ",
+            "  hl4               hl5        ",
+        ];
+
+        widget.handle_command_output(Output::ok_stdin(&out.join("\n")));
+        terminal
+            .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
+            .unwrap();
+        assert_snapshot!("highlight horizontal base", terminal.backend());
+
+        widget.highlight("hl", false);
+        for i in 1..6 {
+            widget.highlight_next();
+            terminal
+                .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
+                .unwrap();
+            assert_snapshot!(format!("highlight {i}"), terminal.backend());
+        }
     }
 
     #[test]

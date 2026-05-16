@@ -8,9 +8,9 @@ mod output_widget;
 mod props;
 mod rura;
 mod rura_widget;
+mod search_widget;
 mod theme;
 mod uicmd;
-mod search_widget;
 
 use crate::app::App;
 use crate::config::load_config;
