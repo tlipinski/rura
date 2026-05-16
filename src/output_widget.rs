@@ -232,7 +232,9 @@ impl OutputWidget {
                 self.offset.x = self.offset.x.saturating_sub(1);
             }
             UiCmd::ScrollRight => {
-                self.offset.x = self.offset.x.saturating_add(1);
+                let max_offset = self.main_output_width().saturating_sub(1); // keep at least one line visible
+
+                self.offset.x = self.offset.x.saturating_add(1).min(max_offset);
             }
             UiCmd::ToggleWrap => {
                 self.wrap = !self.wrap;
@@ -247,12 +249,17 @@ impl OutputWidget {
             ErrorDisplayMode::Pane => &self.output,
         }
     }
-}
 
-impl Widget for &mut OutputWidget {
-    fn render(self, area: Rect, buf: &mut Buffer) {
-        let theme = &self.theme;
+    fn main_output_width(&self) -> usize {
+        let output = self.main_output();
+        let mut max_len = 0;
+        for line in &output.lines {
+            max_len = max_len.max(line.len());
+        }
+        max_len
+    }
 
+    pub fn layout(&self, area: Rect) -> [Rect; 5] {
         let error_output_lines = match self.error_display_mode {
             ErrorDisplayMode::Inline => 0,
             ErrorDisplayMode::Pane => self
@@ -287,15 +294,56 @@ impl Widget for &mut OutputWidget {
             }
         };
 
-        let line_nums_width = self.output.len().to_string().len();
-        let [line_nums_area, output_content_area, vscroll_area] = Layout::default()
+        let line_nums_width = self.main_output().len().to_string().len();
+
+        let [output_area, h_scroll_area] =
+            if !self.wrap && self.main_output_width() > output_area.width as usize {
+                Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints(vec![Constraint::Fill(1), Constraint::Length(1)])
+                    .areas(output_area)
+            } else {
+                Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints(vec![Constraint::Fill(1), Constraint::Length(0)])
+                    .areas(output_area)
+            };
+
+        let lines_content_scroll = Layout::default()
             .direction(Direction::Horizontal)
             .constraints(vec![
                 Constraint::Length((line_nums_width + 1) as u16),
                 Constraint::Fill(1),
                 Constraint::Length(1),
-            ])
-            .areas(output_area);
+            ]);
+
+        let [line_nums_area, output_content_area, v_scrollbar_area] = lines_content_scroll.areas(output_area);
+
+        let [_, h_scrollbar_area, _] = lines_content_scroll.areas(h_scroll_area);
+
+        [
+            line_nums_area,
+            output_content_area,
+            errors_area,
+            v_scrollbar_area,
+            h_scrollbar_area,
+        ]
+    }
+}
+
+impl Widget for &mut OutputWidget {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        let theme = &self.theme;
+
+        let [
+            line_nums_area,
+            output_content_area,
+            errors_area,
+            vscrollbar_area,
+            hscrollbar_area,
+        ] = self.layout(area);
+
+        let line_nums_width = self.output.len().to_string().len();
 
         self.output_height = output_content_area.height; // save this value for scroll logic
 
@@ -425,7 +473,12 @@ impl Widget for &mut OutputWidget {
                 .saturating_sub(self.output_height as usize),
         );
         state = state.position(self.offset.y.into());
-        scroll_bar.render(vscroll_area, buf, &mut state)
+        scroll_bar.render(vscrollbar_area, buf, &mut state);
+
+        let scroll_bar_h = Scrollbar::new(ScrollbarOrientation::HorizontalTop);
+        let mut state_h = ScrollbarState::new(self.main_output_width());
+        state_h = state_h.position(self.offset.x.into());
+        scroll_bar_h.render(hscrollbar_area, buf, &mut state_h)
     }
 }
 
