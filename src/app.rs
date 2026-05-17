@@ -509,9 +509,10 @@ impl App {
             Line::from(format!("{:09} - Execute before cursor", self.kb_config.execute_until_prev.first().unwrap().to_string())),
             Line::from(format!("{:09} - Reset input", self.kb_config.reset_input.first().unwrap().to_string())),
             Line::from(""),
-            Line::from(format!("{:09} - Search ↓", "F3")),
-            Line::from(format!("{:09} - Search ↑", "F4")),
-            Line::from(format!("{:09} - Switch case sensitivity", "alt+c")),
+            Line::from(format!("{:09} - Search next", self.kb_config.search_next.first().unwrap().to_string())),
+            Line::from(format!("{:09} - Search previous", self.kb_config.search_prev.first().unwrap().to_string())),
+            Line::from(format!("{:09} - Toggle regex mode", "alt+x")),
+            Line::from(format!("{:09} - Toggle case sensitivity", "alt+c")),
             Line::from(""),
             Line::from(format!("{:09} - Complete forward", self.kb_config.complete.first().unwrap().to_string())),
             Line::from(format!("{:09} - Complete backward", self.kb_config.complete_prev.first().unwrap().to_string())),
@@ -550,10 +551,6 @@ impl App {
         spans.push(" Execute ".into());
         spans.push("F1".bold());
         spans.push(" Help ".into());
-        spans.push("F3".bold());
-        spans.push("/".into());
-        spans.push("F4".bold());
-        spans.push(" Search ↓/↑ ".into());
         spans.push("F11 ".bold());
         match self.input_mode {
             InputMode::Normal | InputMode::LiveFull => {
