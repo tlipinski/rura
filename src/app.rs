@@ -77,7 +77,13 @@ impl App {
         thread::spawn(move || handle_command_task(CmdRunner::default(), command_rx, s2).unwrap());
 
         let s3 = action_tx.clone();
-        thread::spawn(move || read_stdin_task(args.file, s3).unwrap());
+        thread::spawn(move || {
+            if let Some(file) = args.file {
+                read_file_task(file, s3).unwrap()
+            } else {
+                read_stdin_task(s3).unwrap()
+            }
+        });
 
         let s4 = action_tx.clone();
         thread::spawn(move || {
@@ -605,45 +611,45 @@ fn handle_input_task(tx: Sender<Action>) -> Result<()> {
     }
 }
 
-fn read_stdin_task(file_opt: Option<String>, action_tx: Sender<Action>) -> Result<()> {
-    if let Some(file) = file_opt {
-        info!("reading input file {file}");
-        let file_content = std::fs::read_to_string(file.clone());
-        match file_content {
-            Ok(content) => {
-                action_tx.send(StdinRead(content))?;
+fn read_stdin_task(action_tx: Sender<Action>) -> Result<()> {
+    let mut buff = String::new();
+    let tty = stdin().is_tty();
+    if !tty {
+        let result = stdin().read_to_string(&mut buff);
+
+        match result {
+            Ok(_) => {
+                action_tx.send(StdinRead(buff))?;
             }
             Err(e) => {
                 action_tx.send(StdinReadFailed(format!(
-                    "Failed reading input file {}: {}",
-                    file,
+                    "Failed reading stdin: {}",
                     e.to_string()
                 )))?;
             }
         }
         Ok(())
     } else {
-        let mut buff = String::new();
-        let tty = stdin().is_tty();
-        if !tty {
-            let result = stdin().read_to_string(&mut buff);
+        Ok(())
+    }
+}
 
-            match result {
-                Ok(_) => {
-                    action_tx.send(StdinRead(buff))?;
-                }
-                Err(e) => {
-                    action_tx.send(StdinReadFailed(format!(
-                        "Failed reading stdin: {}",
-                        e.to_string()
-                    )))?;
-                }
-            }
-            Ok(())
-        } else {
-            Ok(())
+fn read_file_task(file: String, action_tx: Sender<Action>) -> Result<()> {
+    info!("reading input file {file}");
+    let file_content = std::fs::read_to_string(file.clone());
+    match file_content {
+        Ok(content) => {
+            action_tx.send(StdinRead(content))?;
+        }
+        Err(e) => {
+            action_tx.send(StdinReadFailed(format!(
+                "Failed reading input file {}: {}",
+                file,
+                e.to_string()
+            )))?;
         }
     }
+    Ok(())
 }
 
 fn reset_highlight_task(rx: Receiver<()>, tx: Sender<Action>, duration_ms: u64) -> Result<()> {
