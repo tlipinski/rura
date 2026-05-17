@@ -1,6 +1,6 @@
 [package]
 name = "rura"
-version = "1.0.1"
+version = "1.1.0"
 license = "MIT"
 edition = "2024"
 description = "Interactive TUI pipeline editor built for rapid iteration"
