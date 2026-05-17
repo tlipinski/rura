@@ -256,24 +256,6 @@ impl App {
                         self.search_widget
                             .update_highlight_info(self.output_widget.highlight_info());
                     }
-                    (F(3), KeyModifiers::NONE) => {
-                        if self.searching {
-                            self.output_widget.highlight_next();
-                        } else {
-                            self.searching = true;
-                        }
-                        self.search_widget
-                            .update_highlight_info(self.output_widget.highlight_info());
-                    }
-                    (F(4), KeyModifiers::NONE) => {
-                        if self.searching {
-                            self.output_widget.highlight_prev();
-                        } else {
-                            self.searching = true;
-                        }
-                        self.search_widget
-                            .update_highlight_info(self.output_widget.highlight_info());
-                    }
                     (Char('c'), KeyModifiers::ALT) => {
                         self.search_widget.handle_event(event);
                         self.output_widget.highlight(
@@ -337,6 +319,24 @@ impl App {
                                 if matches!(self.input_mode, InputMode::Normal) {
                                     self.rura_widget.handle_event(event);
                                 }
+                            }
+                            UiCmd::SearchNext => {
+                                if self.searching {
+                                    self.output_widget.highlight_next();
+                                } else {
+                                    self.searching = true;
+                                }
+                                self.search_widget
+                                    .update_highlight_info(self.output_widget.highlight_info());
+                            }
+                            UiCmd::SearchPrev => {
+                                if self.searching {
+                                    self.output_widget.highlight_prev();
+                                } else {
+                                    self.searching = true;
+                                }
+                                self.search_widget
+                                    .update_highlight_info(self.output_widget.highlight_info());
                             }
                             _ => {
                                 self.output_widget.handle_event(event);
