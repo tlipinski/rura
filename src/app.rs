@@ -365,9 +365,13 @@ impl App {
                         .direction(Direction::Vertical)
                         .constraints(vec![
                             Constraint::Length(self.rura_widget.height(inner_area.width) + 2), // command
-                            Constraint::Length(if self.searching { 3 } else { 0 }), // search
-                            Constraint::Fill(1),                                    // output
-                            Constraint::Length(1),                                  // status
+                            Constraint::Length(if self.searching {
+                                self.search_widget.height(inner_area.width) + 2
+                            } else {
+                                0
+                            }), // search
+                            Constraint::Fill(1),   // output
+                            Constraint::Length(1), // status
                         ])
                         .split(area);
 
@@ -377,8 +381,12 @@ impl App {
                     let layout = Layout::default()
                         .direction(Direction::Vertical)
                         .constraints(vec![
-                            Constraint::Fill(1),                                               // output
-                            Constraint::Length(if self.searching { 3 } else { 0 }), // search
+                            Constraint::Fill(1), // output
+                            Constraint::Length(if self.searching {
+                                self.search_widget.height(inner_area.width) + 2
+                            } else {
+                                0
+                            }), // search
                             Constraint::Length(self.rura_widget.height(inner_area.width) + 2), // command
                             Constraint::Length(1), // status
                         ])
@@ -412,8 +420,9 @@ impl App {
         }
 
         if self.searching {
-            let x = self.search_widget.input.visual_cursor() as u16;
-            frame.set_cursor_position((search_input_area.x + 1 + x, search_input_area.y + 1));
+            let inner_rect = search_input_area.inner(margin);
+            let (x, y) = self.search_widget.cursor(inner_rect.width);
+            frame.set_cursor_position((search_input_area.x + 1 + x, search_input_area.y + 1 + y));
         } else {
             let inner_rect = command_input_area.inner(margin);
             let (x, y) = self.rura_widget.cursor(inner_rect.width);

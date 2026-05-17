@@ -211,7 +211,7 @@ impl RuraWidget {
     }
 }
 
-fn render_line(line: Vec<StyledGrapheme>, area: Rect, buf: &mut Buffer, y: u16) {
+pub fn render_line(line: Vec<StyledGrapheme>, area: Rect, buf: &mut Buffer, y: u16) {
     let mut x = 0;
     for StyledGrapheme { symbol, style } in line {
         let width = symbol.width();
