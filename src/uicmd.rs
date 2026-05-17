@@ -66,6 +66,8 @@ impl KeyBindings {
         );
         bindings.insert(UiCmd::Complete, parse_bindings(&config.complete));
         bindings.insert(UiCmd::CompletePrev, parse_bindings(&config.complete_prev));
+        bindings.insert(UiCmd::SearchNext, parse_bindings(&config.search_next));
+        bindings.insert(UiCmd::SearchPrev, parse_bindings(&config.search_prev));
         KeyBindings { bindings }
     }
 }

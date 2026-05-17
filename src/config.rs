@@ -101,6 +101,8 @@ pub struct KeyBindingsConfig {
     pub subcommand_prev: Vec<String>,
     pub complete: Vec<String>,
     pub complete_prev: Vec<String>,
+    pub search_next: Vec<String>,
+    pub search_prev: Vec<String>,
 }
 
 impl Default for KeyBindingsConfig {
@@ -129,6 +131,8 @@ impl Default for KeyBindingsConfig {
                 "alt+tab".into(),
                 "backtab".into(),
             ],
+            search_next: vec!["f3".into(), "ctrl+f".into()],
+            search_prev: vec!["f4".into(), "ctrl+b".into()],
         }
     }
 }
