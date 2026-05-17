@@ -16,6 +16,32 @@ Rura transforms the tedious "edit, up-arrow, rerun" shell cycle into a fluid, in
 - **Flexible Error Display**: Choose between "inline" errors (replacing the main view) or a dedicated "pane" (showing both output and errors).
 - **Customizable**: Fully configurable key bindings, themes, and UI placement via TOML.
 
+## Demos
+
+**Live Execution**
+
+![Made with VHS](https://vhs.charm.sh/vhs-62Hf1lkCtIMz5DDCeZ0uFr.gif)
+
+**History**
+
+![Made with VHS](https://vhs.charm.sh/vhs-7m80OhHcR9MohlEa32I1WI.gif)
+
+**Search with regex support**
+
+![Made with VHS](https://vhs.charm.sh/vhs-WDHLj84DGQsjmYVKbsMJi.gif)
+
+**Configurable layout**
+
+![Made with VHS](https://vhs.charm.sh/vhs-2WVQxVCGJ8tbSNgVoChMpC.gif)
+
+**Command and filename completion**
+
+![Made with VHS](https://vhs.charm.sh/vhs-734scXMBN5VuOmc6nVlXjx.gif)
+
+**Line wrapping**
+
+![Made with VHS](https://vhs.charm.sh/vhs-5yI8kU23FHKtOa2B7O4QNT.gif)
+
 ## Installation
 
 Check the [Releases](https://github.com/tlipinski/rura/releases) page for pre-compiled binaries for your platform.
