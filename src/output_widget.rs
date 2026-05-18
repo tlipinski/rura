@@ -177,7 +177,7 @@ impl OutputWidget {
 
     pub fn handle_command_output(&mut self, output: Output) {
         if self.output.len() != output.len() {
-            self.offset.row = 0;
+            self.offset = Position::default();
         }
 
         if output.ok {
