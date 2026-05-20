@@ -1346,6 +1346,7 @@ dependencies = [
  "toml",
  "tui-input",
  "tui-popup",
+ "unicode-segmentation",
  "unicode-width",
 ]
 

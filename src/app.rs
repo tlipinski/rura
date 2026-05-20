@@ -24,7 +24,7 @@ use ratatui::crossterm::event::Event;
 use ratatui::layout::{Constraint, Direction, Layout, Margin, Rect};
 use ratatui::prelude::Span;
 use ratatui::prelude::Stylize;
-use ratatui::style::Color::Yellow;
+use ratatui::style::Color::{Cyan, Yellow};
 use ratatui::style::Style;
 use ratatui::text::{Line, Text};
 use ratatui::widgets::{Block, BorderType, Widget};
@@ -113,6 +113,7 @@ impl App {
                 highlight_reset_tx,
                 completions: None,
                 completer: Box::new(ShCompleter {}),
+                multiline: false,
             },
             output_widget: OutputWidget::new(
                 theme_config,
@@ -294,7 +295,23 @@ impl App {
                                 self.exit = true;
                             }
                             UiCmd::ExecuteFull if !self.searching => {
-                                self.handle_execute(ExecuteType::Full);
+                                if self.rura_widget.multiline
+                                    && code == Enter
+                                    && mods == KeyModifiers::NONE
+                                {
+                                    self.rura_widget.insert_newline();
+                                    match self.input_mode {
+                                        InputMode::Normal => {}
+                                        InputMode::LiveFull | InputMode::LiveUntilCursor => {
+                                            self.debouncer_tx.send(()).unwrap();
+                                        }
+                                    }
+                                } else {
+                                    self.handle_execute(ExecuteType::Full);
+                                }
+                            }
+                            UiCmd::ToggleMultiline => {
+                                self.rura_widget.toggle_multiline();
                             }
                             UiCmd::ExecuteUntilCurrent if !self.searching => {
                                 self.handle_execute(ExecuteType::UntilCurrent)
@@ -407,12 +424,14 @@ impl App {
                 .render(search_input_area, frame.buffer_mut());
         }
 
-        let command_input_block = if matches!(self.input_mode, InputMode::Normal) {
-            Block::bordered()
-        } else {
+        let command_input_block = if !matches!(self.input_mode, InputMode::Normal) {
             Block::bordered()
                 .border_style(Style::default().fg(Yellow))
                 .border_type(BorderType::Thick)
+        } else if self.rura_widget.multiline {
+            Block::bordered().border_style(Style::default().fg(Cyan))
+        } else {
+            Block::bordered()
         };
 
         frame.render_widget(command_input_block, command_input_area);
@@ -509,6 +528,9 @@ impl App {
             Line::from(format!("{:09} - Execute before cursor", self.kb_config.execute_until_prev.first().unwrap().to_string())),
             Line::from(format!("{:09} - Reset input", self.kb_config.reset_input.first().unwrap().to_string())),
             Line::from(""),
+            Line::from(format!("{:09} - Toggle multiline editor", self.kb_config.toggle_multiline.first().unwrap().to_string())),
+            Line::from(format!("{:09} - Execute (in multiline)", "ctrl+enter")),
+            Line::from(""),
             Line::from(format!("{:09} - Search next", self.kb_config.search_next.first().unwrap().to_string())),
             Line::from(format!("{:09} - Search previous", self.kb_config.search_prev.first().unwrap().to_string())),
             Line::from(format!("{:09} - Toggle regex mode", "alt+x")),
@@ -572,6 +594,14 @@ impl App {
             }
         }
 
+        spans.push(" ".into());
+        spans.push("^M ".bold());
+        if self.rura_widget.multiline {
+            spans.push("Multi".reversed());
+        } else {
+            spans.push("Multi".into());
+        }
+
         Line::from_iter(spans).centered().dim()
     }
 }
@@ -600,9 +630,15 @@ fn handle_command_task(
 }
 
 fn handle_input_task(tx: Sender<Action>) -> Result<()> {
+    use crossterm::event::KeyEventKind;
     loop {
         if let Ok(event) = event::read() {
             debug!("event: {:?}", event);
+            if let Event::Key(ke) = &event {
+                if ke.kind != KeyEventKind::Press {
+                    continue;
+                }
+            }
             tx.send(UserInput(event))?
         }
     }
@@ -720,6 +756,7 @@ mod tests {
                     highlight_reset_tx,
                     completions: None,
                     completer: Box::new(ShCompleter {}),
+                    multiline: false,
                 },
                 output_widget: OutputWidget::new(
                     &theme_config,
@@ -810,6 +847,30 @@ mod tests {
             .unwrap();
 
         assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn ctrl_m_toggles_multiline() {
+        let mut app = App::default();
+        assert!(!app.rura_widget.multiline);
+
+        input_key(&mut app, Char('m'), KeyModifiers::CONTROL);
+        assert!(app.rura_widget.multiline);
+
+        input_key(&mut app, Char('m'), KeyModifiers::CONTROL);
+        assert!(!app.rura_widget.multiline);
+    }
+
+    #[test]
+    fn enter_in_multiline_inserts_newline() {
+        let mut app = App::default();
+        app.rura_widget.multiline = true;
+        input_text(&mut app, "ls");
+
+        input_key(&mut app, Enter, KeyModifiers::NONE);
+        input_text(&mut app, "wc");
+
+        assert_eq!(app.rura_widget.command_input.value(), "ls\nwc");
     }
 
     #[test]

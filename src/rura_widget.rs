@@ -5,7 +5,6 @@ use crate::theme::Theme;
 use crate::uicmd::{KeyBindings, UiCmd, to_ui_command};
 use anyhow::Result;
 use crossterm::event::Event;
-use itertools::Itertools;
 use log::info;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
@@ -15,6 +14,7 @@ use ratatui::text::StyledGrapheme;
 use std::sync::mpsc::Sender;
 use tui_input::backend::crossterm::EventHandler;
 use tui_input::{Input, InputRequest};
+use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
 pub struct RuraWidget {
@@ -26,6 +26,7 @@ pub struct RuraWidget {
     pub highlight_reset_tx: Sender<()>,
     pub completions: Option<(CompletionResult, usize)>,
     pub completer: Box<dyn Completer>,
+    pub multiline: bool,
 }
 
 impl Widget for &RuraWidget {
@@ -33,36 +34,100 @@ impl Widget for &RuraWidget {
     where
         Self: Sized,
     {
-        let command_input_line = {
-            match Rura::new(
-                self.command_input.value(),
-                self.command_input.visual_cursor(),
-            ) {
-                Ok(r) => to_line(r, self.highlight_until, &self.theme),
-                Err(_) => Line::from(self.command_input.value()),
-            }
+        let value = self.command_input.value();
+        let byte_cursor = codepoint_to_byte(value, self.command_input.cursor());
+
+        let command_input_line = match Rura::new(value, byte_cursor) {
+            Ok(r) => to_line(r, self.highlight_until, &self.theme),
+            Err(_) => Line::from(value),
         };
 
-        let graphemes = command_input_line
-            .styled_graphemes(Style::default())
-            .collect_vec();
-
-        let chunks = graphemes.chunks(area.width as usize);
-
-        for (i, c) in chunks.enumerate() {
-            render_line(c.to_vec(), area, buf, i as u16)
+        let width = area.width as usize;
+        if width == 0 {
+            return;
         }
+
+        // ratatui's styled_graphemes() filters control chars including '\n',
+        // so split logical lines at the span level before iterating graphemes.
+        let mut logical_lines: Vec<Vec<StyledGrapheme>> = vec![Vec::new()];
+        for span in command_input_line.spans.iter() {
+            let style = Style::default().patch(span.style);
+            let content: &str = span.content.as_ref();
+            let mut parts = content.split('\n');
+            if let Some(first) = parts.next() {
+                push_graphemes(logical_lines.last_mut().unwrap(), first, style);
+            }
+            for piece in parts {
+                logical_lines.push(Vec::new());
+                push_graphemes(logical_lines.last_mut().unwrap(), piece, style);
+            }
+        }
+
+        let mut y: u16 = 0;
+        for line in logical_lines {
+            let line_byte_len: usize = line.iter().map(|g| g.symbol.len()).sum();
+            let chunks: Vec<&[StyledGrapheme]> = line.chunks(width).collect();
+            for chunk in &chunks {
+                if y < area.height {
+                    render_line(chunk.to_vec(), area, buf, y);
+                }
+                y = y.saturating_add(1);
+            }
+            let reserved = (line_byte_len / width) + 1;
+            if reserved > chunks.len() {
+                y = y.saturating_add((reserved - chunks.len()) as u16);
+            }
+        }
+    }
+}
+
+fn codepoint_to_byte(s: &str, cp: usize) -> usize {
+    s.char_indices().nth(cp).map_or(s.len(), |(i, _)| i)
+}
+
+fn push_graphemes<'a>(out: &mut Vec<StyledGrapheme<'a>>, s: &'a str, style: Style) {
+    for g in s.graphemes(true) {
+        if g.contains(char::is_control) {
+            continue;
+        }
+        out.push(StyledGrapheme { symbol: g, style });
     }
 }
 
 impl RuraWidget {
     pub fn height(&self, width: u16) -> u16 {
-        (self.command_input.value().len() as u16 / width) + 1
+        if width == 0 {
+            return 1;
+        }
+        let value = self.command_input.value();
+        let mut rows: u16 = 0;
+        for line in value.split('\n') {
+            rows = rows.saturating_add((line.len() as u16 / width) + 1);
+        }
+        rows
     }
 
     pub fn cursor(&self, width: u16) -> (u16, u16) {
-        let cursor = self.command_input.visual_cursor() as u16;
-        (cursor % width, cursor / width)
+        if width == 0 {
+            return (0, 0);
+        }
+        let value = self.command_input.value();
+        let byte_cursor = codepoint_to_byte(value, self.command_input.cursor());
+
+        let mut y: u16 = 0;
+        let mut line_byte_start: usize = 0;
+        for (i, &b) in value.as_bytes().iter().enumerate() {
+            if i >= byte_cursor {
+                break;
+            }
+            if b == b'\n' {
+                let line_len = (i - line_byte_start) as u16;
+                y = y.saturating_add((line_len / width) + 1);
+                line_byte_start = i + 1;
+            }
+        }
+        let col = (byte_cursor - line_byte_start) as u16;
+        (col % width, y.saturating_add(col / width))
     }
 
     // returns bool - indicates if the command value was modified
@@ -166,6 +231,7 @@ impl RuraWidget {
             }
             UiCmd::HistoryPrev => {
                 self.command_input = Input::from(self.history.previous(self.command_input.value()));
+                self.multiline = self.command_input.value().contains('\n');
 
                 self.completions = None;
 
@@ -173,6 +239,7 @@ impl RuraWidget {
             }
             UiCmd::HistoryNext => {
                 self.command_input = Input::from(self.history.next(self.command_input.value()));
+                self.multiline = self.command_input.value().contains('\n');
 
                 self.completions = None;
 
@@ -180,6 +247,20 @@ impl RuraWidget {
             }
             _ => false,
         }
+    }
+
+    pub fn insert_newline(&mut self) {
+        let v = self.command_input.value();
+        let cp_pos = self.command_input.cursor();
+        let byte_pos = v.char_indices().nth(cp_pos).map_or(v.len(), |(i, _)| i);
+        let mut new_v = v.to_string();
+        new_v.insert(byte_pos, '\n');
+        self.command_input = Input::new(new_v).with_cursor(cp_pos + 1);
+        self.completions = None;
+    }
+
+    pub fn toggle_multiline(&mut self) {
+        self.multiline = !self.multiline;
     }
 
     pub fn execute(&mut self, execute_type: ExecuteType) -> Result<Option<String>> {
@@ -313,6 +394,7 @@ mod tests {
                 highlight_reset_tx,
                 completions: None,
                 completer: Box::new(TestCompleter {}),
+                multiline: false,
             }
         }
     }
@@ -343,6 +425,66 @@ mod tests {
             .unwrap();
 
         assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn command_input_multiline_render() {
+        let mut widget = RuraWidget::default();
+        widget.multiline = true;
+        widget.command_input = Input::from("ls -la\nwc -l");
+
+        let mut terminal = TestTerminal::default().0;
+        terminal
+            .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
+            .unwrap();
+
+        assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn insert_newline_at_cursor() {
+        let mut widget = RuraWidget::default();
+        widget.multiline = true;
+        widget.command_input = Input::from("lswc -l").with_cursor(2);
+
+        widget.insert_newline();
+
+        assert_eq!(widget.command_input.value(), "ls\nwc -l");
+        assert_eq!(widget.command_input.cursor(), 3);
+    }
+
+    #[test]
+    fn cursor_position_across_newline() {
+        let widget = RuraWidget {
+            command_input: Input::from("ls\nfoo").with_cursor(4),
+            multiline: true,
+            ..RuraWidget::default()
+        };
+
+        assert_eq!(widget.cursor(20), (1, 1));
+    }
+
+    #[test]
+    fn height_counts_logical_lines() {
+        let widget = RuraWidget {
+            command_input: Input::from("ls\nfoo\nbar"),
+            ..RuraWidget::default()
+        };
+
+        assert_eq!(widget.height(20), 3);
+    }
+
+    #[test]
+    fn history_recall_enables_multiline() {
+        let mut widget = RuraWidget::default();
+        widget.history.push("ls -la");
+        widget.history.push("for i in 1 2 3\ndo echo $i\ndone");
+
+        widget.handle_ui_command(UiCmd::HistoryPrev);
+        assert!(widget.multiline);
+
+        widget.handle_ui_command(UiCmd::HistoryPrev);
+        assert!(!widget.multiline);
     }
 
     #[test]

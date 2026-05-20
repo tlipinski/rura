@@ -1,0 +1,9 @@
+---
+source: src/rura_widget.rs
+assertion_line: 444
+expression: terminal.backend()
+---
+"ls -la              "
+"wc -l               "
+"                    "
+"                    "

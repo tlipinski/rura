@@ -103,13 +103,14 @@ pub struct KeyBindingsConfig {
     pub complete_prev: Vec<String>,
     pub search_next: Vec<String>,
     pub search_prev: Vec<String>,
+    pub toggle_multiline: Vec<String>,
 }
 
 impl Default for KeyBindingsConfig {
     fn default() -> Self {
         KeyBindingsConfig {
             quit: vec!["ctrl+c".into()],
-            execute_full: vec!["enter".into()],
+            execute_full: vec!["enter".into(), "ctrl+enter".into(), "alt+enter".into()],
             execute_until_current: vec!["alt+\\".into()],
             execute_until_prev: vec!["alt+|".into()],
             reset_input: vec!["alt+i".into()],
@@ -133,6 +134,7 @@ impl Default for KeyBindingsConfig {
             ],
             search_next: vec!["f3".into(), "ctrl+f".into()],
             search_prev: vec!["f4".into(), "ctrl+b".into()],
+            toggle_multiline: vec!["ctrl+m".into(), "alt+m".into()],
         }
     }
 }

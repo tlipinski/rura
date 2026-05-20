@@ -24,6 +24,7 @@ pub enum UiCmd {
     CompletePrev,
     SearchNext,
     SearchPrev,
+    ToggleMultiline,
 }
 
 pub struct KeyBindings {
@@ -68,6 +69,10 @@ impl KeyBindings {
         bindings.insert(UiCmd::CompletePrev, parse_bindings(&config.complete_prev));
         bindings.insert(UiCmd::SearchNext, parse_bindings(&config.search_next));
         bindings.insert(UiCmd::SearchPrev, parse_bindings(&config.search_prev));
+        bindings.insert(
+            UiCmd::ToggleMultiline,
+            parse_bindings(&config.toggle_multiline),
+        );
         KeyBindings { bindings }
     }
 }

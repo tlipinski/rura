@@ -1,5 +1,6 @@
 ---
 source: src/app.rs
+assertion_line: 807
 expression: terminal.backend()
 ---
 "                               ┌ Keys ───────────────────────────────┐                              "
@@ -7,6 +8,9 @@ expression: terminal.backend()
 "                               │alt+\     - Execute until cursor     │                              "
 "                               │alt+|     - Execute before cursor    │                              "
 "                               │alt+i     - Reset input              │                              "
+"                               │                                     │                              "
+"                               │ctrl+m    - Toggle multiline editor  │                              "
+"                               │ctrl+enter - Execute (in multiline)  │                              "
 "                               │                                     │                              "
 "                               │f3        - Search next              │                              "
 "                               │f4        - Search previous          │                              "
@@ -25,10 +29,7 @@ expression: terminal.backend()
 "                               │up        - Scroll up                │                              "
 "                               │down      - Scroll down              │                              "
 "                               │pageup    - Scroll page up           │                              "
-"                               │pagedown  - Scroll page down         │                              "
-"                               │                                     │                              "
-"                               │alt+l     - Scroll right             │                              "
-"┌──────────────────────────────│alt+h     - Scroll left              │─────────────────────────────┐"
+"┌──────────────────────────────│pagedown  - Scroll page down         │─────────────────────────────┐"
 "│                              │                                     │                             │"
-"└──────────────────────────────│alt+w     - Wrap output lines        │─────────────────────────────┘"
-"                        ^C Quit└─────────────────────────────────────┘Live                      L:0 "
+"└──────────────────────────────│alt+l     - Scroll right             │─────────────────────────────┘"
+"                   ^C Quit Ente└─────────────────────────────────────┘^M Multi                  L:0 "

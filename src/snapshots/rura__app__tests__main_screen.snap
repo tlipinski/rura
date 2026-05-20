@@ -1,5 +1,6 @@
 ---
 source: src/app.rs
+assertion_line: 793
 expression: terminal.backend()
 ---
 "                                                                                                    "
@@ -31,4 +32,4 @@ expression: terminal.backend()
 "┌──────────────────────────────────────────────────────────────────────────────────────────────────┐"
 "│                                                                                                  │"
 "└──────────────────────────────────────────────────────────────────────────────────────────────────┘"
-"                        ^C Quit Enter Execute F1 Help F11 Live UC F12 Live                      L:0 "
+"                   ^C Quit Enter Execute F1 Help F11 Live UC F12 Live ^M Multi                  L:0 "
