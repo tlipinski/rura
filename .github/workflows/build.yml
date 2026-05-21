@@ -18,16 +18,22 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            artifact: rura
+            use_cross: false
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            use_cross: false
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            use_cross: true
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+            use_cross: true
           - os: macos-latest
             target: aarch64-apple-darwin
-            artifact: rura
+            use_cross: false
           - os: macos-13
             target: x86_64-apple-darwin
-            artifact: rura
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            artifact: rura.exe
+            use_cross: false
     steps:
       - uses: actions/checkout@v4
 
@@ -39,13 +45,28 @@ jobs:
         with:
           key: ${{ matrix.target }}
 
-      - name: Build release binary
+      - name: Install musl tools
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      - name: Install cross
+        if: matrix.use_cross
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cross
+
+      - name: Build (cargo)
+        if: ${{ !matrix.use_cross }}
         run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Build (cross)
+        if: matrix.use_cross
+        run: cross build --release --locked --target ${{ matrix.target }}
 
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
           name: rura-${{ matrix.target }}
-          path: target/${{ matrix.target }}/release/${{ matrix.artifact }}
+          path: target/${{ matrix.target }}/release/rura
           if-no-files-found: error
           retention-days: 30
