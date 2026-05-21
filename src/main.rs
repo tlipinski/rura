@@ -9,6 +9,7 @@ mod props;
 mod rura;
 mod rura_widget;
 mod search_widget;
+mod state;
 mod theme;
 mod uicmd;
 

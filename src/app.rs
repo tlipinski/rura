@@ -103,6 +103,8 @@ impl App {
             .unwrap()
         });
 
+        let cached = crate::state::load();
+
         Self {
             rura_widget: RuraWidget {
                 command_input: Input::from(args.command.unwrap_or_default()),
@@ -113,7 +115,7 @@ impl App {
                 highlight_reset_tx,
                 completions: None,
                 completer: Box::new(ShCompleter {}),
-                multiline: false,
+                multiline: cached.multiline,
             },
             output_widget: OutputWidget::new(
                 theme_config,
@@ -312,6 +314,9 @@ impl App {
                             }
                             UiCmd::ToggleMultiline => {
                                 self.rura_widget.toggle_multiline();
+                                crate::state::save(&crate::state::CachedState {
+                                    multiline: self.rura_widget.multiline,
+                                });
                             }
                             UiCmd::ExecuteUntilCurrent if !self.searching => {
                                 self.handle_execute(ExecuteType::UntilCurrent)
@@ -326,13 +331,20 @@ impl App {
                             UiCmd::SubcommandNext | UiCmd::SubcommandPrev if !self.searching => {
                                 self.rura_widget.handle_event(event);
                             }
-                            UiCmd::HistoryNext
-                            | UiCmd::HistoryPrev
-                            | UiCmd::Complete
-                            | UiCmd::CompletePrev
-                                if !self.searching =>
-                            {
-                                // disable history and completions in live mode
+                            UiCmd::HistoryNext | UiCmd::HistoryPrev if !self.searching => {
+                                // disable history in live mode
+                                if matches!(self.input_mode, InputMode::Normal) {
+                                    let before = self.rura_widget.multiline;
+                                    self.rura_widget.handle_event(event);
+                                    if self.rura_widget.multiline != before {
+                                        crate::state::save(&crate::state::CachedState {
+                                            multiline: self.rura_widget.multiline,
+                                        });
+                                    }
+                                }
+                            }
+                            UiCmd::Complete | UiCmd::CompletePrev if !self.searching => {
+                                // disable completions in live mode
                                 if matches!(self.input_mode, InputMode::Normal) {
                                     self.rura_widget.handle_event(event);
                                 }
