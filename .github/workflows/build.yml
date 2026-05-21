@@ -2,6 +2,8 @@ name: Build
 
 on:
   push:
+    branches:
+      - '**'
   pull_request:
   workflow_dispatch:
 
@@ -70,3 +72,45 @@ jobs:
           path: target/${{ matrix.target }}/release/rura
           if-no-files-found: error
           retention-days: 30
+
+  nightly:
+    name: Publish nightly release
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Stage release files
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          for d in dist/rura-*; do
+            target=${d#dist/rura-}
+            cp "$d/rura" "out/rura-${target}"
+          done
+          (cd out && sha256sum rura-* > SHA256SUMS)
+          ls -la out
+
+      - name: Update nightly release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: nightly
+          name: Nightly build
+          body: |
+            Rolling nightly build of `master`. Replaced on every push.
+
+            Commit: ${{ github.sha }}
+            Run: ${{ github.run_id }}
+          prerelease: true
+          make_latest: false
+          target_commitish: ${{ github.sha }}
+          files: |
+            out/*
