@@ -267,10 +267,9 @@ impl RuraWidget {
         if self.command_input.value().is_empty() {
             return Ok(None);
         }
-        match Rura::new(
-            self.command_input.value(),
-            self.command_input.visual_cursor(),
-        ) {
+        let value = self.command_input.value();
+        let byte_cursor = codepoint_to_byte(value, self.command_input.cursor());
+        match Rura::new(value, byte_cursor) {
             Ok(r) => match r.command(&execute_type) {
                 None => Ok(None),
                 Some(command) => {
@@ -281,7 +280,7 @@ impl RuraWidget {
                         self.highlight_until = Some(command.until);
                         let _ = self.highlight_reset_tx.send(());
                     }
-                    Ok(Some(command.to_run))
+                    Ok(Some(flatten_for_shell(&command.to_run)))
                 }
             },
             Err(e) => {
@@ -290,6 +289,15 @@ impl RuraWidget {
             }
         }
     }
+}
+
+/// Collapse multiline editor input into a single command line. Treats
+/// `\<newline>` as a shell line-continuation (zero-width join) and other
+/// newlines as token separators (replaced with a space), then trims the
+/// result. Single-line input is unaffected.
+fn flatten_for_shell(cmd: &str) -> String {
+    let no_continuation = cmd.replace("\\\n", "");
+    no_continuation.replace('\n', " ").trim().to_string()
 }
 
 pub fn render_line(line: Vec<StyledGrapheme>, area: Rect, buf: &mut Buffer, y: u16) {
@@ -472,6 +480,15 @@ mod tests {
         };
 
         assert_eq!(widget.height(20), 3);
+    }
+
+    #[test]
+    fn flatten_for_shell_collapses_continuations_and_newlines() {
+        assert_eq!(flatten_for_shell("ls"), "ls");
+        assert_eq!(flatten_for_shell("ls\n    "), "ls");
+        assert_eq!(flatten_for_shell("   \nls -la\n"), "ls -la");
+        assert_eq!(flatten_for_shell("ls \\\n  -la"), "ls   -la");
+        assert_eq!(flatten_for_shell("ls\n| grep foo"), "ls | grep foo");
     }
 
     #[test]
