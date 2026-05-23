@@ -1,9 +1,6 @@
 use crate::cmd_runner::Output;
-use crate::config::{KeyBindingsConfig, ThemeConfig};
+use crate::config::ThemeConfig;
 use crate::theme::Theme;
-use crate::uicmd::{KeyBindings, UiCmd, to_ui_command};
-use crossterm::event::Event;
-use crossterm::event::Event::Key;
 use itertools::Itertools;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Direction, Layout, Rect, Size};
@@ -32,7 +29,6 @@ pub struct OutputWidget {
     offset: Position,
     wrap: bool,
     theme: Theme,
-    key_bindings: KeyBindings,
     output_content_area_size: Size,
     error_pane_placement: ErrorPanePlacement,
     highlight_positions: Vec<(usize, Range<usize>)>,
@@ -43,7 +39,6 @@ pub struct OutputWidget {
 impl OutputWidget {
     pub fn new(
         theme_config: &ThemeConfig,
-        kb_config: &KeyBindingsConfig,
         error_pane_placement: ErrorPanePlacement,
         error_display_mode: ErrorDisplayMode,
     ) -> Self {
@@ -53,7 +48,6 @@ impl OutputWidget {
             error_output_opt: None,
             wrap: false,
             theme: Theme::from_config(theme_config),
-            key_bindings: KeyBindings::from_config(&kb_config),
             error_display_mode,
             output_content_area_size: Size::default(),
             error_pane_placement,
@@ -191,60 +185,43 @@ impl OutputWidget {
         self.highlight_positions = vec![];
     }
 
-    pub fn handle_event(&mut self, event: &Event) {
-        match event {
-            Key(key_event) => {
-                let code = key_event.code;
-                let mods = key_event.modifiers;
-                let key_bindings = &self.key_bindings;
-
-                match key_event.code {
-                    _ => match to_ui_command(key_bindings, code, mods) {
-                        Some(ui_cmd) => self.handle_ui_command(ui_cmd),
-                        None => {}
-                    },
-                }
-            }
-            _ => {}
+    pub fn scroll_down(&mut self) {
+        if self.main_output().len() > self.viewport().rows.len() {
+            let max_offset = self.main_output().lines.len().saturating_sub(1); // keep at least one line visible
+            self.offset.row = self.offset.row.saturating_add(1).min(max_offset);
         }
     }
 
-    pub fn handle_ui_command(&mut self, ui_cmd: UiCmd) {
-        match ui_cmd {
-            UiCmd::ScrollDown => {
-                if self.main_output().len() > self.viewport().rows.len() {
-                    let max_offset = self.main_output().lines.len().saturating_sub(1); // keep at least one line visible
-                    self.offset.row = self.offset.row.saturating_add(1).min(max_offset);
-                }
-            }
-            UiCmd::ScrollDownPage => {
-                if self.main_output().len() > self.viewport().rows.len() {
-                    let max_offset = self.main_output().lines.len().saturating_sub(1); // keep at least one line visible
-                    let page_size = self.output_content_area_size.height as usize / 2;
-                    self.offset.row = self.offset.row.saturating_add(page_size).min(max_offset);
-                }
-            }
-            UiCmd::ScrollUp => {
-                self.offset.row = self.offset.row.saturating_sub(1);
-            }
-            UiCmd::ScrollUpPage => {
-                let page_size = self.output_content_area_size.height as usize / 2;
-                self.offset.row = self.offset.row.saturating_sub(page_size);
-            }
-            UiCmd::ScrollLeft => {
-                self.offset.col = self.offset.col.saturating_sub(1);
-            }
-            UiCmd::ScrollRight => {
-                if self.main_output_width() > self.viewport().cols.len() {
-                    let max_offset = self.main_output_width().saturating_sub(1); // keep at least one line visible
-                    self.offset.col = self.offset.col.saturating_add(1).min(max_offset);
-                }
-            }
-            UiCmd::ToggleWrap => {
-                self.wrap = !self.wrap;
-            }
-            _ => {}
+    pub fn scroll_page_down(&mut self) {
+        if self.main_output().len() > self.viewport().rows.len() {
+            let max_offset = self.main_output().lines.len().saturating_sub(1); // keep at least one line visible
+            let page_size = self.output_content_area_size.height as usize / 2;
+            self.offset.row = self.offset.row.saturating_add(page_size).min(max_offset);
         }
+    }
+
+    pub fn scroll_up(&mut self) {
+        self.offset.row = self.offset.row.saturating_sub(1);
+    }
+
+    pub fn scroll_page_up(&mut self) {
+        let page_size = self.output_content_area_size.height as usize / 2;
+        self.offset.row = self.offset.row.saturating_sub(page_size);
+    }
+
+    pub fn scroll_left(&mut self) {
+        self.offset.col = self.offset.col.saturating_sub(1);
+    }
+
+    pub fn scroll_right(&mut self) {
+        if self.main_output_width() > self.viewport().cols.len() {
+            let max_offset = self.main_output_width().saturating_sub(1); // keep at least one line visible
+            self.offset.col = self.offset.col.saturating_add(1).min(max_offset);
+        }
+    }
+
+    pub fn toggle_wrap(&mut self) {
+        self.wrap = !self.wrap;
     }
 
     pub fn main_output(&self) -> &Output {
@@ -523,11 +500,9 @@ mod tests {
     impl Default for OutputWidget {
         fn default() -> Self {
             let theme_config = ThemeConfig::default();
-            let kb_config = KeyBindingsConfig::default();
 
             OutputWidget::new(
                 &theme_config,
-                &kb_config,
                 ErrorPanePlacement::Top,
                 ErrorDisplayMode::Pane,
             )
@@ -624,25 +599,25 @@ mod tests {
             .unwrap();
         assert_snapshot!("scroll base", terminal.backend());
 
-        widget.handle_ui_command(UiCmd::ScrollDown);
+        widget.scroll_down();
         terminal
             .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
             .unwrap();
         assert_snapshot!("scroll down line", terminal.backend());
 
-        widget.handle_ui_command(UiCmd::ScrollDownPage);
+        widget.scroll_page_down();
         terminal
             .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
             .unwrap();
         assert_snapshot!("scroll down page", terminal.backend());
 
-        widget.handle_ui_command(UiCmd::ScrollUp);
+        widget.scroll_up();
         terminal
             .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
             .unwrap();
         assert_snapshot!("scroll up line", terminal.backend());
 
-        widget.handle_ui_command(UiCmd::ScrollUpPage);
+        widget.scroll_page_up();
         terminal
             .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
             .unwrap();
@@ -664,9 +639,9 @@ mod tests {
         assert_snapshot!("no scrolling base", terminal.backend());
 
         // neither of this commands is supposed to move viewport if content fits it
-        widget.handle_ui_command(UiCmd::ScrollDown);
-        widget.handle_ui_command(UiCmd::ScrollDownPage);
-        widget.handle_ui_command(UiCmd::ScrollRight);
+        widget.scroll_down();
+        widget.scroll_page_down();
+        widget.scroll_right();
         terminal
             .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
             .unwrap();
