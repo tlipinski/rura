@@ -1,5 +1,6 @@
 mod app;
 mod cmd_runner;
+mod completable_input;
 mod completion;
 mod config;
 mod debouncer;
@@ -8,6 +9,7 @@ mod output_widget;
 mod props;
 mod rura;
 mod rura_widget;
+mod save_to_file_widget;
 mod search_widget;
 mod theme;
 mod uicmd;

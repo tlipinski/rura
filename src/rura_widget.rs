@@ -1,4 +1,4 @@
-use crate::completion::{Completer, CompletionResult};
+use crate::completable_input::CompletableInput;
 use crate::history::History;
 use crate::rura::{ExecuteType, Part, Rura};
 use crate::theme::Theme;
@@ -12,18 +12,15 @@ use ratatui::prelude::{Line, Style, Widget};
 use ratatui::style::Styled;
 use ratatui::text::StyledGrapheme;
 use std::sync::mpsc::Sender;
-use tui_input::backend::crossterm::EventHandler;
-use tui_input::{Input, InputRequest};
+use tui_input::InputRequest;
 use unicode_width::UnicodeWidthStr;
 
 pub struct RuraWidget {
-    pub command_input: Input,
+    pub command_input: CompletableInput,
     pub highlight_until: Option<usize>,
     pub theme: Theme,
     pub history: History,
     pub highlight_reset_tx: Sender<()>,
-    pub completions: Option<(CompletionResult, usize)>,
-    pub completer: Box<dyn Completer>,
 }
 
 impl Widget for &RuraWidget {
@@ -64,52 +61,10 @@ impl RuraWidget {
     }
 
     pub fn handle_event(&mut self, event: &Event) -> bool {
-        self.completions = None;
         self.command_input
             .handle_event(event)
             .map(|change| change.value)
             .unwrap_or(false)
-    }
-
-    pub fn complete(&mut self, next: bool) {
-        let current_value = self.command_input.value().to_string();
-        let cursor_pos = self.command_input.visual_cursor();
-
-        if let Some((res, index)) = self.completions.as_mut() {
-            if next {
-                *index = (*index + 1) % res.completions.len();
-            } else {
-                *index = if *index == 0 {
-                    res.completions.len() - 1
-                } else {
-                    *index - 1
-                };
-            }
-            let completion = &res.completions[*index];
-            let new_value = format!(
-                "{}{}{}",
-                &current_value[..res.word_start],
-                completion,
-                &current_value[cursor_pos..]
-            );
-            self.command_input = Input::from(new_value);
-            self.command_input
-                .handle(InputRequest::SetCursor(res.word_start + completion.len()));
-        } else if let Some(res) = self.completer.completions(&current_value, cursor_pos) {
-            let index = if next { 0 } else { res.completions.len() - 1 };
-            let word_start = res.word_start;
-            let completion = res.completions[index].clone();
-            let new_value = format!(
-                "{}{}{}",
-                &current_value[..word_start],
-                completion,
-                &current_value[cursor_pos..]
-            );
-            self.completions = Some((res, index));
-            self.command_input = Input::from(new_value);
-            self.command_input
-                .handle(InputRequest::SetCursor(word_start + completion.len()));
-        }
     }
 
     pub fn subcommand_next(&mut self) {
@@ -122,7 +77,7 @@ impl RuraWidget {
             }
         }
 
-        self.completions = None;
+        self.command_input.clear_completions();
     }
 
     pub fn subcommand_prev(&mut self) {
@@ -135,19 +90,20 @@ impl RuraWidget {
             }
         }
 
-        self.completions = None;
+        self.command_input.clear_completions()
     }
 
     pub fn history_next(&mut self) {
-        self.command_input = Input::from(self.history.next(self.command_input.value()));
+        self.command_input = CompletableInput::from(self.history.next(self.command_input.value()));
 
-        self.completions = None;
+        self.command_input.clear_completions()
     }
 
     pub fn history_prev(&mut self) {
-        self.command_input = Input::from(self.history.previous(self.command_input.value()));
+        self.command_input =
+            CompletableInput::from(self.history.previous(self.command_input.value()));
 
-        self.completions = None;
+        self.command_input.clear_completions()
     }
 
     pub fn execute(&mut self, execute_type: ExecuteType) -> Result<Option<String>> {
@@ -245,20 +201,8 @@ mod tests {
     use insta::assert_snapshot;
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
-    use tui_input::Input;
 
     struct TestTerminal(Terminal<TestBackend>);
-
-    struct TestCompleter;
-
-    impl Completer for TestCompleter {
-        fn completions(&self, _input: &str, _cursor_pos: usize) -> Option<CompletionResult> {
-            Some(CompletionResult {
-                completions: vec!["command".to_string(), "command_other".to_string()],
-                word_start: 0,
-            })
-        }
-    }
 
     impl Default for TestTerminal {
         fn default() -> Self {
@@ -271,13 +215,11 @@ mod tests {
             let (highlight_reset_tx, _) = std::sync::mpsc::channel::<()>();
             let theme_config = ThemeConfig::default();
             RuraWidget {
-                command_input: Input::from(""),
+                command_input: CompletableInput::from(""),
                 highlight_until: None,
                 theme: Theme::from_config(&theme_config),
                 history: History::in_mem(),
                 highlight_reset_tx,
-                completions: None,
-                completer: Box::new(TestCompleter {}),
             }
         }
     }
@@ -327,22 +269,6 @@ mod tests {
 
         widget.history_next();
         assert_eq!(widget.command_input.value(), "cmd1 | cmd2");
-    }
-
-    #[test]
-    fn completer() {
-        let mut widget = RuraWidget::default();
-
-        input_text(&mut widget, "co");
-
-        widget.complete(true);
-        assert_eq!(widget.command_input.value(), "command");
-
-        widget.complete(true);
-        assert_eq!(widget.command_input.value(), "command_other");
-
-        widget.complete(false);
-        assert_eq!(widget.command_input.value(), "command");
     }
 
     fn input_text(app: &mut RuraWidget, text: &str) {

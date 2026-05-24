@@ -97,6 +97,8 @@ pub struct KeyBindingsConfig {
     pub complete_prev: Vec<String>,
     pub search_next: Vec<String>,
     pub search_prev: Vec<String>,
+    pub save_output: Vec<String>,
+    pub save_command: Vec<String>,
 }
 
 impl Default for KeyBindingsConfig {
@@ -132,6 +134,8 @@ impl Default for KeyBindingsConfig {
             complete_prev: vec!["shift+tab".into(), "alt+tab".into()],
             search_next: vec!["f3".into(), "ctrl+f".into()],
             search_prev: vec!["f4".into(), "ctrl+b".into()],
+            save_output: vec!["ctrl+s".into()],
+            save_command: vec!["ctrl+alt+s".into()],
         }
     }
 }

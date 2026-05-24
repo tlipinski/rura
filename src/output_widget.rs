@@ -24,7 +24,7 @@ struct Viewport {
 }
 
 pub struct OutputWidget {
-    output: Output,
+    pub output: Output,
     error_output_opt: Option<Output>,
     offset: Position,
     wrap: bool,

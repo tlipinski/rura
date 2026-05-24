@@ -91,6 +91,71 @@ impl ShCompleter {
     }
 }
 
+pub struct FileOnlyShCompleter;
+
+impl Completer for FileOnlyShCompleter {
+    fn completions(&self, input: &str, cursor_pos: usize) -> Option<CompletionResult> {
+        let (prefix, completion_type, word_start) = {
+            let input_up_to_cursor = &input[..cursor_pos];
+
+            let word_start = input_up_to_cursor
+                .rfind(|c: char| c.is_whitespace())
+                .map(|i| i + 1)
+                .unwrap_or(0);
+            let prefix = &input_up_to_cursor[word_start..];
+
+            (prefix.to_string(), CompletionType::File, word_start)
+        };
+
+        debug!(
+            "Completion prefix for '{}' @ {}: '{}', type: {:?}, word start: {}",
+            input, cursor_pos, prefix, completion_type, word_start
+        );
+
+        let comp_type_str = match completion_type {
+            CompletionType::Command => "-c",
+            CompletionType::File => "-f",
+        };
+
+        let output = Command::new("sh")
+            .arg("-c")
+            .arg(format!("compgen {} -- \"{}\"", comp_type_str, prefix))
+            .output();
+
+        match output {
+            Ok(output) => {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                let completions: Vec<String> = stdout
+                    .lines()
+                    .map(|s| s.to_string())
+                    .unique()
+                    .sorted_by(|a, b| a.len().cmp(&b.len()))
+                    .sorted()
+                    .collect();
+
+                debug!(
+                    "completion results [{}]: {:?}",
+                    completions.len(),
+                    completions
+                );
+
+                if completions.is_empty() {
+                    None
+                } else {
+                    Some(CompletionResult {
+                        completions,
+                        word_start,
+                    })
+                }
+            }
+            Err(e) => {
+                error!("Failed fetching completions {}", e);
+                None
+            }
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 enum CompletionType {
     Command,

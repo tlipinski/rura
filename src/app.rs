@@ -3,13 +3,14 @@ use crate::app::Action::{
     CommandCompleted, Debounced, ResetHighlight, StdinRead, StdinReadFailed, UserInput,
 };
 use crate::cmd_runner::{CmdRunner, Output};
-use crate::completion::ShCompleter;
+use crate::completable_input::CompletableInput;
 use crate::config::{KeyBindingsConfig, ThemeConfig};
 use crate::debouncer::debouncer_task;
 use crate::history::History;
 use crate::output_widget::{ErrorDisplayMode, ErrorPanePlacement, OutputWidget};
 use crate::rura::ExecuteType;
 use crate::rura_widget::RuraWidget;
+use crate::save_to_file_widget::SaveToFileWidget;
 use crate::search_widget::SearchWidget;
 use crate::theme::Theme;
 use crate::uicmd::{KeyBindings, UiCmd, to_ui_command};
@@ -18,7 +19,7 @@ use anyhow::Result;
 use crossterm::event::KeyCode::Char;
 use crossterm::event::{KeyCode, KeyModifiers};
 use crossterm::tty::IsTty;
-use log::{error, info};
+use log::{debug, error, info};
 use ratatui::crossterm::event;
 use ratatui::crossterm::event::Event;
 use ratatui::layout::{Constraint, Direction, Layout, Margin, Rect};
@@ -34,7 +35,6 @@ use std::io::{Read, stdin};
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 use std::time::Duration;
-use tui_input::Input;
 use tui_popup::Popup;
 
 pub struct App {
@@ -51,6 +51,8 @@ pub struct App {
     input_mode: InputMode,
     debouncer_tx: Sender<()>,
     active_mode: ActiveMode,
+    save_output_widget: SaveToFileWidget,
+    save_command_widget: SaveToFileWidget,
 }
 
 impl App {
@@ -103,13 +105,11 @@ impl App {
 
         Self {
             rura_widget: RuraWidget {
-                command_input: Input::from(args.command.unwrap_or_default()),
+                command_input: CompletableInput::from(args.command.unwrap_or_default()),
                 highlight_until: None,
                 theme: Theme::from_config(theme_config),
                 history: History::using_file(),
                 highlight_reset_tx,
-                completions: None,
-                completer: Box::new(ShCompleter {}),
             },
             output_widget: OutputWidget::new(
                 theme_config,
@@ -120,6 +120,8 @@ impl App {
                 error_display_mode,
             ),
             search_widget: SearchWidget::default(),
+            save_output_widget: SaveToFileWidget::new(" Save output to file ".to_string()),
+            save_command_widget: SaveToFileWidget::new(" Save command to file ".to_string()),
             stdin: "".into(),
             action_rx,
             command_tx,
@@ -187,8 +189,6 @@ impl App {
                 let mods = key_event.modifiers;
                 let key_bindings = &self.key_bindings;
 
-                let ui_cmd_opt = to_ui_command(key_bindings, code, mods);
-
                 match &self.active_mode {
                     ActiveMode::Normal => match (code, mods) {
                         (Esc, KeyModifiers::NONE) => {
@@ -221,7 +221,7 @@ impl App {
                                 self.input_mode = InputMode::LiveFull;
                             }
                         },
-                        _ => match ui_cmd_opt {
+                        _ => match to_ui_command(key_bindings, code, mods) {
                             Some(ui_cmd) => match ui_cmd {
                                 UiCmd::Quit => {
                                     self.exit = true;
@@ -263,13 +263,13 @@ impl App {
                                 UiCmd::Complete => {
                                     // disable completions in live mode
                                     if matches!(self.input_mode, InputMode::Normal) {
-                                        self.rura_widget.complete(true);
+                                        self.rura_widget.command_input.complete(true);
                                     }
                                 }
                                 UiCmd::CompletePrev => {
                                     // disable completions in live mode
                                     if matches!(self.input_mode, InputMode::Normal) {
-                                        self.rura_widget.complete(false);
+                                        self.rura_widget.command_input.complete(false);
                                     }
                                 }
                                 UiCmd::ScrollDown => {
@@ -292,6 +292,12 @@ impl App {
                                 }
                                 UiCmd::ToggleWrap => {
                                     self.output_widget.toggle_wrap();
+                                }
+                                UiCmd::SaveOutput => {
+                                    self.active_mode = ActiveMode::SaveOutput;
+                                }
+                                UiCmd::SaveCommand => {
+                                    self.active_mode = ActiveMode::SaveCommand;
                                 }
                             },
                             _ => {
@@ -340,7 +346,7 @@ impl App {
                             self.search_widget
                                 .update_highlight_info(self.output_widget.highlight_info());
                         }
-                        _ => match ui_cmd_opt {
+                        _ => match to_ui_command(key_bindings, code, mods) {
                             Some(ui_cmd) => match ui_cmd {
                                 UiCmd::Quit => {
                                     self.exit = true;
@@ -376,6 +382,12 @@ impl App {
                                 UiCmd::ToggleWrap => {
                                     self.output_widget.toggle_wrap();
                                 }
+                                UiCmd::SaveOutput => {
+                                    self.active_mode = ActiveMode::SaveOutput;
+                                }
+                                UiCmd::SaveCommand => {
+                                    self.active_mode = ActiveMode::SaveCommand;
+                                }
                                 _ => {}
                             },
                             _ => {
@@ -400,7 +412,7 @@ impl App {
                             self.input_mode = input_mode.clone();
                             self.active_mode = ActiveMode::default();
                         }
-                        _ => match ui_cmd_opt {
+                        _ => match to_ui_command(key_bindings, code, mods) {
                             Some(UiCmd::Quit) => {
                                 self.exit = true;
                             }
@@ -415,17 +427,95 @@ impl App {
                         (F(1), KeyModifiers::NONE) => {
                             self.active_mode = ActiveMode::default();
                         }
-                        _ => match ui_cmd_opt {
+                        _ => match to_ui_command(key_bindings, code, mods) {
                             Some(UiCmd::Quit) => {
                                 self.exit = true;
                             }
                             _ => {}
                         },
                     },
+
+                    ActiveMode::SaveOutput => match (code, mods) {
+                        (Esc, KeyModifiers::NONE) => {
+                            self.active_mode = ActiveMode::default();
+                        }
+                        (Enter, KeyModifiers::NONE) => match self.save_output_to_file() {
+                            Ok(()) => {
+                                debug!(
+                                    "Output saved to file: {}",
+                                    self.save_output_widget.file_path_input.value()
+                                );
+                                self.active_mode = ActiveMode::default();
+                            }
+                            Err(e) => {
+                                self.save_output_widget.error_message = Some(e.to_string());
+                                error!("Error saving output to file: {}", e);
+                            }
+                        },
+                        _ => match to_ui_command(key_bindings, code, mods) {
+                            Some(UiCmd::Quit) => {
+                                self.exit = true;
+                            }
+                            Some(UiCmd::Complete) => {
+                                self.save_output_widget.file_path_input.complete(true);
+                            }
+                            Some(UiCmd::CompletePrev) => {
+                                self.save_output_widget.file_path_input.complete(false);
+                            }
+                            _ => {
+                                self.save_output_widget.file_path_input.handle_event(event);
+                            }
+                        },
+                    },
+
+                    ActiveMode::SaveCommand => match (code, mods) {
+                        (Esc, KeyModifiers::NONE) => {
+                            self.active_mode = ActiveMode::default();
+                        }
+                        (Enter, KeyModifiers::NONE) => match self.save_command_to_file() {
+                            Ok(()) => {
+                                debug!(
+                                    "Output saved to file: {}",
+                                    self.save_command_widget.file_path_input.value()
+                                );
+                                self.active_mode = ActiveMode::default();
+                            }
+                            Err(e) => {
+                                self.save_command_widget.error_message = Some(e.to_string());
+                                error!("Error saving output to file: {}", e);
+                            }
+                        },
+                        _ => match to_ui_command(key_bindings, code, mods) {
+                            Some(UiCmd::Quit) => {
+                                self.exit = true;
+                            }
+                            Some(UiCmd::Complete) => {
+                                self.save_command_widget.file_path_input.complete(true);
+                            }
+                            Some(UiCmd::CompletePrev) => {
+                                self.save_command_widget.file_path_input.complete(false);
+                            }
+                            _ => {
+                                self.save_command_widget.file_path_input.handle_event(event);
+                            }
+                        },
+                    },
                 }
             }
             _ => {}
         }
+    }
+
+    fn save_output_to_file(&self) -> Result<()> {
+        self.save_output_widget
+            .save(&self.output_widget.output.lines.join("\n"))
+    }
+
+    fn save_command_to_file(&self) -> Result<()> {
+        self.save_command_widget.save(&format!(
+            "#!/usr/bin/env sh\n\n{}",
+            self.rura_widget.command_input.value()
+        ))
     }
 
     fn handle_execute(&mut self, kind: ExecuteType) {
@@ -479,11 +569,6 @@ impl App {
             }
         };
 
-        if matches!(self.active_mode, ActiveMode::Search) {
-            self.search_widget
-                .render(search_input_area, frame.buffer_mut());
-        }
-
         let command_input_block = if matches!(self.input_mode, InputMode::Normal) {
             Block::bordered()
         } else {
@@ -495,21 +580,33 @@ impl App {
         frame.render_widget(command_input_block, command_input_area);
         frame.render_widget(&self.rura_widget, command_input_area.inner(margin));
 
-        if matches!(self.active_mode, ActiveMode::Search) {
-            frame.render_widget(
-                Block::default().reversed(),
-                command_input_area.inner(margin),
-            );
-        }
+        match self.active_mode {
+            ActiveMode::Normal => {
+                let inner_rect = command_input_area.inner(margin);
+                let (x, y) = self.rura_widget.cursor(inner_rect.width);
+                frame.set_cursor_position((
+                    command_input_area.x + 1 + x,
+                    command_input_area.y + 1 + y,
+                ));
+            }
+            ActiveMode::Search => {
+                self.search_widget
+                    .render(search_input_area, frame.buffer_mut());
 
-        if matches!(self.active_mode, ActiveMode::Search) {
-            let inner_rect = search_input_area.inner(margin);
-            let (x, y) = self.search_widget.cursor(inner_rect.width);
-            frame.set_cursor_position((search_input_area.x + 1 + x, search_input_area.y + 1 + y));
-        } else {
-            let inner_rect = command_input_area.inner(margin);
-            let (x, y) = self.rura_widget.cursor(inner_rect.width);
-            frame.set_cursor_position((command_input_area.x + 1 + x, command_input_area.y + 1 + y));
+                frame.render_widget(
+                    Block::default().reversed(),
+                    command_input_area.inner(margin),
+                );
+
+                let inner_rect = search_input_area.inner(margin);
+                let (x, y) = self.search_widget.cursor(inner_rect.width);
+                frame.set_cursor_position((
+                    search_input_area.x + 1 + x,
+                    search_input_area.y + 1 + y,
+                ));
+            }
+            ActiveMode::SaveOutput => {}
+            _ => {}
         }
 
         frame.render_widget(&mut self.output_widget, output_area);
@@ -553,12 +650,24 @@ impl App {
             lines_area,
         );
 
-        if matches!(self.active_mode, ActiveMode::Help) {
-            self.render_help(frame);
-        }
-
-        if matches!(self.active_mode, ActiveMode::LiveConfirmation(_)) {
-            self.render_live_confirm(frame);
+        match self.active_mode {
+            ActiveMode::LiveConfirmation(_) => {
+                self.render_live_confirm(frame);
+            }
+            ActiveMode::Help => {
+                self.render_help(frame);
+            }
+            ActiveMode::SaveOutput => {
+                self.save_output_widget
+                    .render(frame.area(), frame.buffer_mut());
+                frame.set_cursor_position(self.save_output_widget.cursor)
+            }
+            ActiveMode::SaveCommand => {
+                self.save_command_widget
+                    .render(frame.area(), frame.buffer_mut());
+                frame.set_cursor_position(self.save_command_widget.cursor)
+            }
+            _ => {}
         }
     }
 
@@ -583,34 +692,37 @@ impl App {
     fn render_help(&self, frame: &mut Frame) {
         #[rustfmt::skip]
         let lines = Text::from(vec![
-            Line::from(format!("{:09} - Execute full command", self.kb_config.execute_full.first().unwrap().to_string())),
-            Line::from(format!("{:09} - Execute until cursor", self.kb_config.execute_until_current.first().unwrap().to_string())),
-            Line::from(format!("{:09} - Execute before cursor", self.kb_config.execute_until_prev.first().unwrap().to_string())),
-            Line::from(format!("{:09} - Reset input", self.kb_config.reset_input.first().unwrap().to_string())),
+            Line::from(format!("{:012} - Execute full command", self.kb_config.execute_full.first().unwrap().to_string())),
+            Line::from(format!("{:012} - Execute until cursor", self.kb_config.execute_until_current.first().unwrap().to_string())),
+            Line::from(format!("{:012} - Execute before cursor", self.kb_config.execute_until_prev.first().unwrap().to_string())),
+            Line::from(format!("{:012} - Reset input", self.kb_config.reset_input.first().unwrap().to_string())),
             Line::from(""),
-            Line::from(format!("{:09} - Search next", self.kb_config.search_next.first().unwrap().to_string())),
-            Line::from(format!("{:09} - Search previous", self.kb_config.search_prev.first().unwrap().to_string())),
-            Line::from(format!("{:09} - Toggle regex mode", "alt+x")),
-            Line::from(format!("{:09} - Toggle case sensitivity", "alt+c")),
+            Line::from(format!("{:012} - Save output to file", self.kb_config.save_output.first().unwrap().to_string())),
+            Line::from(format!("{:012} - Save command to file", self.kb_config.save_command.first().unwrap().to_string())),
             Line::from(""),
-            Line::from(format!("{:09} - Complete forward", self.kb_config.complete.first().unwrap().to_string())),
-            Line::from(format!("{:09} - Complete backward", self.kb_config.complete_prev.first().unwrap().to_string())),
+            Line::from(format!("{:012} - Search next", self.kb_config.search_next.first().unwrap().to_string())),
+            Line::from(format!("{:012} - Search previous", self.kb_config.search_prev.first().unwrap().to_string())),
+            Line::from(format!("{:012} - Toggle regex mode", "alt+x")),
+            Line::from(format!("{:012} - Toggle case sensitivity", "alt+c")),
             Line::from(""),
-            Line::from(format!("{:09} - Go to previous subcommand", self.kb_config.subcommand_prev.first().unwrap().to_string())),
-            Line::from(format!("{:09} - Go to next subcommand", self.kb_config.subcommand_next.first().unwrap().to_string())),
+            Line::from(format!("{:012} - Complete forward", self.kb_config.complete.first().unwrap().to_string())),
+            Line::from(format!("{:012} - Complete backward", self.kb_config.complete_prev.first().unwrap().to_string())),
             Line::from(""),
-            Line::from(format!("{:09} - History previous item", self.kb_config.history_prev.first().unwrap().to_string())),
-            Line::from(format!("{:09} - History next item", self.kb_config.history_next.first().unwrap().to_string())),
+            Line::from(format!("{:012} - Go to previous subcommand", self.kb_config.subcommand_prev.first().unwrap().to_string())),
+            Line::from(format!("{:012} - Go to next subcommand", self.kb_config.subcommand_next.first().unwrap().to_string())),
             Line::from(""),
-            Line::from(format!("{:09} - Scroll up", self.kb_config.scroll_up.first().unwrap().to_string())),
-            Line::from(format!("{:09} - Scroll down", self.kb_config.scroll_down.first().unwrap().to_string())),
-            Line::from(format!("{:09} - Scroll page up", self.kb_config.scroll_up_page.first().unwrap().to_string())),
-            Line::from(format!("{:09} - Scroll page down", self.kb_config.scroll_down_page.first().unwrap().to_string())),
+            Line::from(format!("{:012} - History previous item", self.kb_config.history_prev.first().unwrap().to_string())),
+            Line::from(format!("{:012} - History next item", self.kb_config.history_next.first().unwrap().to_string())),
             Line::from(""),
-            Line::from(format!("{:09} - Scroll right", self.kb_config.scroll_right.first().unwrap().to_string())),
-            Line::from(format!("{:09} - Scroll left", self.kb_config.scroll_left.first().unwrap().to_string())),
+            Line::from(format!("{:012} - Scroll up", self.kb_config.scroll_up.first().unwrap().to_string())),
+            Line::from(format!("{:012} - Scroll down", self.kb_config.scroll_down.first().unwrap().to_string())),
+            Line::from(format!("{:012} - Scroll page up", self.kb_config.scroll_up_page.first().unwrap().to_string())),
+            Line::from(format!("{:012} - Scroll page down", self.kb_config.scroll_down_page.first().unwrap().to_string())),
             Line::from(""),
-            Line::from(format!("{:09} - Wrap output lines", self.kb_config.toggle_wrap.first().unwrap().to_string())),
+            Line::from(format!("{:012} - Scroll right", self.kb_config.scroll_right.first().unwrap().to_string())),
+            Line::from(format!("{:012} - Scroll left", self.kb_config.scroll_left.first().unwrap().to_string())),
+            Line::from(""),
+            Line::from(format!("{:012} - Wrap output lines", self.kb_config.toggle_wrap.first().unwrap().to_string())),
         ]);
 
         let popup = Popup::new(lines)
@@ -790,19 +902,19 @@ mod tests {
 
             Self {
                 rura_widget: RuraWidget {
-                    command_input: Input::from(""),
+                    command_input: CompletableInput::from(""),
                     highlight_until: None,
                     theme: Theme::from_config(&theme_config),
                     history: History::in_mem(),
                     highlight_reset_tx,
-                    completions: None,
-                    completer: Box::new(ShCompleter {}),
                 },
                 output_widget: OutputWidget::new(
                     &theme_config,
                     ErrorPanePlacement::Bottom,
                     ErrorDisplayMode::Pane,
                 ),
+                save_output_widget: SaveToFileWidget::new(" Save output to file ".into()),
+                save_command_widget: SaveToFileWidget::new(" Save command to file ".into()),
                 search_widget: SearchWidget::default(),
                 stdin: "".into(),
                 action_rx,
@@ -903,6 +1015,38 @@ mod tests {
         );
     }
 
+    #[test]
+    fn save_output_popup() {
+        let mut app = App::default();
+
+        input_key(&mut app, Char('s'), KeyModifiers::CONTROL);
+
+        input_text(&mut app, "output-file.txt");
+
+        let mut terminal = TestTerminal::default().0;
+        terminal
+            .draw(|frame| app.render(frame, frame.area()))
+            .unwrap();
+
+        assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn save_command_popup() {
+        let mut app = App::default();
+
+        input_key(&mut app, Char('s'), KeyModifiers::CONTROL | KeyModifiers::ALT);
+
+        input_text(&mut app, "command-file.txt");
+
+        let mut terminal = TestTerminal::default().0;
+        terminal
+            .draw(|frame| app.render(frame, frame.area()))
+            .unwrap();
+
+        assert_snapshot!(terminal.backend());
+    }
+
     // todo
     // add test checking that whatever was piped in through stdin
     // goes in exactly the same form out - jq input_line_number
@@ -935,4 +1079,6 @@ enum ActiveMode {
     Search,
     LiveConfirmation(InputMode),
     Help,
+    SaveOutput,
+    SaveCommand,
 }
