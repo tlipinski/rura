@@ -1,5 +1,6 @@
 use crate::config::KeyBindingsConfig;
 use crossterm::event::{KeyCode, KeyModifiers};
+use log::debug;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -77,9 +78,7 @@ fn parse_bindings(keys: &[String]) -> Vec<(KeyCode, KeyModifiers)> {
 }
 
 fn parse_key_binding(s: &str) -> Option<(KeyCode, KeyModifiers)> {
-    // Split into parts; everything before the last segment is a modifier.
-    // Use splitn with a high limit to get all segments.
-    let parts: Vec<&str> = s.splitn(10, '+').collect();
+    let parts: Vec<&str> = s.splitn(5, '+').collect();
     if parts.is_empty() {
         return None;
     }
@@ -132,11 +131,27 @@ fn parse_key_binding(s: &str) -> Option<(KeyCode, KeyModifiers)> {
 }
 
 pub fn to_ui_command(bindings: &KeyBindings, code: KeyCode, mods: KeyModifiers) -> Option<UiCmd> {
-    bindings.bindings.iter().find_map(|(action, bindings)| {
-        if bindings.contains(&(code, mods)) {
+    // Cleaning up data about key press to avoid leaking some of terminal related quirks into config
+    // Not sure if this is the best way to do it, but it works for now
+    let (c, m) = match (code, mods) {
+        (KeyCode::BackTab, KeyModifiers::NONE) => (KeyCode::Tab, KeyModifiers::SHIFT),
+        (KeyCode::BackTab, KeyModifiers::SHIFT) => (KeyCode::Tab, KeyModifiers::SHIFT),
+        (KeyCode::Char(c), mods) => (KeyCode::Char(c.to_lowercase().next().unwrap()), mods),
+        other => other,
+    };
+    let cmd_opt = bindings.bindings.iter().find_map(|(action, bindings)| {
+        if bindings.contains(&(c, m)) {
             Some(*action)
         } else {
             None
         }
-    })
+    });
+
+    if let Some(action) = cmd_opt {
+        debug!("Action: {:?} -> {:?}", (code, mods), action);
+    } else {
+        debug!("Key press: {:?}", (code, mods));
+    };
+
+    cmd_opt
 }

@@ -74,12 +74,6 @@ impl Default for ThemeConfig {
     }
 }
 
-/// Key binding strings use the format: `[modifier+]*key`
-/// Modifiers: `ctrl`, `alt`, `shift`
-/// Named keys: `enter`, `esc`, `backspace`, `delete`, `tab`, `backtab`, `up`, `down`, `left`, `right`,
-///             `pageup`, `pagedown`, `home`, `end`, `f1`–`f12`
-/// Single characters: `a`–`z`, `0`–`9`, symbols like `|`, `\`, etc.
-/// Examples: `"ctrl+c"`, `"alt+j"`, `"enter"`, `"pagedown"`, `"alt+\\"`
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(default)]
 pub struct KeyBindingsConfig {
@@ -114,9 +108,19 @@ impl Default for KeyBindingsConfig {
             execute_until_prev: vec!["alt+|".into()],
             reset_input: vec!["alt+i".into()],
             scroll_down: vec!["down".into(), "alt+j".into()],
-            scroll_down_page: vec!["pagedown".into(), "ctrl+d".into(), "alt+down".into()],
+            scroll_down_page: vec![
+                "pagedown".into(),
+                "ctrl+d".into(),
+                "alt+down".into(),
+                "alt+shift+j".into(),
+            ],
             scroll_up: vec!["up".into(), "alt+k".into()],
-            scroll_up_page: vec!["pageup".into(), "ctrl+u".into(), "alt+up".into()],
+            scroll_up_page: vec![
+                "pageup".into(),
+                "ctrl+u".into(),
+                "alt+up".into(),
+                "alt+shift+k".into(),
+            ],
             scroll_left: vec!["alt+h".into()],
             scroll_right: vec!["alt+l".into()],
             toggle_wrap: vec!["alt+w".into()],
@@ -125,12 +129,7 @@ impl Default for KeyBindingsConfig {
             subcommand_next: vec!["alt+right".into()],
             subcommand_prev: vec!["alt+left".into()],
             complete: vec!["tab".into()],
-            complete_prev: vec![
-                "shift+tab".into(),
-                "shift+backtab".into(),
-                "alt+tab".into(),
-                "backtab".into(),
-            ],
+            complete_prev: vec!["shift+tab".into(), "alt+tab".into()],
             search_next: vec!["f3".into(), "ctrl+f".into()],
             search_prev: vec!["f4".into(), "ctrl+b".into()],
         }

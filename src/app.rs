@@ -18,7 +18,7 @@ use anyhow::Result;
 use crossterm::event::KeyCode::Char;
 use crossterm::event::{KeyCode, KeyModifiers};
 use crossterm::tty::IsTty;
-use log::{debug, error, info};
+use log::{error, info};
 use ratatui::crossterm::event;
 use ratatui::crossterm::event::Event;
 use ratatui::layout::{Constraint, Direction, Layout, Margin, Rect};
@@ -680,7 +680,7 @@ fn handle_command_task(
 fn handle_input_task(tx: Sender<Action>) -> Result<()> {
     loop {
         if let Ok(event) = event::read() {
-            debug!("event: {:?}", event);
+            // debug!("event: {:?}", event);
             tx.send(UserInput(event))?
         }
     }
