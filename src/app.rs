@@ -187,322 +187,339 @@ impl App {
             Event::Key(key_event) => {
                 let code = key_event.code;
                 let mods = key_event.modifiers;
-                let key_bindings = &self.key_bindings;
 
                 match &self.active_mode {
-                    ActiveMode::Normal => match (code, mods) {
-                        (Esc, KeyModifiers::NONE) => {
-                            self.output_widget.clear_highlight();
-                        }
-                        (F(1), KeyModifiers::NONE) => {
-                            self.active_mode = ActiveMode::Help;
-                        }
-                        (F(11), KeyModifiers::NONE) => match self.input_mode {
-                            InputMode::Normal => {
-                                self.active_mode =
-                                    ActiveMode::LiveConfirmation(InputMode::LiveUntilCursor);
-                            }
-                            InputMode::LiveFull => {
-                                self.input_mode = InputMode::LiveUntilCursor;
-                            }
-                            InputMode::LiveUntilCursor => {
-                                self.input_mode = InputMode::Normal;
-                            }
-                        },
-                        (F(12), KeyModifiers::NONE) => match self.input_mode {
-                            InputMode::Normal => {
-                                self.active_mode =
-                                    ActiveMode::LiveConfirmation(InputMode::LiveFull);
-                            }
-                            InputMode::LiveFull => {
-                                self.input_mode = InputMode::Normal;
-                            }
-                            InputMode::LiveUntilCursor => {
-                                self.input_mode = InputMode::LiveFull;
-                            }
-                        },
-                        _ => match to_ui_command(key_bindings, code, mods) {
-                            Some(ui_cmd) => match ui_cmd {
-                                UiCmd::Quit => {
-                                    self.exit = true;
-                                }
-                                UiCmd::SearchNext | UiCmd::SearchPrev => {
-                                    self.active_mode = ActiveMode::Search;
-                                }
-                                UiCmd::ExecuteFull => {
-                                    self.handle_execute(ExecuteType::Full);
-                                }
-                                UiCmd::ExecuteUntilCurrent => {
-                                    self.handle_execute(ExecuteType::UntilCurrent)
-                                }
-                                UiCmd::ExecuteUntilPrev => {
-                                    self.handle_execute(ExecuteType::UntilCurrentPrev)
-                                }
-                                UiCmd::ResetInput => {
-                                    self.output_widget
-                                        .handle_command_output(Output::ok_stdin(&self.stdin));
-                                }
-                                UiCmd::SubcommandNext => {
-                                    self.rura_widget.subcommand_next();
-                                }
-                                UiCmd::SubcommandPrev => {
-                                    self.rura_widget.subcommand_prev();
-                                }
-                                UiCmd::HistoryNext => {
-                                    // disable history in live mode
-                                    if matches!(self.input_mode, InputMode::Normal) {
-                                        self.rura_widget.history_next();
-                                    }
-                                }
-                                UiCmd::HistoryPrev => {
-                                    // disable history in live mode
-                                    if matches!(self.input_mode, InputMode::Normal) {
-                                        self.rura_widget.history_prev();
-                                    }
-                                }
-                                UiCmd::Complete => {
-                                    // disable completions in live mode
-                                    if matches!(self.input_mode, InputMode::Normal) {
-                                        self.rura_widget.command_input.complete(true);
-                                    }
-                                }
-                                UiCmd::CompletePrev => {
-                                    // disable completions in live mode
-                                    if matches!(self.input_mode, InputMode::Normal) {
-                                        self.rura_widget.command_input.complete(false);
-                                    }
-                                }
-                                UiCmd::ScrollDown => {
-                                    self.output_widget.scroll_down();
-                                }
-                                UiCmd::ScrollDownPage => {
-                                    self.output_widget.scroll_page_down();
-                                }
-                                UiCmd::ScrollUp => {
-                                    self.output_widget.scroll_up();
-                                }
-                                UiCmd::ScrollUpPage => {
-                                    self.output_widget.scroll_page_up();
-                                }
-                                UiCmd::ScrollLeft => {
-                                    self.output_widget.scroll_left();
-                                }
-                                UiCmd::ScrollRight => {
-                                    self.output_widget.scroll_right();
-                                }
-                                UiCmd::ToggleWrap => {
-                                    self.output_widget.toggle_wrap();
-                                }
-                                UiCmd::SaveOutput => {
-                                    self.active_mode = ActiveMode::SaveOutput;
-                                }
-                                UiCmd::SaveCommand => {
-                                    self.active_mode = ActiveMode::SaveCommand;
-                                }
-                            },
-                            _ => {
-                                if self.rura_widget.handle_event(event) {
-                                    match self.input_mode {
-                                        InputMode::Normal => {}
-                                        InputMode::LiveFull | InputMode::LiveUntilCursor => {
-                                            self.debouncer_tx.send(()).unwrap();
-                                        }
-                                    }
-                                }
-                            }
-                        },
-                    },
-
-                    ActiveMode::Search => match (code, mods) {
-                        (Esc, KeyModifiers::NONE) => {
-                            self.active_mode = ActiveMode::Normal;
-                        }
-                        (Char('c'), KeyModifiers::ALT) => {
-                            self.search_widget.toggle_case_sensitive();
-                            self.output_widget.highlight(
-                                self.search_widget.input.value(),
-                                self.search_widget.case_sensitive,
-                                self.search_widget.regex,
-                            );
-                            self.search_widget
-                                .update_highlight_info(self.output_widget.highlight_info());
-                        }
-                        (Char('x'), KeyModifiers::ALT) => {
-                            self.search_widget.toggle_regex();
-                            self.output_widget.highlight(
-                                self.search_widget.input.value(),
-                                self.search_widget.case_sensitive,
-                                self.search_widget.regex,
-                            );
-                            self.search_widget
-                                .update_highlight_info(self.output_widget.highlight_info());
-                        }
-                        (Enter, KeyModifiers::NONE) => {
-                            self.output_widget.highlight(
-                                self.search_widget.input.value(),
-                                self.search_widget.case_sensitive,
-                                self.search_widget.regex,
-                            );
-                            self.search_widget
-                                .update_highlight_info(self.output_widget.highlight_info());
-                        }
-                        _ => match to_ui_command(key_bindings, code, mods) {
-                            Some(ui_cmd) => match ui_cmd {
-                                UiCmd::Quit => {
-                                    self.exit = true;
-                                }
-                                UiCmd::SearchNext => {
-                                    self.output_widget.highlight_next();
-                                    self.search_widget
-                                        .update_highlight_info(self.output_widget.highlight_info());
-                                }
-                                UiCmd::SearchPrev => {
-                                    self.output_widget.highlight_prev();
-                                    self.search_widget
-                                        .update_highlight_info(self.output_widget.highlight_info());
-                                }
-                                UiCmd::ScrollDown => {
-                                    self.output_widget.scroll_down();
-                                }
-                                UiCmd::ScrollDownPage => {
-                                    self.output_widget.scroll_page_down();
-                                }
-                                UiCmd::ScrollUp => {
-                                    self.output_widget.scroll_up();
-                                }
-                                UiCmd::ScrollUpPage => {
-                                    self.output_widget.scroll_page_up();
-                                }
-                                UiCmd::ScrollLeft => {
-                                    self.output_widget.scroll_left();
-                                }
-                                UiCmd::ScrollRight => {
-                                    self.output_widget.scroll_right();
-                                }
-                                UiCmd::ToggleWrap => {
-                                    self.output_widget.toggle_wrap();
-                                }
-                                UiCmd::SaveOutput => {
-                                    self.active_mode = ActiveMode::SaveOutput;
-                                }
-                                UiCmd::SaveCommand => {
-                                    self.active_mode = ActiveMode::SaveCommand;
-                                }
-                                _ => {}
-                            },
-                            _ => {
-                                if self.search_widget.handle_event(event) {
-                                    self.output_widget.highlight(
-                                        self.search_widget.input.value(),
-                                        self.search_widget.case_sensitive,
-                                        self.search_widget.regex,
-                                    );
-                                    self.search_widget
-                                        .update_highlight_info(self.output_widget.highlight_info());
-                                };
-                            }
-                        },
-                    },
-
-                    ActiveMode::LiveConfirmation(input_mode) => match (code, mods) {
-                        (Esc | Char('n'), KeyModifiers::NONE) => {
-                            self.active_mode = ActiveMode::default()
-                        }
-                        (Char('y'), KeyModifiers::NONE) => {
-                            self.input_mode = input_mode.clone();
-                            self.active_mode = ActiveMode::default();
-                        }
-                        _ => match to_ui_command(key_bindings, code, mods) {
-                            Some(UiCmd::Quit) => {
-                                self.exit = true;
-                            }
-                            _ => {}
-                        },
-                    },
-
-                    ActiveMode::Help => match (code, mods) {
-                        (Esc, KeyModifiers::NONE) => {
-                            self.active_mode = ActiveMode::default();
-                        }
-                        (F(1), KeyModifiers::NONE) => {
-                            self.active_mode = ActiveMode::default();
-                        }
-                        _ => match to_ui_command(key_bindings, code, mods) {
-                            Some(UiCmd::Quit) => {
-                                self.exit = true;
-                            }
-                            _ => {}
-                        },
-                    },
-
-                    ActiveMode::SaveOutput => match (code, mods) {
-                        (Esc, KeyModifiers::NONE) => {
-                            self.active_mode = ActiveMode::default();
-                        }
-                        (Enter, KeyModifiers::NONE) => match self.save_output_to_file() {
-                            Ok(()) => {
-                                debug!(
-                                    "Output saved to file: {}",
-                                    self.save_output_widget.file_path_input.value()
-                                );
-                                self.active_mode = ActiveMode::default();
-                            }
-                            Err(e) => {
-                                self.save_output_widget.error_message = Some(e.to_string());
-                                error!("Error saving output to file: {}", e);
-                            }
-                        },
-                        _ => match to_ui_command(key_bindings, code, mods) {
-                            Some(UiCmd::Quit) => {
-                                self.exit = true;
-                            }
-                            Some(UiCmd::Complete) => {
-                                self.save_output_widget.file_path_input.complete(true);
-                            }
-                            Some(UiCmd::CompletePrev) => {
-                                self.save_output_widget.file_path_input.complete(false);
-                            }
-                            _ => {
-                                self.save_output_widget.file_path_input.handle_event(event);
-                            }
-                        },
-                    },
-
-                    ActiveMode::SaveCommand => match (code, mods) {
-                        (Esc, KeyModifiers::NONE) => {
-                            self.active_mode = ActiveMode::default();
-                        }
-                        (Enter, KeyModifiers::NONE) => match self.save_command_to_file() {
-                            Ok(()) => {
-                                debug!(
-                                    "Output saved to file: {}",
-                                    self.save_command_widget.file_path_input.value()
-                                );
-                                self.active_mode = ActiveMode::default();
-                            }
-                            Err(e) => {
-                                self.save_command_widget.error_message = Some(e.to_string());
-                                error!("Error saving output to file: {}", e);
-                            }
-                        },
-                        _ => match to_ui_command(key_bindings, code, mods) {
-                            Some(UiCmd::Quit) => {
-                                self.exit = true;
-                            }
-                            Some(UiCmd::Complete) => {
-                                self.save_command_widget.file_path_input.complete(true);
-                            }
-                            Some(UiCmd::CompletePrev) => {
-                                self.save_command_widget.file_path_input.complete(false);
-                            }
-                            _ => {
-                                self.save_command_widget.file_path_input.handle_event(event);
-                            }
-                        },
-                    },
+                    ActiveMode::Normal => self.handle_event_normal(event, code, mods),
+                    ActiveMode::Search => self.handle_event_search(event, code, mods),
+                    ActiveMode::Help => self.handle_event_help(code, mods),
+                    ActiveMode::SaveOutput => self.handle_event_save_output(event, code, mods),
+                    ActiveMode::SaveCommand => self.handle_event_save_command(event, code, mods),
+                    ActiveMode::LiveConfirmation(input_mode) => {
+                        self.handle_event_live_confirmation(code, mods, input_mode.clone())
+                    }
                 }
             }
             _ => {}
+        }
+    }
+
+    fn handle_event_save_command(&mut self, event: &Event, code: KeyCode, mods: KeyModifiers) {
+        match (code, mods) {
+            (Esc, KeyModifiers::NONE) => {
+                self.active_mode = ActiveMode::default();
+            }
+            (Enter, KeyModifiers::NONE) => match self.save_command_to_file() {
+                Ok(()) => {
+                    debug!(
+                        "Output saved to file: {}",
+                        self.save_command_widget.file_path_input.value()
+                    );
+                    self.active_mode = ActiveMode::default();
+                }
+                Err(e) => {
+                    self.save_command_widget.error_message = Some(e.to_string());
+                    error!("Error saving output to file: {}", e);
+                }
+            },
+            _ => match to_ui_command(&self.key_bindings, code, mods) {
+                Some(UiCmd::Quit) => {
+                    self.exit = true;
+                }
+                Some(UiCmd::Complete) => {
+                    self.save_command_widget.file_path_input.complete(true);
+                }
+                Some(UiCmd::CompletePrev) => {
+                    self.save_command_widget.file_path_input.complete(false);
+                }
+                _ => {
+                    self.save_command_widget.file_path_input.handle_event(event);
+                }
+            },
+        }
+    }
+
+    fn handle_event_save_output(&mut self, event: &Event, code: KeyCode, mods: KeyModifiers) {
+        match (code, mods) {
+            (Esc, KeyModifiers::NONE) => {
+                self.active_mode = ActiveMode::default();
+            }
+            (Enter, KeyModifiers::NONE) => match self.save_output_to_file() {
+                Ok(()) => {
+                    debug!(
+                        "Output saved to file: {}",
+                        self.save_output_widget.file_path_input.value()
+                    );
+                    self.active_mode = ActiveMode::default();
+                }
+                Err(e) => {
+                    self.save_output_widget.error_message = Some(e.to_string());
+                    error!("Error saving output to file: {}", e);
+                }
+            },
+            _ => match to_ui_command(&self.key_bindings, code, mods) {
+                Some(UiCmd::Quit) => {
+                    self.exit = true;
+                }
+                Some(UiCmd::Complete) => {
+                    self.save_output_widget.file_path_input.complete(true);
+                }
+                Some(UiCmd::CompletePrev) => {
+                    self.save_output_widget.file_path_input.complete(false);
+                }
+                _ => {
+                    self.save_output_widget.file_path_input.handle_event(event);
+                }
+            },
+        }
+    }
+
+    fn handle_event_help(&mut self, code: KeyCode, mods: KeyModifiers) {
+        match (code, mods) {
+            (Esc, KeyModifiers::NONE) => {
+                self.active_mode = ActiveMode::default();
+            }
+            (F(1), KeyModifiers::NONE) => {
+                self.active_mode = ActiveMode::default();
+            }
+            _ => match to_ui_command(&self.key_bindings, code, mods) {
+                Some(UiCmd::Quit) => {
+                    self.exit = true;
+                }
+                _ => {}
+            },
+        }
+    }
+
+    fn handle_event_live_confirmation(
+        &mut self,
+        code: KeyCode,
+        mods: KeyModifiers,
+        input_mode: InputMode,
+    ) {
+        match (code, mods) {
+            (Esc | Char('n'), KeyModifiers::NONE) => self.active_mode = ActiveMode::default(),
+            (Char('y'), KeyModifiers::NONE) => {
+                self.input_mode = input_mode.clone();
+                self.active_mode = ActiveMode::default();
+            }
+            _ => match to_ui_command(&self.key_bindings, code, mods) {
+                Some(UiCmd::Quit) => {
+                    self.exit = true;
+                }
+                _ => {}
+            },
+        }
+    }
+
+    fn handle_event_search(&mut self, event: &Event, code: KeyCode, mods: KeyModifiers) {
+        match (code, mods) {
+            (Esc, KeyModifiers::NONE) => {
+                self.active_mode = ActiveMode::Normal;
+            }
+            (Char('c'), KeyModifiers::ALT) => {
+                self.search_widget.toggle_case_sensitive();
+                self.output_widget.highlight(
+                    self.search_widget.input.value(),
+                    self.search_widget.case_sensitive,
+                    self.search_widget.regex,
+                );
+                self.search_widget
+                    .update_highlight_info(self.output_widget.highlight_info());
+            }
+            (Char('x'), KeyModifiers::ALT) => {
+                self.search_widget.toggle_regex();
+                self.output_widget.highlight(
+                    self.search_widget.input.value(),
+                    self.search_widget.case_sensitive,
+                    self.search_widget.regex,
+                );
+                self.search_widget
+                    .update_highlight_info(self.output_widget.highlight_info());
+            }
+            (Enter, KeyModifiers::NONE) => {
+                self.output_widget.highlight(
+                    self.search_widget.input.value(),
+                    self.search_widget.case_sensitive,
+                    self.search_widget.regex,
+                );
+                self.search_widget
+                    .update_highlight_info(self.output_widget.highlight_info());
+            }
+            _ => match to_ui_command(&self.key_bindings, code, mods) {
+                Some(ui_cmd) => match ui_cmd {
+                    UiCmd::Quit => {
+                        self.exit = true;
+                    }
+                    UiCmd::SearchNext => {
+                        self.output_widget.highlight_next();
+                        self.search_widget
+                            .update_highlight_info(self.output_widget.highlight_info());
+                    }
+                    UiCmd::SearchPrev => {
+                        self.output_widget.highlight_prev();
+                        self.search_widget
+                            .update_highlight_info(self.output_widget.highlight_info());
+                    }
+                    UiCmd::ScrollDown => {
+                        self.output_widget.scroll_down();
+                    }
+                    UiCmd::ScrollDownPage => {
+                        self.output_widget.scroll_page_down();
+                    }
+                    UiCmd::ScrollUp => {
+                        self.output_widget.scroll_up();
+                    }
+                    UiCmd::ScrollUpPage => {
+                        self.output_widget.scroll_page_up();
+                    }
+                    UiCmd::ScrollLeft => {
+                        self.output_widget.scroll_left();
+                    }
+                    UiCmd::ScrollRight => {
+                        self.output_widget.scroll_right();
+                    }
+                    UiCmd::ToggleWrap => {
+                        self.output_widget.toggle_wrap();
+                    }
+                    UiCmd::SaveOutput => {
+                        self.active_mode = ActiveMode::SaveOutput;
+                    }
+                    UiCmd::SaveCommand => {
+                        self.active_mode = ActiveMode::SaveCommand;
+                    }
+                    _ => {}
+                },
+                _ => {
+                    if self.search_widget.handle_event(event) {
+                        self.output_widget.highlight(
+                            self.search_widget.input.value(),
+                            self.search_widget.case_sensitive,
+                            self.search_widget.regex,
+                        );
+                        self.search_widget
+                            .update_highlight_info(self.output_widget.highlight_info());
+                    };
+                }
+            },
+        }
+    }
+
+    fn handle_event_normal(&mut self, event: &Event, code: KeyCode, mods: KeyModifiers) {
+        match (code, mods) {
+            (Esc, KeyModifiers::NONE) => {
+                self.output_widget.clear_highlight();
+            }
+            (F(1), KeyModifiers::NONE) => {
+                self.active_mode = ActiveMode::Help;
+            }
+            (F(11), KeyModifiers::NONE) => match self.input_mode {
+                InputMode::Normal => {
+                    self.active_mode = ActiveMode::LiveConfirmation(InputMode::LiveUntilCursor);
+                }
+                InputMode::LiveFull => {
+                    self.input_mode = InputMode::LiveUntilCursor;
+                }
+                InputMode::LiveUntilCursor => {
+                    self.input_mode = InputMode::Normal;
+                }
+            },
+            (F(12), KeyModifiers::NONE) => match self.input_mode {
+                InputMode::Normal => {
+                    self.active_mode = ActiveMode::LiveConfirmation(InputMode::LiveFull);
+                }
+                InputMode::LiveFull => {
+                    self.input_mode = InputMode::Normal;
+                }
+                InputMode::LiveUntilCursor => {
+                    self.input_mode = InputMode::LiveFull;
+                }
+            },
+            _ => match to_ui_command(&self.key_bindings, code, mods) {
+                Some(ui_cmd) => match ui_cmd {
+                    UiCmd::Quit => {
+                        self.exit = true;
+                    }
+                    UiCmd::SearchNext | UiCmd::SearchPrev => {
+                        self.active_mode = ActiveMode::Search;
+                    }
+                    UiCmd::ExecuteFull => {
+                        self.handle_execute(ExecuteType::Full);
+                    }
+                    UiCmd::ExecuteUntilCurrent => self.handle_execute(ExecuteType::UntilCurrent),
+                    UiCmd::ExecuteUntilPrev => self.handle_execute(ExecuteType::UntilCurrentPrev),
+                    UiCmd::ResetInput => {
+                        self.output_widget
+                            .handle_command_output(Output::ok_stdin(&self.stdin));
+                    }
+                    UiCmd::SubcommandNext => {
+                        self.rura_widget.subcommand_next();
+                    }
+                    UiCmd::SubcommandPrev => {
+                        self.rura_widget.subcommand_prev();
+                    }
+                    UiCmd::HistoryNext => {
+                        // disable history in live mode
+                        if matches!(self.input_mode, InputMode::Normal) {
+                            self.rura_widget.history_next();
+                        }
+                    }
+                    UiCmd::HistoryPrev => {
+                        // disable history in live mode
+                        if matches!(self.input_mode, InputMode::Normal) {
+                            self.rura_widget.history_prev();
+                        }
+                    }
+                    UiCmd::Complete => {
+                        // disable completions in live mode
+                        if matches!(self.input_mode, InputMode::Normal) {
+                            self.rura_widget.command_input.complete(true);
+                        }
+                    }
+                    UiCmd::CompletePrev => {
+                        // disable completions in live mode
+                        if matches!(self.input_mode, InputMode::Normal) {
+                            self.rura_widget.command_input.complete(false);
+                        }
+                    }
+                    UiCmd::ScrollDown => {
+                        self.output_widget.scroll_down();
+                    }
+                    UiCmd::ScrollDownPage => {
+                        self.output_widget.scroll_page_down();
+                    }
+                    UiCmd::ScrollUp => {
+                        self.output_widget.scroll_up();
+                    }
+                    UiCmd::ScrollUpPage => {
+                        self.output_widget.scroll_page_up();
+                    }
+                    UiCmd::ScrollLeft => {
+                        self.output_widget.scroll_left();
+                    }
+                    UiCmd::ScrollRight => {
+                        self.output_widget.scroll_right();
+                    }
+                    UiCmd::ToggleWrap => {
+                        self.output_widget.toggle_wrap();
+                    }
+                    UiCmd::SaveOutput => {
+                        self.active_mode = ActiveMode::SaveOutput;
+                    }
+                    UiCmd::SaveCommand => {
+                        self.active_mode = ActiveMode::SaveCommand;
+                    }
+                },
+                _ => {
+                    if self.rura_widget.handle_event(event) {
+                        match self.input_mode {
+                            InputMode::Normal => {}
+                            InputMode::LiveFull | InputMode::LiveUntilCursor => {
+                                self.debouncer_tx.send(()).unwrap();
+                            }
+                        }
+                    }
+                }
+            },
         }
     }
 
@@ -1035,7 +1052,11 @@ mod tests {
     fn save_command_popup() {
         let mut app = App::default();
 
-        input_key(&mut app, Char('s'), KeyModifiers::CONTROL | KeyModifiers::ALT);
+        input_key(
+            &mut app,
+            Char('s'),
+            KeyModifiers::CONTROL | KeyModifiers::ALT,
+        );
 
         input_text(&mut app, "command-file.txt");
 
