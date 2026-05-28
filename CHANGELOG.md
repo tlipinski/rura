@@ -1,3 +1,16 @@
+## v.1.3.0 - 2026-05-28
+
+### Features
+
+- Added shell customization with CLI arg, config and SHELL environment variable
+- Added Zsh shell completion support
+- Added Fish shell completion support
+- Added support for x86_64-unknown-linux-musl target platform
+
+### Bug Fixes
+
+- Append newline to saved content
+
 ## v1.2.0 - 2026-05-26
 
 ### Features
