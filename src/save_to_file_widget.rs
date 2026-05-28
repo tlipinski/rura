@@ -42,7 +42,7 @@ impl SaveToFileWidget {
             .mode(mode)
             .open(path)?;
 
-        write!(file, "{}", content)?;
+        write!(file, "{}\n", content)?;
 
         self.error_message = None;
 
