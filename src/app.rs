@@ -4,7 +4,7 @@ use crate::app::Action::{
 use crate::args::Args;
 use crate::cmd_runner::{CmdRunner, Output};
 use crate::completable_input::CompletableInput;
-use crate::config::{KeyBindingsConfig, ThemeConfig};
+use crate::config::Config;
 use crate::debouncer::debouncer_task;
 use crate::help_widget::HelpWidget;
 use crate::history::History;
@@ -33,9 +33,10 @@ use ratatui::widgets::{Block, BorderType, Widget};
 use ratatui::{DefaultTerminal, Frame};
 use serde::{Deserialize, Serialize};
 use std::io::{Read, stdin};
+use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, Sender};
-use std::thread;
 use std::time::Duration;
+use std::{env, thread};
 use tui_popup::Popup;
 
 pub struct App {
@@ -59,17 +60,26 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(
-        args: Args,
-        theme_config: &ThemeConfig,
-        kb_config: KeyBindingsConfig,
-        command_line_placement: CommandLinePlacement,
-        error_display_mode: ErrorDisplayMode,
-        highlight_duration_ms: u64,
-        debounce_duration_ms: u64,
-        shell: String,
-        split_commands: bool,
-    ) -> Self {
+    pub fn new(args: Args, config: Config) -> Self {
+        let shell = args
+            .shell
+            .clone()
+            .or(config.shell)
+            .or({
+                if let Ok(shell_var) = env::var("SHELL") {
+                    let shell_path = PathBuf::from(shell_var);
+                    shell_path
+                        .file_name()
+                        .and_then(|s| s.to_str())
+                        .map(String::from)
+                } else {
+                    None
+                }
+            })
+            .unwrap_or("sh".into());
+
+        debug!("Shell: {:?}", shell);
+
         let (action_tx, action_rx) = std::sync::mpsc::channel::<Action>();
         let (command_tx, command_rx) = std::sync::mpsc::channel::<(RuraCommand, String)>();
         let (highlight_reset_tx, highlight_reset_rx) = std::sync::mpsc::channel::<()>();
@@ -81,7 +91,8 @@ impl App {
         let value = shell.clone();
         let s2 = action_tx.clone();
         thread::spawn(move || {
-            handle_command_task(CmdRunner::new(&value, split_commands), command_rx, s2).unwrap()
+            handle_command_task(CmdRunner::new(&value, args.split_commands), command_rx, s2)
+                .unwrap()
         });
 
         let s3 = action_tx.clone();
@@ -95,13 +106,13 @@ impl App {
 
         let s4 = action_tx.clone();
         thread::spawn(move || {
-            reset_highlight_task(highlight_reset_rx, s4, highlight_duration_ms).unwrap()
+            reset_highlight_task(highlight_reset_rx, s4, config.highlight_duration_ms).unwrap()
         });
 
         thread::spawn(move || {
             debouncer_task(
                 debouncer_rx,
-                Duration::from_millis(debounce_duration_ms),
+                Duration::from_millis(config.debounce_duration_ms),
                 move || {
                     action_tx
                         .send(Debounced)
@@ -115,17 +126,17 @@ impl App {
             rura_widget: RuraWidget {
                 command_input: CompletableInput::from(&args.command.unwrap_or_default(), &shell),
                 highlight_until: None,
-                theme: Theme::from_config(theme_config),
+                theme: Theme::from_config(&config.theme),
                 history: History::using_file(),
                 highlight_reset_tx,
             },
             output_widget: OutputWidget::new(
-                theme_config,
-                match command_line_placement {
+                &config.theme,
+                match config.command_line_placement {
                     CommandLinePlacement::Top => ErrorPanePlacement::Top,
                     CommandLinePlacement::Bottom => ErrorPanePlacement::Bottom,
                 },
-                error_display_mode,
+                config.error_display_mode,
             ),
             search_widget: SearchWidget::default(),
             save_output_widget: SaveToFileWidget::new(
@@ -141,9 +152,9 @@ impl App {
             action_rx,
             command_tx,
             debouncer_tx,
-            key_bindings: KeyBindings::from_config(&kb_config),
-            command_line_placement,
-            help_widget: HelpWidget::new(kb_config),
+            key_bindings: KeyBindings::from_config(&config.keybindings),
+            command_line_placement: config.command_line_placement,
+            help_widget: HelpWidget::new(config.keybindings),
             input_mode: InputMode::Normal,
             active_mode: ActiveMode::default(),
             active_modal: ActiveModal::default(),
@@ -870,6 +881,7 @@ enum InputMode {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::{KeyBindingsConfig, ThemeConfig};
     use crossterm::event::Event::Key;
     use crossterm::event::{KeyEvent, KeyEventKind, KeyEventState};
     use insta::assert_snapshot;
