@@ -1,4 +1,5 @@
 mod app;
+mod args;
 mod cmd_runner;
 mod completable_input;
 mod completion;
@@ -16,6 +17,7 @@ mod theme;
 mod uicmd;
 
 use crate::app::App;
+use crate::args::Args;
 use crate::config::load_config;
 use crate::history::History;
 use anyhow::Result;
@@ -67,31 +69,6 @@ fn main() {
             error!("{e}");
         }
     }
-}
-
-#[derive(Parser, Debug)]
-#[command(
-    version = crate::props::VERSION,
-    about = "Interactive TUI pipeline editor built for rapid iteration",
-    long_about = None
-)]
-struct Args {
-    #[arg(short, long, help = "Path to the input file")]
-    file: Option<String>,
-    #[arg(short, long, help = "Initial command to populate the input field")]
-    command: Option<String>,
-    #[arg(short = 'C', long, help = "Path to a custom TOML configuration file")]
-    config: Option<String>,
-    #[arg(
-        short,
-        long,
-        help = "Specify the shell to use for execution and completions"
-    )]
-    shell: Option<String>,
-    #[arg(short, long, help = "Print the last command from history and exit")]
-    last: bool,
-    #[arg(long = "ff-split", hide = true)]
-    split_commands: bool,
 }
 
 fn run(args: Args, config: config::Config) -> Result<()> {

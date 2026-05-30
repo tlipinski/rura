@@ -1,7 +1,7 @@
-use crate::Args;
 use crate::app::Action::{
     CommandCompleted, Debounced, ResetHighlight, StdinRead, StdinReadFailed, UserInput,
 };
+use crate::args::Args;
 use crate::cmd_runner::{CmdRunner, Output};
 use crate::completable_input::CompletableInput;
 use crate::config::{KeyBindingsConfig, ThemeConfig};
