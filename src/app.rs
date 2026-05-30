@@ -68,6 +68,7 @@ impl App {
         highlight_duration_ms: u64,
         debounce_duration_ms: u64,
         shell: String,
+        split_commands: bool,
     ) -> Self {
         let (action_tx, action_rx) = std::sync::mpsc::channel::<Action>();
         let (command_tx, command_rx) = std::sync::mpsc::channel::<(RuraCommand, String)>();
@@ -79,7 +80,9 @@ impl App {
 
         let value = shell.clone();
         let s2 = action_tx.clone();
-        thread::spawn(move || handle_command_task(CmdRunner::new(&value), command_rx, s2).unwrap());
+        thread::spawn(move || {
+            handle_command_task(CmdRunner::new(&value, split_commands), command_rx, s2).unwrap()
+        });
 
         let s3 = action_tx.clone();
         thread::spawn(move || {

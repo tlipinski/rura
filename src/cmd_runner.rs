@@ -13,10 +13,10 @@ pub struct CmdRunner {
 }
 
 impl CmdRunner {
-    pub fn new(shell: &str) -> Self {
+    pub fn new(shell: &str, split_commands: bool) -> Self {
         Self {
             shell: shell.into(),
-            split_commands: false,
+            split_commands,
         }
     }
 

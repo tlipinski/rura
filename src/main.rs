@@ -82,6 +82,8 @@ struct Args {
     shell: Option<String>,
     #[arg(short, long)]
     last: bool,
+    #[arg(long = "ff-split", hide = true)]
+    split_commands: bool,
 }
 
 fn run(args: Args, config: config::Config) -> Result<()> {
@@ -107,6 +109,8 @@ fn run(args: Args, config: config::Config) -> Result<()> {
     info!("Starting TUI");
     let mut terminal = ratatui::init();
 
+    let split_commands = args.split_commands;
+
     let app = App::new(
         args,
         &config.theme,
@@ -116,6 +120,7 @@ fn run(args: Args, config: config::Config) -> Result<()> {
         config.highlight_duration_ms,
         config.debounce_duration_ms,
         shell,
+        split_commands,
     );
     let last_command = app.run(&mut terminal)?;
 
