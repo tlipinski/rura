@@ -82,7 +82,11 @@ impl Completer for ZshCompleter {
                 format!("print -l ${{(k)commands[(I){}*]}}", prefix)
             }
             CompletionType::File => {
-                format!("setopt extended_glob && print -l (#i){}*(N)", prefix)
+                if prefix.starts_with("~") {
+                    format!("setopt extended_glob && print -l {}*(N)", prefix)
+                } else {
+                    format!("setopt extended_glob && print -l (#i){}*(N)", prefix)
+                }
             }
         };
 
