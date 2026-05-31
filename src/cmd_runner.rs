@@ -46,7 +46,7 @@ impl CmdRunner for CachedCmdRunner {
         if commands.is_empty() {
             return Ok(CmdResult {
                 command: "".into(),
-                output: Output::ok_stdin(&String::from_utf8_lossy(self.stdin.as_slice())),
+                output: Output::ok_stdin(self.stdin.clone()),
             });
         }
 
@@ -141,7 +141,7 @@ impl CmdRunner for SimpleCmdRunner {
         if commands.is_empty() {
             return Ok(CmdResult {
                 command: "".into(),
-                output: Output::ok_stdin(&String::from_utf8_lossy(self.stdin.as_slice())),
+                output: Output::ok_stdin(self.stdin.clone()),
             });
         }
 
@@ -194,18 +194,18 @@ impl Exec for SystemExec {
 
         if let Ok(output) = child.wait_with_output() {
             if output.status.success() {
-                let stdout = output.stdout.as_slice();
-                let str = String::from_utf8_lossy(stdout);
-                Ok(Output::ok_command(&command, &str))
+                Ok(Output::ok_command(&command, output.stdout))
             } else {
-                let stderr = output.stderr.as_slice();
-                let str = String::from_utf8_lossy(stderr);
-                Ok(Output::err_command(&command, &str, output.status.code()))
+                Ok(Output::err_command(
+                    &command,
+                    output.stderr,
+                    output.status.code(),
+                ))
             }
         } else {
             Ok(Output::err_command(
                 &command,
-                "Failed to execute command",
+                "Failed to execute command".bytes().collect_vec(),
                 None,
             ))
         }
@@ -227,41 +227,41 @@ pub struct Output {
 }
 
 impl Output {
-    pub fn ok_command(command: &str, str: &str) -> Self {
+    pub fn ok_command(command: &str, bytes: Vec<u8>) -> Self {
         Self {
             command: Some(command.into()),
-            lines: Self::lines(str),
-            bytes: str.as_bytes().to_vec(),
+            lines: Self::lines(&String::from_utf8_lossy(&bytes)),
+            bytes,
             status_code: Some(0),
             ok: true,
         }
     }
 
-    pub fn err_command(command: &str, str: &str, status_code: Option<i32>) -> Self {
+    pub fn err_command(command: &str, bytes: Vec<u8>, status_code: Option<i32>) -> Self {
         Self {
             command: Some(command.into()),
-            lines: Self::lines(str),
-            bytes: str.as_bytes().to_vec(),
+            lines: Self::lines(&String::from_utf8_lossy(&bytes)),
+            bytes,
             status_code,
             ok: false,
         }
     }
 
-    pub fn ok_stdin(str: &str) -> Self {
+    pub fn ok_stdin(bytes: Vec<u8>) -> Self {
         Self {
             command: None,
-            lines: Self::lines(str),
-            bytes: str.as_bytes().to_vec(),
+            lines: Self::lines(&String::from_utf8_lossy(&bytes)),
+            bytes,
             status_code: Some(0),
             ok: true,
         }
     }
 
-    pub fn err_stdin(str: &str) -> Self {
+    pub fn err_stdin(bytes: Vec<u8>) -> Self {
         Self {
             command: None,
-            lines: Self::lines(str),
-            bytes: str.as_bytes().to_vec(),
+            lines: Self::lines(&String::from_utf8_lossy(&bytes)),
+            bytes,
             status_code: None,
             ok: false,
         }
@@ -302,13 +302,16 @@ mod tests {
         fn exec(&self, command: &str, stdin: Vec<u8>) -> Result<Output> {
             self.calls.borrow_mut().push((command.into(), stdin));
             if command.ends_with("err") {
-                Ok(Output::err_command(
+                Ok(Output::err_command_str(
                     command,
                     &format!("{}-output", command),
                     Some(1),
                 ))
             } else {
-                Ok(Output::ok_command(command, &format!("{}-output", command)))
+                Ok(Output::ok_command_str(
+                    command,
+                    &format!("{}-output", command),
+                ))
             }
         }
     }
@@ -325,7 +328,7 @@ mod tests {
 
         assert_eq!(
             result.output,
-            Output::ok_command("echo hello", "echo hello-output")
+            Output::ok_command_str("echo hello", "echo hello-output")
         )
     }
 
@@ -339,7 +342,7 @@ mod tests {
 
         let result = runner.run(vec![]).unwrap();
 
-        assert_eq!(result.output, Output::ok_stdin("stdin"))
+        assert_eq!(result.output, Output::ok_stdin_str("stdin"))
     }
 
     #[test]
@@ -352,7 +355,7 @@ mod tests {
 
         let result = runner.run(vec![]).unwrap();
 
-        assert_eq!(result.output, Output::ok_stdin("stdin"))
+        assert_eq!(result.output, Output::ok_stdin_str("stdin"))
     }
 
     #[test]
@@ -368,7 +371,7 @@ mod tests {
             .unwrap();
 
         // output of the last called command
-        assert_eq!(result.output, Output::ok_command("cmd3", "cmd3-output"));
+        assert_eq!(result.output, Output::ok_command_str("cmd3", "cmd3-output"));
 
         // input for the command is the output of the previous command
         assert_eq!(
@@ -384,9 +387,9 @@ mod tests {
         assert_eq!(
             runner.cache,
             vec![
-                Output::ok_command("cmd1", "cmd1-output"),
-                Output::ok_command("cmd2", "cmd2-output"),
-                Output::ok_command("cmd3", "cmd3-output")
+                Output::ok_command_str("cmd1", "cmd1-output"),
+                Output::ok_command_str("cmd2", "cmd2-output"),
+                Output::ok_command_str("cmd3", "cmd3-output")
             ]
         );
     }
@@ -409,7 +412,7 @@ mod tests {
         let result = runner.run(vec!["cmd1".into()]).unwrap();
 
         // output of the last called command - cmd3
-        assert_eq!(result.output, Output::ok_command("cmd1", "cmd1-output"));
+        assert_eq!(result.output, Output::ok_command_str("cmd1", "cmd1-output"));
 
         // no calls since the command is cached
         assert_eq!(*calls.borrow(), vec![]);
@@ -418,9 +421,9 @@ mod tests {
         assert_eq!(
             runner.cache,
             vec![
-                Output::ok_command("cmd1", "cmd1-output"),
-                Output::ok_command("cmd2", "cmd2-output"),
-                Output::ok_command("cmd3", "cmd3-output")
+                Output::ok_command_str("cmd1", "cmd1-output"),
+                Output::ok_command_str("cmd2", "cmd2-output"),
+                Output::ok_command_str("cmd3", "cmd3-output")
             ]
         );
     }
@@ -448,7 +451,7 @@ mod tests {
             .unwrap();
 
         // output of the last called command
-        assert_eq!(result.output, Output::ok_command("cmd4", "cmd4-output"));
+        assert_eq!(result.output, Output::ok_command_str("cmd4", "cmd4-output"));
 
         // only cmd3 is called since is's the only one not cached
         assert_eq!(
@@ -463,10 +466,10 @@ mod tests {
         assert_eq!(
             runner.cache,
             vec![
-                Output::ok_command("cmd1", "cmd1-output"),
-                Output::ok_command("cmd2", "cmd2-output"),
-                Output::ok_command("cmd3", "cmd3-output"),
-                Output::ok_command("cmd4", "cmd4-output")
+                Output::ok_command_str("cmd1", "cmd1-output"),
+                Output::ok_command_str("cmd2", "cmd2-output"),
+                Output::ok_command_str("cmd3", "cmd3-output"),
+                Output::ok_command_str("cmd4", "cmd4-output")
             ]
         );
     }
@@ -490,7 +493,7 @@ mod tests {
         // output of the last called command
         assert_eq!(
             result.output,
-            Output::ok_command("cmd2mod", "cmd2mod-output")
+            Output::ok_command_str("cmd2mod", "cmd2mod-output")
         );
 
         // cmd2mod is called since it's modified
@@ -503,8 +506,8 @@ mod tests {
         assert_eq!(
             runner.cache,
             vec![
-                Output::ok_command("cmd1", "cmd1-output"),
-                Output::ok_command("cmd2mod", "cmd2mod-output"),
+                Output::ok_command_str("cmd1", "cmd1-output"),
+                Output::ok_command_str("cmd2mod", "cmd2mod-output"),
             ]
         );
     }
@@ -528,7 +531,7 @@ mod tests {
             .unwrap();
 
         // output of the last called command
-        assert_eq!(result.output, Output::ok_command("cmd3", "cmd3-output"));
+        assert_eq!(result.output, Output::ok_command_str("cmd3", "cmd3-output"));
 
         // cmd2mod is called since it's modified
         // cmd3 is also called because it was after modified command
@@ -544,9 +547,9 @@ mod tests {
         assert_eq!(
             runner.cache,
             vec![
-                Output::ok_command("cmd1", "cmd1-output"),
-                Output::ok_command("cmd2mod", "cmd2mod-output"),
-                Output::ok_command("cmd3", "cmd3-output"),
+                Output::ok_command_str("cmd1", "cmd1-output"),
+                Output::ok_command_str("cmd2mod", "cmd2mod-output"),
+                Output::ok_command_str("cmd3", "cmd3-output"),
             ]
         );
     }
@@ -566,7 +569,7 @@ mod tests {
         // output of the last called command
         assert_eq!(
             result.output,
-            Output::err_command("cmd2err", "cmd2err-output", Some(1))
+            Output::err_command_str("cmd2err", "cmd2err-output", Some(1))
         );
 
         // cmd2mod is called since it's modified
@@ -582,7 +585,7 @@ mod tests {
         // only cmd1 is cached since it didn't fail
         assert_eq!(
             runner.cache,
-            vec![Output::ok_command("cmd1", "cmd1-output"),]
+            vec![Output::ok_command_str("cmd1", "cmd1-output"),]
         );
     }
 
@@ -605,7 +608,7 @@ mod tests {
 
         assert_eq!(
             result.output,
-            Output::err_command("cmd2err", "cmd2err-output", Some(1))
+            Output::err_command_str("cmd2err", "cmd2err-output", Some(1))
         );
 
         // cmd1 not called because it's cached
@@ -618,7 +621,50 @@ mod tests {
         // entry for cmd3 is cleared because cmd2err failed before
         assert_eq!(
             runner.cache,
-            vec![Output::ok_command("cmd1", "cmd1-output"),]
+            vec![Output::ok_command_str("cmd1", "cmd1-output"),]
         );
+    }
+}
+
+#[cfg(test)]
+impl Output {
+    pub fn ok_command_str(command: &str, str: &str) -> Self {
+        Self {
+            command: Some(command.into()),
+            lines: Self::lines(str),
+            bytes: str.as_bytes().to_vec(),
+            status_code: Some(0),
+            ok: true,
+        }
+    }
+
+    pub fn err_command_str(command: &str, str: &str, status_code: Option<i32>) -> Self {
+        Self {
+            command: Some(command.into()),
+            lines: Self::lines(str),
+            bytes: str.as_bytes().to_vec(),
+            status_code,
+            ok: false,
+        }
+    }
+
+    pub fn ok_stdin_str(str: &str) -> Self {
+        Self {
+            command: None,
+            lines: Self::lines(str),
+            bytes: str.as_bytes().to_vec(),
+            status_code: Some(0),
+            ok: true,
+        }
+    }
+
+    pub fn err_stdin_str(str: &str) -> Self {
+        Self {
+            command: None,
+            lines: Self::lines(str),
+            bytes: str.as_bytes().to_vec(),
+            status_code: None,
+            ok: false,
+        }
     }
 }

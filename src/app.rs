@@ -18,6 +18,7 @@ use anyhow::{Error, Result};
 use crossterm::event::KeyCode::Char;
 use crossterm::event::{KeyCode, KeyModifiers};
 use crossterm::tty::IsTty;
+use itertools::Itertools;
 use log::{debug, error, info};
 use ratatui::crossterm::event;
 use ratatui::crossterm::event::Event;
@@ -560,7 +561,7 @@ impl App {
 
     fn save_output_to_file(&mut self) -> Result<()> {
         self.save_output_widget
-            .save(&self.output_widget.output.lines.join("\n"))
+            .save(self.output_widget.output.bytes.clone())
     }
 
     fn save_command_to_file(&mut self) -> Result<()> {
@@ -788,7 +789,9 @@ fn handle_command_task(
                     // todo use dedicated status widget for such errors?
                     let cmd_out = CmdResult {
                         command: "".into(),
-                        output: Output::err_stdin("Failed running command, check logs"),
+                        output: Output::err_stdin(
+                            "Failed running command, check logs".bytes().collect_vec(),
+                        ),
                     };
                     action_tx.send(CommandCompleted(cmd_out))?;
                     error!("{}", e)
@@ -1012,27 +1015,27 @@ mod tests {
 
         app.handle_action(CommandCompleted(cmd_res(
             "g",
-            Output::err_command("g", "", None),
+            Output::err_command_str("g", "", None),
         )));
         app.handle_action(CommandCompleted(cmd_res(
             "gr",
-            Output::err_command("gr", "", None),
+            Output::err_command_str("gr", "", None),
         )));
         app.handle_action(CommandCompleted(cmd_res(
             "gre",
-            Output::err_command("gre", "", None),
+            Output::err_command_str("gre", "", None),
         )));
         app.handle_action(CommandCompleted(cmd_res(
             "grep",
-            Output::ok_command("grep", ""),
+            Output::ok_command_str("grep", ""),
         )));
         app.handle_action(CommandCompleted(cmd_res(
             "grep 'abc'",
-            Output::ok_command("grep 'abc'", ""),
+            Output::ok_command_str("grep 'abc'", ""),
         )));
         app.handle_action(CommandCompleted(cmd_res(
             "gp 'abc'",
-            Output::err_command("gp 'abc'", "", None),
+            Output::err_command_str("gp 'abc'", "", None),
         )));
 
         assert_eq!(

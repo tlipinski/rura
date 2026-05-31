@@ -44,7 +44,7 @@ impl OutputWidget {
     ) -> Self {
         Self {
             offset: Position::default(),
-            output: Output::ok_stdin(""),
+            output: Output::ok_stdin(vec![]),
             error_output_opt: None,
             wrap: false,
             theme: Theme::from_config(theme_config),
@@ -530,8 +530,8 @@ mod tests {
         widget.error_pane_placement = ErrorPanePlacement::Top;
         widget.error_display_mode = ErrorDisplayMode::Pane;
 
-        widget.handle_command_output(Output::ok_command("", "out1\nout2\nout3"));
-        widget.handle_command_output(Output::err_command(
+        widget.handle_command_output(Output::ok_command_str("", "out1\nout2\nout3"));
+        widget.handle_command_output(Output::err_command_str(
             "",
             "errors1\nerrors2\nerrors3",
             Some(1),
@@ -552,8 +552,8 @@ mod tests {
         widget.error_pane_placement = ErrorPanePlacement::Bottom;
         widget.error_display_mode = ErrorDisplayMode::Pane;
 
-        widget.handle_command_output(Output::ok_command("", "out1\nout2\nout3"));
-        widget.handle_command_output(Output::err_command(
+        widget.handle_command_output(Output::ok_command_str("", "out1\nout2\nout3"));
+        widget.handle_command_output(Output::err_command_str(
             "",
             "errors1\nerrors2\nerrors3",
             Some(1),
@@ -580,15 +580,15 @@ mod tests {
         let mut widget = OutputWidget::default();
         widget.error_display_mode = ErrorDisplayMode::Inline;
 
-        widget.handle_command_output(Output::ok_stdin("out1\nout2\nout3"));
+        widget.handle_command_output(Output::ok_stdin_str("out1\nout2\nout3"));
         terminal
             .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
             .unwrap();
         assert_snapshot!("after ok", terminal.backend());
 
-        widget.handle_command_output(Output::ok_stdin(&generate_lines(3)));
+        widget.handle_command_output(Output::ok_stdin_str(&generate_lines(3)));
 
-        widget.handle_command_output(Output::err_command(
+        widget.handle_command_output(Output::err_command_str(
             "",
             "errors1\nerrors2\nerrors3",
             Some(1),
@@ -606,7 +606,7 @@ mod tests {
         let mut widget = OutputWidget::default();
         widget.error_display_mode = ErrorDisplayMode::Inline;
 
-        widget.handle_command_output(Output::ok_stdin(&generate_lines(10)));
+        widget.handle_command_output(Output::ok_stdin_str(&generate_lines(10)));
         terminal
             .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
             .unwrap();
@@ -644,7 +644,7 @@ mod tests {
         let mut widget = OutputWidget::default();
         widget.output_content_area_size = terminal.size().unwrap();
 
-        widget.handle_command_output(Output::ok_stdin(&generate_lines(8)));
+        widget.handle_command_output(Output::ok_stdin_str(&generate_lines(8)));
 
         terminal
             .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
@@ -667,7 +667,7 @@ mod tests {
 
         let mut widget = OutputWidget::default();
 
-        widget.handle_command_output(Output::ok_stdin(&generate_lines(50)));
+        widget.handle_command_output(Output::ok_stdin_str(&generate_lines(50)));
         terminal
             .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
             .unwrap();
@@ -723,7 +723,7 @@ mod tests {
             "  hl4               hl5        ",
         ];
 
-        widget.handle_command_output(Output::ok_stdin(&out.join("\n")));
+        widget.handle_command_output(Output::ok_stdin_str(&out.join("\n")));
         terminal
             .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
             .unwrap();

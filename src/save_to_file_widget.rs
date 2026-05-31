@@ -1,4 +1,6 @@
 use crate::completable_input::CompletableInput;
+use itertools::Itertools;
+use log::debug;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Constraint::Length;
 use ratatui::layout::{Constraint, Direction, Layout, Margin, Rect};
@@ -26,15 +28,15 @@ impl SaveToFileWidget {
         }
     }
 
-    pub fn save(&mut self, content: &str) -> anyhow::Result<()> {
+    pub fn save(&mut self, content: Vec<u8>) -> anyhow::Result<()> {
         self.save_file(content, 0o644)
     }
 
     pub fn save_executable(&mut self, content: &str) -> anyhow::Result<()> {
-        self.save_file(content, 0o755)
+        self.save_file(content.bytes().collect_vec(), 0o755)
     }
 
-    fn save_file(&mut self, content: &str, mode: u32) -> anyhow::Result<()> {
+    fn save_file(&mut self, content: Vec<u8>, mode: u32) -> anyhow::Result<()> {
         let path = PathBuf::from(self.file_path_input.value().trim());
         let mut file = OpenOptions::new()
             .create_new(true)
@@ -42,7 +44,9 @@ impl SaveToFileWidget {
             .mode(mode)
             .open(path)?;
 
-        write!(file, "{}\n", content)?;
+        debug!("Saving with len: {:?}", content.len());
+
+        file.write_all(&content)?;
 
         self.error_message = None;
 
