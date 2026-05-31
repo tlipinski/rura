@@ -2,7 +2,7 @@ use crate::app::Action::{
     CommandCompleted, Debounced, ResetHighlight, StdinRead, StdinReadFailed, UserInput,
 };
 use crate::args::Args;
-use crate::cmd_runner::{CmdRunner, Output};
+use crate::cmd_runner::{CmdResult, CmdRunner, CmdRunners, Output};
 use crate::completable_input::CompletableInput;
 use crate::config::Config;
 use crate::debouncer::debouncer_task;
@@ -91,8 +91,7 @@ impl App {
         let value = shell.clone();
         let s2 = action_tx.clone();
         thread::spawn(move || {
-            handle_command_task(CmdRunner::new(&value, args.split_commands), command_rx, s2)
-                .unwrap()
+            handle_command_task(CmdRunners::new(&value, args.use_cache), command_rx, s2).unwrap()
         });
 
         let s3 = action_tx.clone();
@@ -176,13 +175,11 @@ impl App {
     fn handle_action(&mut self, action: Action) {
         match action {
             UserInput(event) => self.handle_event(&event),
-            CommandCompleted(output) => {
-                if output.ok {
-                    if let Some(c) = &output.command {
-                        self.rura_widget.history.push(c)
-                    }
+            CommandCompleted(result) => {
+                if result.output.ok {
+                    self.rura_widget.history.push(&result.command)
                 }
-                self.output_widget.handle_command_output(output)
+                self.output_widget.handle_command_output(result.output)
             }
             ResetHighlight => self.rura_widget.highlight_until = None,
             StdinRead(output) => {
@@ -783,21 +780,23 @@ impl App {
 }
 
 fn handle_command_task(
-    cmd_runner: CmdRunner,
+    mut cmd_runner: Box<dyn CmdRunner>,
     command_rx: Receiver<(RuraCommand, String)>,
     action_tx: Sender<Action>,
 ) -> Result<()> {
     loop {
         if let Ok((command, stdin)) = command_rx.recv() {
-            match cmd_runner.run(command, &stdin) {
-                Ok(output) => {
-                    let _ = action_tx.send(CommandCompleted(output));
+            match cmd_runner.run(command.to_run, &stdin) {
+                Ok(result) => {
+                    let _ = action_tx.send(CommandCompleted(result));
                 }
                 Err(e) => {
                     // todo use dedicated status widget for such errors?
-                    action_tx.send(CommandCompleted(Output::err_stdin(
-                        "Failed running command, check logs",
-                    )))?;
+                    let cmd_out = CmdResult {
+                        command: "".into(),
+                        output: Output::err_stdin("Failed running command, check logs"),
+                    };
+                    action_tx.send(CommandCompleted(cmd_out))?;
                     error!("{}", e)
                 }
             }
@@ -866,7 +865,7 @@ fn reset_highlight_task(rx: Receiver<()>, tx: Sender<Action>, duration_ms: u64) 
 
 enum Action {
     UserInput(Event),
-    CommandCompleted(Output),
+    CommandCompleted(CmdResult),
     StdinRead(String),
     StdinReadFailed(String),
     ResetHighlight,
@@ -1027,12 +1026,35 @@ mod tests {
     fn saving_to_history_only_ok_outputs() {
         let mut app = App::default();
 
-        app.handle_action(CommandCompleted(Output::err_command("g", "", None)));
-        app.handle_action(CommandCompleted(Output::err_command("gr", "", None)));
-        app.handle_action(CommandCompleted(Output::err_command("gre", "", None)));
-        app.handle_action(CommandCompleted(Output::ok_command("grep", "")));
-        app.handle_action(CommandCompleted(Output::ok_command("grep 'abc'", "")));
-        app.handle_action(CommandCompleted(Output::err_command("gp 'abc'", "", None)));
+        let cmd_res = |cmd: &str, output: Output| CmdResult {
+            command: cmd.into(),
+            output,
+        };
+
+        app.handle_action(CommandCompleted(cmd_res(
+            "g",
+            Output::err_command("g", "", None),
+        )));
+        app.handle_action(CommandCompleted(cmd_res(
+            "gr",
+            Output::err_command("gr", "", None),
+        )));
+        app.handle_action(CommandCompleted(cmd_res(
+            "gre",
+            Output::err_command("gre", "", None),
+        )));
+        app.handle_action(CommandCompleted(cmd_res(
+            "grep",
+            Output::ok_command("grep", ""),
+        )));
+        app.handle_action(CommandCompleted(cmd_res(
+            "grep 'abc'",
+            Output::ok_command("grep 'abc'", ""),
+        )));
+        app.handle_action(CommandCompleted(cmd_res(
+            "gp 'abc'",
+            Output::err_command("gp 'abc'", "", None),
+        )));
 
         assert_eq!(
             *app.rura_widget.history.history(),

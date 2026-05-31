@@ -63,6 +63,6 @@ pub struct Args {
     pub shell: Option<String>,
     #[arg(short, long, help = "Print the last command from history and exit")]
     pub last: bool,
-    #[arg(long = "ff-split", hide = true)]
-    pub split_commands: bool,
+    #[arg(long = "cache", hide = true)]
+    pub use_cache: bool,
 }
