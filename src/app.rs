@@ -92,28 +92,45 @@ impl App {
         let no_cache = args.no_cache || config.no_cache;
         let value = shell.clone();
         let s2 = action_tx.clone();
+        let s3 = action_tx.clone();
         let ctx = command_tx.clone();
         thread::spawn(move || {
-            let stdin = if let Some(file) = args.file {
-                read_file_task(file).unwrap()
+            let stdin_res = if let Some(file) = args.file {
+                read_file_task(file)
             } else {
-                read_stdin_task().unwrap()
+                read_stdin_task()
             };
 
-            thread::spawn(move || {
-                handle_command_task(CmdRunners::new(&value, stdin, no_cache), command_rx, s2)
-                    .unwrap();
-            });
+            match stdin_res {
+                Ok(stdin) => {
+                    thread::spawn(move || {
+                        handle_command_task(
+                            CmdRunners::new(&value, stdin, no_cache),
+                            command_rx,
+                            s2,
+                        )
+                        .unwrap();
+                    });
 
-            while let Err(_) = ctx.send(vec![]) {
-                thread::sleep(Duration::from_millis(100));
-                debug!("Waiting for command_rx to accept commands");
+                    while let Err(_) = ctx.send(vec![]) {
+                        thread::sleep(Duration::from_millis(100));
+                        debug!("Waiting for command_rx to accept commands");
+                    }
+                }
+                Err(e) => {
+                    s3.send(CommandCompleted(CmdResult {
+                        command: "".into(),
+                        output: Output::err_stdin(e.to_string().bytes().collect()),
+                        failed_subcommand: None,
+                    }))
+                    .unwrap();
+                }
             }
         });
 
-        let s3 = action_tx.clone();
+        let s4 = action_tx.clone();
         thread::spawn(move || {
-            reset_highlight_task(highlight_reset_rx, s3, config.highlight_duration_ms).unwrap()
+            reset_highlight_task(highlight_reset_rx, s4, config.highlight_duration_ms).unwrap()
         });
 
         thread::spawn(move || {
