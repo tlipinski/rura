@@ -109,7 +109,7 @@ impl App {
                             command_rx,
                             s2,
                         )
-                        .unwrap();
+                            .unwrap();
                     });
 
                     while let Err(_) = ctx.send(vec![]) {
@@ -123,7 +123,7 @@ impl App {
                         output: Output::err_stdin(e.to_string().bytes().collect()),
                         failed_subcommand: None,
                     }))
-                    .unwrap();
+                        .unwrap();
                 }
             }
         });
@@ -143,7 +143,7 @@ impl App {
                         .expect("Sending to channel failed");
                 },
             )
-            .unwrap()
+                .unwrap()
         });
 
         Self {
@@ -202,8 +202,16 @@ impl App {
         match action {
             UserInput(event) => self.handle_event(&event),
             CommandCompleted(result) => {
-                if result.output.ok && !result.command.is_empty() {
-                    self.rura_widget.history.push(&result.command)
+                if !result.command.is_empty() {
+                    if matches!(self.input_mode, InputMode::Normal) {
+                        // in normal mode save all commands to history
+                        self.rura_widget.history.push(&result.command)
+                    } else {
+                        // in live mode only save commands that were successfully executed
+                        if result.output.ok {
+                            self.rura_widget.history.push(&result.command)
+                        }
+                    }
                 }
                 self.output_widget.handle_command_output(result.output);
                 self.rura_widget.failed_subcommand = result.failed_subcommand;
@@ -1049,8 +1057,9 @@ mod tests {
     }
 
     #[test]
-    fn saving_to_history_only_ok_outputs() {
+    fn saving_to_history_only_ok_outputs_in_live_mode() {
         let mut app = App::default();
+        app.input_mode = InputMode::LiveFull;
 
         let cmd_res = |cmd: &str, output: Output| CmdResult {
             command: cmd.into(),
@@ -1085,7 +1094,32 @@ mod tests {
 
         assert_eq!(
             *app.rura_widget.history.history(),
-            VecDeque::from(vec!["grep 'abc'".into(), "grep".into(),])
+            VecDeque::from(vec!["grep 'abc'".into(), "grep".into(), ])
+        );
+    }
+
+    #[test]
+    fn saving_to_history_all_outputs_in_normal_mode() {
+        let mut app = App::default();
+
+        let cmd_res = |cmd: &str, output: Output| CmdResult {
+            command: cmd.into(),
+            output,
+            failed_subcommand: None,
+        };
+
+        app.handle_action(CommandCompleted(cmd_res(
+            "g",
+            Output::err_command_str("g", "", None),
+        )));
+        app.handle_action(CommandCompleted(cmd_res(
+            "grep",
+            Output::ok_command_str("grep", ""),
+        )));
+
+        assert_eq!(
+            *app.rura_widget.history.history(),
+            VecDeque::from(vec!["grep".into(), "g".into()])
         );
     }
 
