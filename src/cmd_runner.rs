@@ -12,11 +12,11 @@ pub trait CmdRunner {
 
 pub struct CmdRunners;
 impl CmdRunners {
-    pub fn new(shell: &str, stdin: Vec<u8>, use_cache: bool) -> Box<dyn CmdRunner> {
-        if use_cache {
-            Box::new(CachedCmdRunner::new(shell, stdin))
-        } else {
+    pub fn new(shell: &str, stdin: Vec<u8>, no_cache: bool) -> Box<dyn CmdRunner> {
+        if no_cache {
             Box::new(SimpleCmdRunner::new(shell, stdin))
+        } else {
+            Box::new(CachedCmdRunner::new(shell, stdin))
         }
     }
 }

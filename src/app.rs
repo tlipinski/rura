@@ -98,7 +98,7 @@ impl App {
 
             thread::spawn(move || {
                 handle_command_task(
-                    CmdRunners::new(&value, stdin, args.use_cache),
+                    CmdRunners::new(&value, stdin, args.no_cache),
                     command_rx,
                     s2,
                 )
