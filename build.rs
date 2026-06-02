@@ -7,7 +7,18 @@ fn main() {
 }
 
 fn get_git_version() -> String {
-    git_output(&["describe", "--tags"]).unwrap_or(env!("CARGO_PKG_VERSION").to_string())
+    if let Some(version) = git_output(&["describe", "--tags"]) {
+        return version;
+    }
+
+    if let Some(commit) = git_output(&["rev-list", "--count", "HEAD"]) {
+        if let Some(branch) = git_output(&["rev-parse", "--short=7", "HEAD"]) {
+            let base_version = env!("CARGO_PKG_VERSION");
+            return format!("{}-{}-{}", base_version, commit, branch);
+        }
+    }
+
+   env!("CARGO_PKG_VERSION").to_string()
 }
 
 fn git_output(args: &[&str]) -> Option<String> {
