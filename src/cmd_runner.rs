@@ -8,7 +8,7 @@ use std::thread;
 use std::time::SystemTime;
 
 pub trait CmdRunner {
-    fn run(&mut self, command: RuraCommand) -> Result<CmdResult>;
+    fn run(&mut self, command: &RuraCommand) -> Result<CmdResult>;
 }
 
 pub struct CmdRunners;
@@ -45,7 +45,7 @@ impl SplitCmdRunner {
 }
 
 impl CmdRunner for SplitCmdRunner {
-    fn run(&mut self, command: RuraCommand) -> Result<CmdResult> {
+    fn run(&mut self, command: &RuraCommand) -> Result<CmdResult> {
         info!("executing commands: '{command:?}'");
 
         let now = SystemTime::now();
@@ -111,7 +111,7 @@ impl CachedCmdRunner {
 }
 
 impl CmdRunner for CachedCmdRunner {
-    fn run(&mut self, command: RuraCommand) -> Result<CmdResult> {
+    fn run(&mut self, command: &RuraCommand) -> Result<CmdResult> {
         info!("executing: '{command:?}'");
 
         if command.is_empty() {
@@ -213,7 +213,7 @@ impl SimpleCmdRunner {
 }
 
 impl CmdRunner for SimpleCmdRunner {
-    fn run(&mut self, command: RuraCommand) -> Result<CmdResult> {
+    fn run(&mut self, command: &RuraCommand) -> Result<CmdResult> {
         info!("executing: '{command:?}'");
 
         if command.is_empty() {
@@ -416,7 +416,7 @@ mod tests {
             };
             let mut runner = simple_runner(Box::new(mock_exec), "stdin".into());
 
-            let result = runner.run("echo hello".into()).unwrap();
+            let result = runner.run(&"echo hello".into()).unwrap();
 
             assert_eq!(
                 result.output,
@@ -432,7 +432,7 @@ mod tests {
             };
             let mut runner = simple_runner(Box::new(mock_exec), "stdin".into());
 
-            let result = runner.run(vec![].into()).unwrap();
+            let result = runner.run(&vec![].into()).unwrap();
 
             assert_eq!(result.output, Output::ok_stdin_str("stdin"))
         }
@@ -456,7 +456,7 @@ mod tests {
             };
             let mut runner = runner(Box::new(mock_exec), "stdin".into());
 
-            let result = runner.run(vec![].into()).unwrap();
+            let result = runner.run(&vec![].into()).unwrap();
 
             assert_eq!(result.output, Output::ok_stdin_str("stdin"));
 
@@ -472,7 +472,7 @@ mod tests {
             let mut runner = runner(Box::new(mock_exec), "stdin".into());
 
             let result = runner
-                .run(vec!["cmd1".into(), "cmd2".into(), "cmd3".into()].into())
+                .run(&vec!["cmd1".into(), "cmd2".into(), "cmd3".into()].into())
                 .unwrap();
 
             // output of the last called command
@@ -498,7 +498,7 @@ mod tests {
             let mut runner = runner(Box::new(mock_exec), "stdin".into());
 
             let result = runner
-                .run(vec!["cmd1".into(), "cmd2err".into(), "cmd3".into()].into())
+                .run(&vec!["cmd1".into(), "cmd2err".into(), "cmd3".into()].into())
                 .unwrap();
 
             // output of the last called command
@@ -531,7 +531,7 @@ mod tests {
             };
             let mut runner = cached_runner(Box::new(mock_exec), "stdin".into());
 
-            let result = runner.run(vec![].into()).unwrap();
+            let result = runner.run(&vec![].into()).unwrap();
 
             assert_eq!(result.output, Output::ok_stdin_str("stdin"))
         }
@@ -545,7 +545,7 @@ mod tests {
             let mut runner = cached_runner(Box::new(mock_exec), "stdin".into());
 
             let result = runner
-                .run(vec!["cmd1".into(), "cmd2".into(), "cmd3".into()].into())
+                .run(&vec!["cmd1".into(), "cmd2".into(), "cmd3".into()].into())
                 .unwrap();
 
             // output of the last called command
@@ -581,13 +581,13 @@ mod tests {
             let mut runner = cached_runner(Box::new(mock_exec), "stdin".into());
 
             let _init_run = runner
-                .run(vec!["cmd1".into(), "cmd2".into(), "cmd3".into()].into())
+                .run(&vec!["cmd1".into(), "cmd2".into(), "cmd3".into()].into())
                 .unwrap();
 
             calls.borrow_mut().clear();
 
             // second run
-            let result = runner.run(vec!["cmd1".into()].into()).unwrap();
+            let result = runner.run(&vec!["cmd1".into()].into()).unwrap();
 
             // output of the last called command - cmd3
             assert_eq!(result.output, Output::ok_command_str("cmd1", "cmd1-output"));
@@ -615,14 +615,14 @@ mod tests {
             let mut runner = cached_runner(Box::new(mock_exec), "stdin".into());
 
             let _init_run = runner
-                .run(vec!["cmd1".into(), "cmd2".into()].into())
+                .run(&vec!["cmd1".into(), "cmd2".into()].into())
                 .unwrap();
 
             calls.borrow_mut().clear();
 
             // second run for less commands - keep whole cache
             let result = runner
-                .run(vec!["cmd1".into(), "cmd2".into(), "cmd3".into(), "cmd4".into()].into())
+                .run(&vec!["cmd1".into(), "cmd2".into(), "cmd3".into(), "cmd4".into()].into())
                 .unwrap();
 
             // output of the last called command
@@ -658,13 +658,13 @@ mod tests {
             let mut runner = cached_runner(Box::new(mock_exec), "stdin".into());
 
             let _init_run = runner
-                .run(vec!["cmd1".into(), "cmd2".into(), "cmd3".into()].into())
+                .run(&vec!["cmd1".into(), "cmd2".into(), "cmd3".into()].into())
                 .unwrap();
             calls.borrow_mut().clear();
 
             // second run for shorter command - keep whole cache
             let result = runner
-                .run(vec!["cmd1".into(), "cmd2mod".into()].into())
+                .run(&vec!["cmd1".into(), "cmd2mod".into()].into())
                 .unwrap();
 
             // output of the last called command
@@ -698,13 +698,13 @@ mod tests {
             let mut runner = cached_runner(Box::new(mock_exec), "stdin".into());
 
             let _init_run = runner
-                .run(vec!["cmd1".into(), "cmd2".into(), "cmd3".into()].into())
+                .run(&vec!["cmd1".into(), "cmd2".into(), "cmd3".into()].into())
                 .unwrap();
             calls.borrow_mut().clear();
 
             // second run for shorter command - keep whole cache
             let result = runner
-                .run(vec!["cmd1".into(), "cmd2mod".into(), "cmd3".into()].into())
+                .run(&vec!["cmd1".into(), "cmd2mod".into(), "cmd3".into()].into())
                 .unwrap();
 
             // output of the last called command
@@ -740,7 +740,7 @@ mod tests {
             let mut runner = cached_runner(Box::new(mock_exec), "stdin".into());
 
             let result = runner
-                .run(vec!["cmd1".into(), "cmd2err".into(), "cmd3".into()].into())
+                .run(&vec!["cmd1".into(), "cmd2err".into(), "cmd3".into()].into())
                 .unwrap();
 
             // output of the last called command
@@ -775,12 +775,12 @@ mod tests {
             let mut runner = cached_runner(Box::new(mock_exec), "stdin".into());
 
             let _init_run = runner
-                .run(vec!["cmd1".into(), "cmd2".into(), "cmd3".into()].into())
+                .run(&vec!["cmd1".into(), "cmd2".into(), "cmd3".into()].into())
                 .unwrap();
             calls.borrow_mut().clear();
 
             let result = runner
-                .run(vec!["cmd1".into(), "cmd2err".into(), "cmd3".into()].into())
+                .run(&vec!["cmd1".into(), "cmd2err".into(), "cmd3".into()].into())
                 .unwrap();
 
             assert_eq!(

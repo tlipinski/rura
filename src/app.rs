@@ -836,7 +836,7 @@ fn handle_command_task(
         if let Ok(command) = command_rx.recv() {
             action_tx.send(StartProgress(SystemTime::now()))?;
 
-            match cmd_runner.run(command.clone()) {
+            match cmd_runner.run(&command) {
                 Ok(result) => {
                     let _ = action_tx.send(CommandCompleted(command, result));
                 }
