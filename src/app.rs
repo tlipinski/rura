@@ -619,8 +619,7 @@ impl App {
 
     fn handle_execute(&mut self, kind: ExecuteType) {
         match self.rura_widget.execute(kind) {
-            Ok(Some(c)) => self.command_tx.send(c).unwrap(),
-            Ok(None) => self.command_tx.send(RuraCommand::empty()).unwrap(),
+            Ok(command) => self.command_tx.send(command).unwrap(),
             Err(_) => {}
         }
     }

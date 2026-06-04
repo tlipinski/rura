@@ -117,27 +117,27 @@ impl RuraWidget {
         self.failed_subcommand = None;
     }
 
-    pub fn execute(&mut self, execute_type: ExecuteType) -> Result<Option<RuraCommand>> {
+    pub fn execute(&mut self, execute_type: ExecuteType) -> Result<RuraCommand> {
         if self.command_input.value().is_empty() {
-            return Ok(None);
+            return Ok(RuraCommand::empty());
         }
         match Rura::new(
             self.command_input.value(),
             self.command_input.visual_cursor(),
         ) {
-            Ok(r) => match r.command(&execute_type) {
-                None => Ok(None),
-                Some(command) => {
-                    if !matches!(
-                        execute_type,
-                        ExecuteType::FullLive | ExecuteType::UntilCurrentLive
-                    ) {
+            Ok(r) => {
+                let command = r.command(&execute_type);
+                if !matches!(
+                    execute_type,
+                    ExecuteType::FullLive | ExecuteType::UntilCurrentLive
+                ) {
+                    if !command.is_empty() {
                         self.highlight_until = Some(command.len() - 1);
-                        let _ = self.highlight_reset_tx.send(());
                     }
-                    Ok(Some(command))
+                    let _ = self.highlight_reset_tx.send(());
                 }
-            },
+                Ok(command)
+            }
             Err(e) => {
                 info!("invalid command: '{}'", self.command_input.value());
                 Err(e.into())
