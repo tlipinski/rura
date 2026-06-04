@@ -1333,6 +1333,7 @@ name = "rura"
 version = "1.4.0"
 dependencies = [
  "anyhow",
+ "cfg-if",
  "clap",
  "crossterm",
  "dirs",

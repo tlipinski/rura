@@ -12,12 +12,18 @@ pub trait CmdRunner {
 
 pub struct CmdRunners;
 impl CmdRunners {
+    #[cfg(unix)]
     pub fn new(shell: &str, stdin: Vec<u8>, no_cache: bool) -> Box<dyn CmdRunner> {
         if no_cache {
             Box::new(SplitCmdRunner::new(shell, stdin))
         } else {
             Box::new(CachedCmdRunner::new(shell, stdin))
         }
+    }
+
+    #[cfg(windows)]
+    pub fn new(shell: &str, stdin: Vec<u8>, _no_cache: bool) -> Box<dyn CmdRunner> {
+        Box::new(SimpleCmdRunner::new(shell, stdin))
     }
 }
 
@@ -253,8 +259,7 @@ struct SystemExec {
 
 impl Exec for SystemExec {
     fn exec(&self, command: &str, stdin: Vec<u8>) -> Result<Output> {
-        let mut cmd = Command::new("/usr/bin/env");
-        cmd.args([&self.shell, "-c", command]);
+        let mut cmd = build_command(&self.shell, command);
 
         let mut child = cmd
             .stdin(Stdio::piped())
@@ -290,6 +295,24 @@ impl Exec for SystemExec {
             ))
         }
     }
+}
+
+#[cfg(unix)]
+fn build_command(shell: &str, command: &str) -> Command {
+    let mut cmd = Command::new("/usr/bin/env");
+    cmd.args([shell, "-c", command]);
+    cmd
+}
+
+#[cfg(windows)]
+fn build_command(shell: &str, command: &str) -> Command {
+    let mut cmd = Command::new(shell);
+    cmd.env("NO_COLOR", "1");
+    cmd.arg("-NonInteractive");
+    cmd.arg("-NoProfile");
+    cmd.arg("-NoLogo");
+    cmd.args(["/C", &command]);
+    cmd
 }
 
 pub struct CmdResult {

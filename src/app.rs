@@ -17,6 +17,7 @@ use crate::theme::Theme;
 use crate::uicmd::{KeyBindings, UiCmd, to_ui_command};
 use KeyCode::{Enter, Esc, F};
 use anyhow::{Error, Result};
+use cfg_if::cfg_if;
 use crossterm::event::KeyCode::Char;
 use crossterm::event::{KeyCode, KeyModifiers};
 use crossterm::tty::IsTty;
@@ -62,6 +63,14 @@ pub struct App {
 
 impl App {
     pub fn new(args: Args, config: Config) -> Self {
+        let default;
+        cfg_if! {
+            if #[cfg(unix)] {
+                default = "sh";
+            } else if #[cfg(windows)] {
+                default = "powershell";
+            }
+        }
         let shell = args
             .shell
             .clone()
@@ -77,7 +86,7 @@ impl App {
                     None
                 }
             })
-            .unwrap_or("sh".into());
+            .unwrap_or(default.into());
 
         debug!("Shell: {:?}", shell);
 
@@ -852,8 +861,10 @@ fn handle_command_task(
 fn handle_input_task(tx: Sender<Action>) -> Result<()> {
     loop {
         if let Ok(event) = event::read() {
-            // debug!("event: {:?}", event);
-            tx.send(UserInput(event))?
+            match event {
+                Event::Key(key_evt) if !key_evt.is_press() => {}
+                event => tx.send(UserInput(event))?,
+            }
         }
     }
 }
