@@ -603,6 +603,9 @@ impl App {
                     UiCmd::SaveCommand => {
                         self.active_modal = ActiveModal::SaveCommand;
                     }
+                    UiCmd::FormatCommand => {
+                        self.rura_widget.format();
+                    }
                 },
                 _ => {
                     if self.rura_widget.handle_event(event) {

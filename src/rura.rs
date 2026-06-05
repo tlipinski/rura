@@ -8,9 +8,10 @@ use std::{fmt, mem};
 
 #[derive(Debug)]
 pub struct Rura {
-    pub subcommands: Vec<String>,
-    pub current: usize,
-    pub cursor: usize,
+    subcommands: Vec<String>,
+    current: usize,
+    cursor: usize,
+    cursor_relative: usize,
 }
 
 impl Rura {
@@ -19,11 +20,13 @@ impl Rura {
 
         let mut sum = 0;
         let mut current_subcommand = 0;
+        let mut cursor_relative = cursor;
 
         for (index, subcommand) in subcommands.iter().enumerate() {
             sum += subcommand.len();
             if cursor <= sum {
                 current_subcommand = index;
+                cursor_relative = cursor - (sum - subcommand.len());
                 break;
             }
             sum += 1 // for additional pipe character
@@ -33,7 +36,16 @@ impl Rura {
             subcommands,
             current: current_subcommand,
             cursor,
+            cursor_relative,
         })
+    }
+
+    pub fn current(&self) -> usize {
+        *&self.current
+    }
+
+    pub fn subcommands(&self) -> &Vec<String> {
+        &self.subcommands
     }
 
     pub fn command(&self, execute_type: &ExecuteType) -> RuraCommand {
@@ -193,6 +205,54 @@ impl Rura {
             // inserted into empty input
             self.subcommands.first().map(|s| s.len()).unwrap_or(0)
         }
+    }
+
+    pub fn format(&mut self) -> usize {
+        if self.subcommands.is_empty() {
+            return 0;
+        }
+        let current_sub = &self.subcommands[self.current];
+        let trimmed = current_sub.trim();
+        let leading_whitespace = current_sub.len() - current_sub.trim_start().len();
+
+        let mut rel_in_trimmed = if self.cursor_relative < leading_whitespace {
+            0
+        } else {
+            self.cursor_relative - leading_whitespace
+        };
+        rel_in_trimmed = rel_in_trimmed.min(trimmed.len());
+
+        let size = self.subcommands.len();
+        for (i, subcommand) in self.subcommands.iter_mut().enumerate() {
+            *subcommand = match i {
+                0 => format!("{} ", subcommand.trim()),
+                a if a == size - 1 => format!(" {}", subcommand.trim()),
+                _ => format!(" {} ", subcommand.trim()),
+            }
+        }
+
+        let mut new_cursor = 0;
+        for i in 0..self.current {
+            new_cursor += self.subcommands[i].len() + 1;
+        }
+
+        if self.current > 0 {
+            new_cursor += 1;
+        }
+        new_cursor += rel_in_trimmed;
+
+        self.cursor = new_cursor;
+        self.cursor_relative = if self.current > 0 {
+            rel_in_trimmed + 1
+        } else {
+            rel_in_trimmed
+        };
+
+        new_cursor
+    }
+
+    pub fn to_string(&self) -> String {
+        self.subcommands.join("|")
     }
 
     fn cursor_ends(&self) -> Vec<usize> {
@@ -644,6 +704,47 @@ mod tests {
 
         let rura = Rura::new("aaa|bbbb|ccccc", 0).unwrap();
         assert_eq!(rura.cursor_ends(), vec![2, 7, 13]);
+    }
+
+    #[test]
+    fn test_cursor_relative_position() {
+        let rura = Rura::new("aaa|bbbb|ccccc", 0).unwrap();
+        assert_eq!(rura.cursor_relative, 0);
+
+        let rura = Rura::new("aaa|bbbb|ccccc", 3).unwrap();
+        assert_eq!(rura.cursor_relative, 3);
+
+        let rura = Rura::new("aaa|bbbb|ccccc", 4).unwrap();
+        assert_eq!(rura.cursor_relative, 0);
+
+        let rura = Rura::new("aaa|bbbb|ccccc", 9).unwrap();
+        assert_eq!(rura.cursor_relative, 0);
+
+        let rura = Rura::new("aaa|bbbb|ccccc", 14).unwrap();
+        assert_eq!(rura.cursor_relative, 5);
+    }
+
+    #[test]
+    fn test_format_and_cursor_position() {
+        let mut rura = Rura::new("aaa|bbbb|ccccc", 0).unwrap();
+        let cursor = rura.format();
+        assert_eq!(rura.to_string(), "aaa | bbbb | ccccc");
+        assert_eq!(cursor, 0);
+
+        let mut rura = Rura::new("aaa|bbbb|ccccc", 5).unwrap();
+        let cursor = rura.format();
+        assert_eq!(rura.to_string(), "aaa | bbbb | ccccc");
+        assert_eq!(cursor, 7);
+
+        let mut rura = Rura::new("aaa     |bbbb|ccccc", 5).unwrap();
+        let cursor = rura.format();
+        assert_eq!(rura.to_string(), "aaa | bbbb | ccccc");
+        assert_eq!(cursor, 3);
+
+        let mut rura = Rura::new("aaa      |         bbbb       |      ccccc", 40).unwrap();
+        let cursor = rura.format();
+        assert_eq!(rura.to_string(), "aaa | bbbb | ccccc");
+        assert_eq!(cursor, 16);
     }
 
     use super::*;

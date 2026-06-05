@@ -103,6 +103,7 @@ pub struct KeyBindingsConfig {
     pub search_prev: Vec<String>,
     pub save_output: Vec<String>,
     pub save_command: Vec<String>,
+    pub format_command: Vec<String>,
 }
 
 impl Default for KeyBindingsConfig {
@@ -142,6 +143,7 @@ impl Default for KeyBindingsConfig {
             search_prev: vec!["f4".into(), "ctrl+b".into()],
             save_output: vec!["ctrl+s".into()],
             save_command: vec!["ctrl+alt+s".into()],
+            format_command: vec!["alt+o".into()],
         }
     }
 }

@@ -29,6 +29,7 @@ pub enum UiCmd {
     SearchPrev,
     SaveOutput,
     SaveCommand,
+    FormatCommand,
 }
 
 pub struct KeyBindings {
@@ -83,6 +84,7 @@ impl KeyBindings {
         bindings.insert(UiCmd::SearchPrev, parse_bindings(&config.search_prev));
         bindings.insert(UiCmd::SaveOutput, parse_bindings(&config.save_output));
         bindings.insert(UiCmd::SaveCommand, parse_bindings(&config.save_command));
+        bindings.insert(UiCmd::FormatCommand, parse_bindings(&config.format_command));
 
         KeyBindings { bindings }
     }

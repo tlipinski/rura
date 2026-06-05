@@ -118,8 +118,7 @@ impl RuraWidget {
         ) {
             if let Some((removed, cursor)) = r.delete_current() {
                 self.copied = Some(removed);
-                self.command_input
-                    .with_value(r.subcommands.iter().join("|"));
+                self.command_input.with_value(r.to_string());
                 self.command_input.handle(InputRequest::SetCursor(cursor));
             }
         }
@@ -132,8 +131,7 @@ impl RuraWidget {
         ) {
             if let Some(yanked) = self.copied.clone() {
                 let cursor = r.insert_after(&yanked);
-                self.command_input
-                    .with_value(r.subcommands.iter().join("|"));
+                self.command_input.with_value(r.to_string());
                 self.command_input.handle(InputRequest::SetCursor(cursor));
             }
         }
@@ -153,6 +151,17 @@ impl RuraWidget {
 
         self.command_input.clear_completions();
         self.failed_subcommand = None;
+    }
+
+    pub fn format(&mut self) {
+        if let Ok(mut r) = Rura::new(
+            self.command_input.value(),
+            self.command_input.visual_cursor(),
+        ) {
+            let cursor = r.format();
+            self.command_input.with_value(r.to_string());
+            self.command_input.set_cursor(cursor);
+        }
     }
 
     pub fn execute(&mut self, execute_type: ExecuteType) -> Result<RuraCommand> {
@@ -207,8 +216,8 @@ fn to_line<'a>(
 ) -> Line<'a> {
     let mut spans = vec![];
 
-    for (index, subcommand) in r.subcommands.iter().enumerate() {
-        let is_current = index == r.current;
+    for (index, subcommand) in r.subcommands().iter().enumerate() {
+        let is_current = index == r.current();
         let is_highlighted = highlight_until.map_or(false, |until| index <= until);
 
         if index > 0 {

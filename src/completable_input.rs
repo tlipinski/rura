@@ -51,6 +51,10 @@ impl CompletableInput {
         self.input = Input::from(value);
     }
 
+    pub fn set_cursor(&mut self, pos: usize) {
+        self.input.handle(InputRequest::SetCursor(pos));
+    }
+
     pub fn visual_cursor(&self) -> usize {
         self.input.visual_cursor()
     }
