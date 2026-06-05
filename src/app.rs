@@ -359,6 +359,18 @@ impl App {
                 Some(UiCmd::Quit) => {
                     self.exit = true;
                 }
+                Some(UiCmd::ScrollUp) => {
+                    self.help_widget.scroll_up();
+                }
+                Some(UiCmd::ScrollDown) => {
+                    self.help_widget.scroll_down();
+                }
+                Some(UiCmd::ScrollUpPage) => {
+                    self.help_widget.scroll_page_up();
+                }
+                Some(UiCmd::ScrollDownPage) => {
+                    self.help_widget.scroll_page_down();
+                }
                 _ => {}
             },
         }
@@ -1040,6 +1052,48 @@ mod tests {
         input_key(&mut app, F(1), KeyModifiers::NONE);
 
         let mut terminal = TestTerminal::default().0;
+        terminal
+            .draw(|frame| app.render(frame, frame.area()))
+            .unwrap();
+
+        assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn main_screen_help_small_screen() {
+        let mut app = App::default();
+
+        input_key(&mut app, F(1), KeyModifiers::NONE);
+
+        let mut terminal = Terminal::new(TestBackend::new(100, 15)).unwrap();
+        terminal
+            .draw(|frame| app.render(frame, frame.area()))
+            .unwrap();
+
+        assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn main_screen_help_narrow_screen() {
+        let mut app = App::default();
+
+        input_key(&mut app, F(1), KeyModifiers::NONE);
+
+        let mut terminal = Terminal::new(TestBackend::new(40, 30)).unwrap();
+        terminal
+            .draw(|frame| app.render(frame, frame.area()))
+            .unwrap();
+
+        assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn main_screen_help_large_screen() {
+        let mut app = App::default();
+
+        input_key(&mut app, F(1), KeyModifiers::NONE);
+
+        let mut terminal = Terminal::new(TestBackend::new(100, 50)).unwrap();
         terminal
             .draw(|frame| app.render(frame, frame.area()))
             .unwrap();
