@@ -34,7 +34,7 @@ impl CmdRunner for SimpleCmdRunner {
 
         if command.is_empty() {
             return Ok(CmdResult {
-                output: Output::ok_stdin(self.stdin.clone()),
+                output: Output::ok(self.stdin.clone()),
                 failed_subcommand: None,
             });
         }
@@ -49,11 +49,11 @@ impl CmdRunner for SimpleCmdRunner {
 
         match output {
             CommandOutput::Stdout(bytes) => Ok(CmdResult {
-                output: Output::ok_command(&command.to_string(), bytes),
+                output: Output::ok(bytes),
                 failed_subcommand: None,
             }),
             CommandOutput::Stderr(bytes, code) => Ok(CmdResult {
-                output: Output::err_command(&command.to_string(), bytes, code),
+                output: Output::err(bytes, code),
                 failed_subcommand: None,
             }),
         }
@@ -89,10 +89,7 @@ mod tests {
 
         let result = runner.run(&"echo hello".into()).unwrap();
 
-        assert_eq!(
-            result.output,
-            Output::ok_command_str("echo hello", "echo hello-output")
-        )
+        assert_eq!(result.output, Output::ok_str("echo hello-output"))
     }
 
     #[test]
@@ -105,6 +102,6 @@ mod tests {
 
         let result = runner.run(&vec![].into()).unwrap();
 
-        assert_eq!(result.output, Output::ok_stdin_str("stdin"))
+        assert_eq!(result.output, Output::ok_str("stdin"))
     }
 }

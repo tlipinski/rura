@@ -132,7 +132,7 @@ impl App {
                     s3.send(CommandCompleted(
                         RuraCommand::empty(),
                         CmdResult {
-                            output: Output::err_stdin(e.to_string().bytes().collect()),
+                            output: Output::err(e.to_string().bytes().collect(), None),
                             failed_subcommand: None,
                         },
                     ))
@@ -874,8 +874,9 @@ fn handle_command_task(
                 Err(e) => {
                     // todo use dedicated status widget for such errors?
                     let cmd_out = CmdResult {
-                        output: Output::err_stdin(
+                        output: Output::err(
                             "Failed running command, check logs".bytes().collect_vec(),
+                            None,
                         ),
                         failed_subcommand: None,
                     };
@@ -1156,27 +1157,24 @@ mod tests {
 
         app.handle_action(CommandCompleted(
             "g".into(),
-            cmd_res(Output::err_command_str("g", "", None)),
+            cmd_res(Output::err_str("", None)),
         ));
         app.handle_action(CommandCompleted(
             "gr".into(),
-            cmd_res(Output::err_command_str("gr", "", None)),
+            cmd_res(Output::err_str("", None)),
         ));
         app.handle_action(CommandCompleted(
             "gre".into(),
-            cmd_res(Output::err_command_str("gre", "", None)),
+            cmd_res(Output::err_str("", None)),
         ));
-        app.handle_action(CommandCompleted(
-            "grep".into(),
-            cmd_res(Output::ok_command_str("grep", "")),
-        ));
+        app.handle_action(CommandCompleted("grep".into(), cmd_res(Output::ok_str(""))));
         app.handle_action(CommandCompleted(
             "grep 'abc'".into(),
-            cmd_res(Output::ok_command_str("grep 'abc'", "")),
+            cmd_res(Output::ok_str("")),
         ));
         app.handle_action(CommandCompleted(
             "gp 'abc'".into(),
-            cmd_res(Output::err_command_str("gp 'abc'", "", None)),
+            cmd_res(Output::err_str("", None)),
         ));
 
         assert_eq!(
@@ -1196,12 +1194,9 @@ mod tests {
 
         app.handle_action(CommandCompleted(
             "g".into(),
-            cmd_res(Output::err_command_str("g", "", None)),
+            cmd_res(Output::err_str("", None)),
         ));
-        app.handle_action(CommandCompleted(
-            "grep".into(),
-            cmd_res(Output::ok_command_str("grep", "")),
-        ));
+        app.handle_action(CommandCompleted("grep".into(), cmd_res(Output::ok_str(""))));
 
         assert_eq!(
             *app.rura_widget.history.history(),

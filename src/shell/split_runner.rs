@@ -52,24 +52,24 @@ impl CmdRunner for SplitCmdRunner {
                 CommandOutput::Stderr(bytes, code) => {
                     debug!("  failed - aborting further execution");
                     return Ok(CmdResult {
-                        output: Output::err_command(subcommand, bytes, code),
+                        output: Output::err(bytes, code),
                         failed_subcommand: Some(i),
                     });
                 }
             }
         }
 
-        if let Some((c, output)) = output_opt {
+        if let Some((_, output)) = output_opt {
             let elapsed = now.elapsed()?;
             debug!("command exec took {elapsed:?}");
 
             Ok(CmdResult {
-                output: Output::ok_command(&c, output),
+                output: Output::ok(output),
                 failed_subcommand: None,
             })
         } else {
             Ok(CmdResult {
-                output: Output::ok_stdin(self.stdin.clone()),
+                output: Output::ok(self.stdin.clone()),
                 failed_subcommand: None,
             })
         }
@@ -104,7 +104,7 @@ mod tests {
 
         let result = runner.run(&vec![].into()).unwrap();
 
-        assert_eq!(result.output, Output::ok_stdin_str("stdin"));
+        assert_eq!(result.output, Output::ok_str("stdin"));
 
         assert_eq!(*calls.borrow(), vec![])
     }
@@ -122,7 +122,7 @@ mod tests {
             .unwrap();
 
         // output of the last called command
-        assert_eq!(result.output, Output::ok_command_str("cmd3", "cmd3-output"));
+        assert_eq!(result.output, Output::ok_str("cmd3-output"));
 
         // input for the command is the output of the previous command
         assert_eq!(
@@ -148,9 +148,6 @@ mod tests {
             .unwrap();
 
         // output of the last called command
-        assert_eq!(
-            result.output,
-            Output::err_command_str("cmd2err", "cmd2err-output", Some(1))
-        );
+        assert_eq!(result.output, Output::err_str("cmd2err-output", Some(1)));
     }
 }
