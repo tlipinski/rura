@@ -24,19 +24,27 @@ impl CmdRunners {
 
     #[cfg(windows)]
     pub fn new(shell: &str, stdin: Vec<u8>, _no_cache: bool) -> Box<dyn CmdRunner> {
-        Box::new(SimpleCmdRunner::new(shell, stdin))
+        Box::new(SimpleCmdRunner {
+            exec: Box::new(SystemExec),
+            builder: Box::new(PwshCommandBuilder {
+                shell: shell.into(),
+            }),
+            stdin,
+        })
     }
 }
 
 pub struct SplitCmdRunner {
     exec: Box<dyn Exec>,
+    builder: Box<dyn CommandBuilder>,
     stdin: Vec<u8>,
 }
 
 impl SplitCmdRunner {
     pub fn new(shell: &str, stdin: Vec<u8>) -> Self {
         Self {
-            exec: Box::new(SystemExec {
+            exec: Box::new(SystemExec {}),
+            builder: Box::new(UsrBinEnvCommandBuilder {
                 shell: shell.into(),
             }),
             stdin,
@@ -59,7 +67,8 @@ impl CmdRunner for SplitCmdRunner {
 
             let now_sub = SystemTime::now();
 
-            let output = self.exec.exec(&subcommand, current_stdin.clone())?;
+            let cmd = self.builder.build(subcommand);
+            let output = self.exec.exec(cmd, current_stdin.clone())?;
 
             debug!("    time: {:?}, ", now_sub.elapsed()?);
 
@@ -97,6 +106,7 @@ impl CmdRunner for SplitCmdRunner {
 
 pub struct CachedCmdRunner {
     exec: Box<dyn Exec>,
+    builder: Box<dyn CommandBuilder>,
     stdin: Vec<u8>,
     cache: Vec<(String, Vec<u8>)>,
 }
@@ -104,7 +114,8 @@ pub struct CachedCmdRunner {
 impl CachedCmdRunner {
     pub fn new(shell: &str, stdin: Vec<u8>) -> Self {
         Self {
-            exec: Box::new(SystemExec {
+            exec: Box::new(SystemExec),
+            builder: Box::new(UsrBinEnvCommandBuilder {
                 shell: shell.into(),
             }),
             stdin,
@@ -159,7 +170,8 @@ impl CmdRunner for CachedCmdRunner {
 
             let now_sub = SystemTime::now();
 
-            let output = self.exec.exec(&subcommand, current_stdin.clone())?;
+            let cmd = self.builder.build(subcommand);
+            let output = self.exec.exec(cmd, current_stdin.clone())?;
 
             debug!("    time: {:?}, ", now_sub.elapsed()?);
 
@@ -199,19 +211,8 @@ impl CmdRunner for CachedCmdRunner {
 #[allow(dead_code)]
 pub struct SimpleCmdRunner {
     exec: Box<dyn Exec>,
+    builder: Box<dyn CommandBuilder>,
     stdin: Vec<u8>,
-}
-
-impl SimpleCmdRunner {
-    #[allow(dead_code)]
-    pub fn new(shell: &str, stdin: Vec<u8>) -> Self {
-        Self {
-            exec: Box::new(SystemExec {
-                shell: shell.into(),
-            }),
-            stdin,
-        }
-    }
 }
 
 impl CmdRunner for SimpleCmdRunner {
@@ -227,7 +228,8 @@ impl CmdRunner for SimpleCmdRunner {
 
         let now = SystemTime::now();
 
-        let output = self.exec.exec(&command.to_string(), self.stdin.clone())?;
+        let cmd = self.builder.build(&command.to_string());
+        let output = self.exec.exec(cmd, self.stdin.clone())?;
 
         let elapsed = now.elapsed()?;
         debug!("command exec took {elapsed:?}");
@@ -246,7 +248,7 @@ impl CmdRunner for SimpleCmdRunner {
 }
 
 trait Exec {
-    fn exec(&self, command: &str, stdin: Vec<u8>) -> Result<CommandOutput>;
+    fn exec(&self, command: Command, stdin: Vec<u8>) -> Result<CommandOutput>;
 }
 
 enum CommandOutput {
@@ -254,20 +256,16 @@ enum CommandOutput {
     Stderr(Vec<u8>, Option<i32>),
 }
 
-struct SystemExec {
-    shell: String,
-}
+struct SystemExec;
 
 impl Exec for SystemExec {
-    fn exec(&self, command: &str, stdin: Vec<u8>) -> Result<CommandOutput> {
-        let mut cmd = build_command(&self.shell, command);
-
-        let mut child = cmd
+    fn exec(&self, mut command: Command, stdin: Vec<u8>) -> Result<CommandOutput> {
+        let mut child = command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .map_err(|e| anyhow!("Failed to spawn command [{cmd:?}]: {e}"))?;
+            .map_err(|e| anyhow!("Failed to spawn command [{command:?}]: {e}"))?;
 
         let mut child_stdin = child
             .stdin
@@ -286,27 +284,43 @@ impl Exec for SystemExec {
                     Ok(CommandOutput::Stderr(output.stderr, output.status.code()))
                 }
             }
-            Err(e) => Err(anyhow!("Failed to execute command '{command}': {e}")),
+            Err(e) => Err(anyhow!("Failed to execute command '{command:?}': {e}")),
         }
     }
 }
 
-#[cfg(unix)]
-fn build_command(shell: &str, command: &str) -> Command {
-    let mut cmd = Command::new("/usr/bin/env");
-    cmd.args([shell, "-c", command]);
-    cmd
+#[cfg(windows)]
+struct PwshCommandBuilder {
+    shell: String,
 }
 
 #[cfg(windows)]
-fn build_command(shell: &str, command: &str) -> Command {
-    let mut cmd = Command::new(shell);
-    cmd.env("NO_COLOR", "1");
-    cmd.arg("-NonInteractive");
-    cmd.arg("-NoProfile");
-    cmd.arg("-NoLogo");
-    cmd.args(["/C", &command]);
-    cmd
+impl CommandBuilder for PwshCommandBuilder {
+    fn build(&self, command: &str) -> Command {
+        let mut cmd = Command::new(&self.shell);
+        cmd.env("NO_COLOR", "1");
+        cmd.arg("-NonInteractive");
+        cmd.arg("-NoProfile");
+        cmd.arg("-NoLogo");
+        cmd.args(["/C", &command]);
+        cmd
+    }
+}
+
+trait CommandBuilder {
+    fn build(&self, command: &str) -> Command;
+}
+
+struct UsrBinEnvCommandBuilder {
+    shell: String,
+}
+
+impl CommandBuilder for UsrBinEnvCommandBuilder {
+    fn build(&self, command: &str) -> Command {
+        let mut cmd = Command::new("/usr/bin/env");
+        cmd.args([&self.shell, "-c", command]);
+        cmd
+    }
 }
 
 pub struct CmdResult {
@@ -379,24 +393,32 @@ mod tests {
     use std::cell::RefCell;
     use std::rc::Rc;
 
+    struct SimpleBuilder;
+    impl CommandBuilder for SimpleBuilder {
+        fn build(&self, command: &str) -> Command {
+            Command::new(command)
+        }
+    }
+
     struct MockExec {
         calls: Rc<RefCell<Vec<(String, String)>>>,
     }
 
     impl Exec for MockExec {
-        fn exec(&self, command: &str, stdin: Vec<u8>) -> Result<CommandOutput> {
+        fn exec(&self, command: Command, stdin: Vec<u8>) -> Result<CommandOutput> {
+            let program = command.get_program().to_string_lossy().into_owned();
             self.calls.borrow_mut().push((
-                command.into(),
+                program.clone(),
                 String::from_utf8_lossy(stdin.as_slice()).into(),
             ));
-            if command.ends_with("err") {
+            if program.ends_with("err") {
                 Ok(CommandOutput::Stderr(
-                    format!("{}-output", command).bytes().collect_vec(),
+                    format!("{}-output", program).bytes().collect_vec(),
                     Some(1),
                 ))
             } else {
                 Ok(CommandOutput::Stdout(
-                    format!("{}-output", command).bytes().collect_vec(),
+                    format!("{}-output", program).bytes().collect_vec(),
                 ))
             }
         }
@@ -404,12 +426,17 @@ mod tests {
 
     mod simple_runner {
         use crate::cmd_runner::tests::MockExec;
+        use crate::cmd_runner::tests::SimpleBuilder;
         use crate::cmd_runner::{CmdRunner, Exec, Output, SimpleCmdRunner};
         use std::cell::RefCell;
         use std::rc::Rc;
 
         fn simple_runner(exec: Box<dyn Exec>, stdin: Vec<u8>) -> SimpleCmdRunner {
-            SimpleCmdRunner { exec, stdin }
+            SimpleCmdRunner {
+                exec,
+                stdin,
+                builder: Box::new(SimpleBuilder {}),
+            }
         }
 
         #[test]
@@ -443,13 +470,17 @@ mod tests {
     }
 
     mod split_runner {
-        use crate::cmd_runner::tests::MockExec;
+        use crate::cmd_runner::tests::{MockExec, SimpleBuilder};
         use crate::cmd_runner::{CmdRunner, Exec, Output, SplitCmdRunner};
         use std::cell::RefCell;
         use std::rc::Rc;
 
         fn runner(exec: Box<dyn Exec>, stdin: Vec<u8>) -> SplitCmdRunner {
-            SplitCmdRunner { exec, stdin }
+            SplitCmdRunner {
+                exec,
+                stdin,
+                builder: Box::new(SimpleBuilder),
+            }
         }
 
         #[test]
@@ -515,6 +546,7 @@ mod tests {
 
     mod cached_runner {
         use crate::cmd_runner::tests::MockExec;
+        use crate::cmd_runner::tests::SimpleBuilder;
         use crate::cmd_runner::{CachedCmdRunner, CmdRunner, Exec, Output};
         use std::cell::RefCell;
         use std::rc::Rc;
@@ -522,6 +554,7 @@ mod tests {
         fn cached_runner(exec: Box<dyn Exec>, stdin: Vec<u8>) -> CachedCmdRunner {
             CachedCmdRunner {
                 exec,
+                builder: Box::new(SimpleBuilder {}),
                 stdin,
                 cache: vec![],
             }
