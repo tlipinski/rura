@@ -5,7 +5,7 @@ use crate::shell::split_runner::SplitCmdRunner;
 use anyhow::Result;
 
 pub trait CmdRunner {
-    fn run(&mut self, command: &RuraCommand) -> Result<CmdResult>;
+    fn run(&self, command: &RuraCommand) -> Result<CmdResult>;
 }
 
 pub struct CmdRunners;

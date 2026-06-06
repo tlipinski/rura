@@ -29,7 +29,7 @@ impl SimpleCmdRunner {
 }
 
 impl CmdRunner for SimpleCmdRunner {
-    fn run(&mut self, command: &RuraCommand) -> anyhow::Result<CmdResult> {
+    fn run(&self, command: &RuraCommand) -> anyhow::Result<CmdResult> {
         info!("executing: '{command:?}'");
 
         if command.is_empty() {
@@ -85,7 +85,7 @@ mod tests {
         let mock_exec = MockExec {
             calls: calls.clone(),
         };
-        let mut runner = simple_runner(Box::new(mock_exec), "stdin".into());
+        let runner = simple_runner(Box::new(mock_exec), "stdin".into());
 
         let result = runner.run(&"echo hello".into()).unwrap();
 
@@ -101,7 +101,7 @@ mod tests {
         let mock_exec = MockExec {
             calls: calls.clone(),
         };
-        let mut runner = simple_runner(Box::new(mock_exec), "stdin".into());
+        let runner = simple_runner(Box::new(mock_exec), "stdin".into());
 
         let result = runner.run(&vec![].into()).unwrap();
 

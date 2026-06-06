@@ -859,7 +859,7 @@ impl App {
 }
 
 fn handle_command_task(
-    mut cmd_runner: Box<dyn CmdRunner>,
+    cmd_runner: Box<dyn CmdRunner>,
     command_rx: Receiver<RuraCommand>,
     action_tx: Sender<Action>,
 ) -> Result<()> {

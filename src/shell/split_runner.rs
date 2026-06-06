@@ -25,7 +25,7 @@ impl SplitCmdRunner {
 }
 
 impl CmdRunner for SplitCmdRunner {
-    fn run(&mut self, command: &RuraCommand) -> anyhow::Result<CmdResult> {
+    fn run(&self, command: &RuraCommand) -> anyhow::Result<CmdResult> {
         info!("executing commands: '{command:?}'");
 
         let now = SystemTime::now();
@@ -100,7 +100,7 @@ mod tests {
         let mock_exec = MockExec {
             calls: calls.clone(),
         };
-        let mut runner = runner(Box::new(mock_exec), "stdin".into());
+        let runner = runner(Box::new(mock_exec), "stdin".into());
 
         let result = runner.run(&vec![].into()).unwrap();
 
@@ -115,7 +115,7 @@ mod tests {
         let mock_exec = MockExec {
             calls: calls.clone(),
         };
-        let mut runner = runner(Box::new(mock_exec), "stdin".into());
+        let runner = runner(Box::new(mock_exec), "stdin".into());
 
         let result = runner
             .run(&vec!["cmd1".into(), "cmd2".into(), "cmd3".into()].into())
@@ -141,7 +141,7 @@ mod tests {
         let mock_exec = MockExec {
             calls: calls.clone(),
         };
-        let mut runner = runner(Box::new(mock_exec), "stdin".into());
+        let runner = runner(Box::new(mock_exec), "stdin".into());
 
         let result = runner
             .run(&vec!["cmd1".into(), "cmd2err".into(), "cmd3".into()].into())
