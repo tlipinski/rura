@@ -20,7 +20,6 @@ Rura transforms the tedious "edit, up-arrow, rerun" shell cycle into a fluid, in
 - **Persistent History**: Quickly access and reuse previous commands.
 - **Save to File**: Save current output or command to a file.
 - **Line Wrapping**: Toggle whether long output lines wrap to fit the view.
-- **Flexible Error Display**: Choose between "inline" errors (replacing the main view) or a dedicated "pane" (showing both output and errors).
 - **Customizable**: Fully configurable key bindings, themes, and UI placement via TOML.
 
 ## Demos
@@ -176,9 +175,6 @@ The configuration path is determined as follows:
 ### General Options
 
 - `command_line_placement`: Set to `"top"` or `"bottom"` (default) to change where the input field is rendered.
-- `error_display_mode`: Set to `"inline"` or `"pane"` (default) to choose how errors are shown:
-    - `inline`: Errors replace the main output view. A status indicator (e.g., `ERR(1)`) appears in the status bar.
-    - `pane`: A dedicated error pane appears, allowing you to see the error message while still viewing the last successful output in the main area.
 - `highlight_duration_ms`: Duration in milliseconds for the temporary highlighting when executing commands (default: `250`).
 - `debounce_duration_ms`: Duration in milliseconds to wait before executing commands in live mode (default: `500`).
 - `shell`: The shell to use for execution and completions (e.g., `"bash"`, `"zsh"`, `"fish"`).

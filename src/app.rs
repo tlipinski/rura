@@ -8,7 +8,7 @@ use crate::debouncer::debouncer_task;
 use crate::file_saver::{FileSaver, FileSavers};
 use crate::help_widget::HelpWidget;
 use crate::history::History;
-use crate::output_widget::{ErrorDisplayMode, ErrorPanePlacement, OutputWidget};
+use crate::output_widget::{ErrorPanePlacement, OutputWidget};
 use crate::rura::{ExecuteType, RuraCommand};
 use crate::rura_widget::RuraWidget;
 use crate::save_to_file_widget::SaveToFileWidget;
@@ -176,7 +176,6 @@ impl App {
                     CommandLinePlacement::Top => ErrorPanePlacement::Top,
                     CommandLinePlacement::Bottom => ErrorPanePlacement::Bottom,
                 },
-                config.error_display_mode,
             ),
             search_widget: SearchWidget::default(),
             save_output_widget: SaveToFileWidget::new(
@@ -732,26 +731,12 @@ impl App {
 
         frame.render_widget(&self.output_widget, output_area);
 
-        let status_text = match self.output_widget.error_display_mode {
-            ErrorDisplayMode::Inline => {
-                if self.output_widget.main_output().ok {
-                    " OK ".white().on_green()
-                } else {
-                    match self.output_widget.main_output().status_code {
-                        None => " ERR ".white().on_red(),
-                        Some(code) => format!(" ERR({code}) ").white().on_red(),
-                    }
-                }
-            }
-            ErrorDisplayMode::Pane => Span::from(""),
-        };
-
-        let [_, exec_area, exit_code_area, hints_area, lines_area, _] = Layout::default()
+        let [_, exec_area, _, hints_area, lines_area, _] = Layout::default()
             .direction(Direction::Horizontal)
             .constraints(vec![
                 Constraint::Length(1),
                 Constraint::Length(4),
-                Constraint::Length(status_text.width() as u16 + 1),
+                Constraint::Length(1),
                 Constraint::Fill(1),
                 Constraint::Length(self.output_widget.output_len().to_string().len() as u16 + 3),
                 Constraint::Length(1),
@@ -759,11 +744,6 @@ impl App {
             .areas(status_area);
 
         frame.render_widget(self.hints_widget(), hints_area);
-
-        match self.output_widget.error_display_mode {
-            ErrorDisplayMode::Pane => (),
-            ErrorDisplayMode::Inline => frame.render_widget(status_text, exit_code_area),
-        }
 
         // Render progress indicator only if command runs for more than defined time
         // It reduces flickering when command is fast and progress indicator is not needed.
@@ -999,11 +979,7 @@ mod tests {
                     failed_subcommand: None,
                     copied: None,
                 },
-                output_widget: OutputWidget::new(
-                    &theme_config,
-                    ErrorPanePlacement::Bottom,
-                    ErrorDisplayMode::Pane,
-                ),
+                output_widget: OutputWidget::new(&theme_config, ErrorPanePlacement::Bottom),
                 save_output_widget: SaveToFileWidget::new(
                     " Save output to file ".into(),
                     "".into(),

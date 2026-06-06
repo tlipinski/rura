@@ -9,7 +9,6 @@ use ratatui::prelude::{StatefulWidget, Style, Text, Widget};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap};
 use regex::Regex;
-use serde::{Deserialize, Serialize};
 use std::cell::Cell;
 use std::ops::Range;
 
@@ -34,22 +33,16 @@ pub struct OutputWidget {
     error_pane_placement: ErrorPanePlacement,
     highlight_positions: Vec<(usize, Range<usize>)>,
     highlight_index: usize,
-    pub error_display_mode: ErrorDisplayMode,
 }
 
 impl OutputWidget {
-    pub fn new(
-        theme_config: &ThemeConfig,
-        error_pane_placement: ErrorPanePlacement,
-        error_display_mode: ErrorDisplayMode,
-    ) -> Self {
+    pub fn new(theme_config: &ThemeConfig, error_pane_placement: ErrorPanePlacement) -> Self {
         Self {
             offset: Position::default(),
             output: Output::ok(vec![]),
             error_output_opt: None,
             wrap: false,
             theme: Theme::from_config(theme_config),
-            error_display_mode,
             output_content_area_size: Cell::new(Size::default()),
             error_pane_placement,
             highlight_positions: vec![],
@@ -239,10 +232,7 @@ impl OutputWidget {
     }
 
     pub fn main_output(&self) -> &Output {
-        match self.error_display_mode {
-            ErrorDisplayMode::Inline => self.error_output_opt.as_ref().unwrap_or(&self.output),
-            ErrorDisplayMode::Pane => &self.output,
-        }
+        &self.output
     }
 
     fn main_output_width(&self) -> usize {
@@ -264,14 +254,11 @@ impl OutputWidget {
     }
 
     pub fn layout(&self, area: Rect) -> [Rect; 5] {
-        let error_output_lines = match self.error_display_mode {
-            ErrorDisplayMode::Inline => 0,
-            ErrorDisplayMode::Pane => self
-                .error_output_opt
-                .as_ref()
-                .map(|e| e.lines.len() + 2)
-                .unwrap_or(0),
-        };
+        let error_output_lines = self
+            .error_output_opt
+            .as_ref()
+            .map(|e| e.lines.len() + 2)
+            .unwrap_or(0);
 
         let (output_area, errors_area) = match self.error_pane_placement {
             ErrorPanePlacement::Top => {
@@ -355,20 +342,18 @@ impl Widget for &OutputWidget {
         self.output_content_area_size
             .set(output_content_area.into()); // save this value for scroll logic
 
-        if matches!(self.error_display_mode, ErrorDisplayMode::Pane) {
-            if let Some(err_output) = &self.error_output_opt {
-                let block = Block::bordered()
-                    .title(format!(" Error: {} ", err_output.status_code.unwrap_or(0)))
-                    .border_style(Style::default().fg(Red));
-                let mut err_output_par = Paragraph::new(err_output.lines.join("\n"))
-                    .scroll((0, self.offset.col as u16))
-                    .block(block);
+        if let Some(err_output) = &self.error_output_opt {
+            let block = Block::bordered()
+                .title(format!(" Error: {} ", err_output.status_code.unwrap_or(0)))
+                .border_style(Style::default().fg(Red));
+            let mut err_output_par = Paragraph::new(err_output.lines.join("\n"))
+                .scroll((0, self.offset.col as u16))
+                .block(block);
 
-                if self.wrap {
-                    err_output_par = err_output_par.wrap(Wrap::default())
-                };
-                err_output_par.render(errors_area, buf);
-            }
+            if self.wrap {
+                err_output_par = err_output_par.wrap(Wrap::default())
+            };
+            err_output_par.render(errors_area, buf);
         }
 
         let output_len = self.main_output().len();
@@ -485,14 +470,6 @@ impl Widget for &OutputWidget {
     }
 }
 
-#[derive(Default, Clone, Copy, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum ErrorDisplayMode {
-    Inline,
-    #[default]
-    Pane,
-}
-
 pub enum ErrorPanePlacement {
     Top,
     Bottom,
@@ -518,11 +495,7 @@ mod tests {
         fn default() -> Self {
             let theme_config = ThemeConfig::default();
 
-            OutputWidget::new(
-                &theme_config,
-                ErrorPanePlacement::Top,
-                ErrorDisplayMode::Pane,
-            )
+            OutputWidget::new(&theme_config, ErrorPanePlacement::Top)
         }
     }
 
@@ -532,7 +505,6 @@ mod tests {
 
         let mut widget = OutputWidget::default();
         widget.error_pane_placement = ErrorPanePlacement::Top;
-        widget.error_display_mode = ErrorDisplayMode::Pane;
 
         widget.handle_command_output(Output::ok_str("out1\nout2\nout3"));
         widget.handle_command_output(Output::err_str("errors1\nerrors2\nerrors3", Some(1)));
@@ -550,7 +522,6 @@ mod tests {
 
         let mut widget = OutputWidget::default();
         widget.error_pane_placement = ErrorPanePlacement::Bottom;
-        widget.error_display_mode = ErrorDisplayMode::Pane;
 
         widget.handle_command_output(Output::ok_str("out1\nout2\nout3"));
         widget.handle_command_output(Output::err_str("errors1\nerrors2\nerrors3", Some(1)));
@@ -570,33 +541,10 @@ mod tests {
     }
 
     #[test]
-    fn errors_inline() {
-        let mut terminal = TestTerminal::default().0;
-
-        let mut widget = OutputWidget::default();
-        widget.error_display_mode = ErrorDisplayMode::Inline;
-
-        widget.handle_command_output(Output::ok_str("out1\nout2\nout3"));
-        terminal
-            .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
-            .unwrap();
-        assert_snapshot!("after ok", terminal.backend());
-
-        widget.handle_command_output(Output::ok_str(&generate_lines(3)));
-
-        widget.handle_command_output(Output::err_str("errors1\nerrors2\nerrors3", Some(1)));
-        terminal
-            .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
-            .unwrap();
-        assert_snapshot!(terminal.backend());
-    }
-
-    #[test]
     fn scrolling() {
         let mut terminal = Terminal::new(TestBackend::new(10, 5)).unwrap();
 
         let mut widget = OutputWidget::default();
-        widget.error_display_mode = ErrorDisplayMode::Inline;
 
         widget.handle_command_output(Output::ok_str(&generate_lines(10)));
         terminal
