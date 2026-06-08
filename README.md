@@ -54,7 +54,7 @@ Check the [Releases](https://github.com/tlipinski/rura/releases) page for pre-co
 
 **Homebrew (macOS/Linux)**:
 ```bash
-brew install tlipinski/tap/rura
+brew install rura
 ```
 
 **Arch Linux (AUR)**: Install via your AUR helper:
