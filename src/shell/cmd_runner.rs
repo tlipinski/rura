@@ -3,6 +3,7 @@ use crate::shell::cached_runner::CachedCmdRunner;
 use crate::shell::output::Output;
 use crate::shell::split_runner::SplitCmdRunner;
 use anyhow::Result;
+use itertools::Itertools;
 use std::sync::Arc;
 
 pub trait CmdRunner {
@@ -28,7 +29,20 @@ impl CmdRunners {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct CmdResult {
-    pub output: Output,
-    pub failed_subcommand: Option<usize>,
+    pub stdin: Arc<[u8]>,
+    pub outputs: Vec<Output>,
+}
+
+impl CmdResult {
+    pub fn failed_subcommand(&self) -> Option<usize> {
+        self.outputs
+            .iter()
+            .find_position(|output| match output {
+                Output::Err { .. } => true,
+                _ => false,
+            })
+            .map(|(index, _)| index)
+    }
 }

@@ -29,51 +29,52 @@ impl CmdRunner for SplitCmdRunner {
     fn run(&self, command: &RuraCommand) -> anyhow::Result<CmdResult> {
         info!("executing commands: '{command:?}'");
 
+        if command.is_empty() {
+            return Ok(CmdResult {
+                stdin: self.stdin.clone(),
+                outputs: vec![Output::Ok(self.stdin.clone())],
+            });
+        }
+
         let now = SystemTime::now();
 
         let mut current_stdin = self.stdin.clone();
 
-        let mut output_opt: Option<(String, Arc<[u8]>)> = None;
+        let mut outputs: Vec<Output> = Vec::new();
 
-        for (i, subcommand) in command.trimmed().iter().enumerate() {
-            debug!("  executing sub command: '{subcommand}'");
+        for subcommand in command.trimmed().iter() {
+            debug!("exec: '{subcommand}'");
 
             let now_sub = SystemTime::now();
 
             let cmd = self.builder.build(subcommand);
             let output = self.exec.exec(cmd, current_stdin.clone())?;
 
-            debug!("    time: {:?}, ", now_sub.elapsed()?);
+            outputs.push(output.clone());
+
+            debug!("t: {:?}", now_sub.elapsed()?);
 
             match output {
                 Output::Ok(bytes) => {
                     current_stdin = bytes.clone();
-                    output_opt = Some((subcommand.clone(), bytes));
                 }
-                Output::Err(bytes, code) => {
-                    debug!("  failed - aborting further execution");
+                Output::Err(_, _) => {
+                    debug!("failed - aborting further execution");
                     return Ok(CmdResult {
-                        output: Output::Err(bytes, code),
-                        failed_subcommand: Some(i),
+                        stdin: self.stdin.clone(),
+                        outputs,
                     });
                 }
             }
         }
 
-        if let Some((_, output)) = output_opt {
-            let elapsed = now.elapsed()?;
-            debug!("command exec took {elapsed:?}");
+        let elapsed = now.elapsed()?;
+        debug!("total: {elapsed:?}");
 
-            Ok(CmdResult {
-                output: Output::Ok(output),
-                failed_subcommand: None,
-            })
-        } else {
-            Ok(CmdResult {
-                output: Output::Ok(self.stdin.clone()),
-                failed_subcommand: None,
-            })
-        }
+        Ok(CmdResult {
+            stdin: self.stdin.clone(),
+            outputs,
+        })
     }
 }
 
@@ -106,7 +107,12 @@ mod tests {
 
         let result = runner.run(&vec![].into()).unwrap();
 
-        assert_eq!(result.output, Output::ok_str("stdin"));
+        assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
+
+        assert_eq!(
+            result.outputs,
+            vec![Output::Ok(Arc::from("stdin".as_bytes()))]
+        );
 
         assert_eq!(*calls.borrow(), vec![])
     }
@@ -123,8 +129,16 @@ mod tests {
             .run(&vec!["cmd1".into(), "cmd2".into(), "cmd3".into()].into())
             .unwrap();
 
-        // output of the last called command
-        assert_eq!(result.output, Output::ok_str("cmd3-output"));
+        assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
+
+        assert_eq!(
+            result.outputs,
+            vec![
+                Output::ok_str("cmd1-output"),
+                Output::ok_str("cmd2-output"),
+                Output::ok_str("cmd3-output")
+            ]
+        );
 
         // input for the command is the output of the previous command
         assert_eq!(
@@ -149,7 +163,14 @@ mod tests {
             .run(&vec!["cmd1".into(), "cmd2err".into(), "cmd3".into()].into())
             .unwrap();
 
-        // output of the last called command
-        assert_eq!(result.output, Output::err_str("cmd2err-output"));
+        assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
+
+        assert_eq!(
+            result.outputs,
+            vec![
+                Output::ok_str("cmd1-output"),
+                Output::err_str("cmd2err-output")
+            ]
+        );
     }
 }

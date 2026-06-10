@@ -1,5 +1,5 @@
 use crate::app::Action::{
-    CommandCompleted, Debounced, ResetHighlight, StartProgress, StopProgress, UserInput,
+    CommandCompleted, Debounced, Failure, ResetHighlight, StartProgress, StopProgress, UserInput,
 };
 use crate::args::Args;
 use crate::completable_input::CompletableInput;
@@ -132,14 +132,7 @@ impl App {
                     }
                 }
                 Err(e) => {
-                    s3.send(CommandCompleted(
-                        RuraCommand::empty(),
-                        CmdResult {
-                            output: Output::Err(e.to_string().bytes().collect(), None),
-                            failed_subcommand: None,
-                        },
-                    ))
-                    .unwrap();
+                    s3.send(Failure(e.to_string())).unwrap();
                 }
             }
         });
@@ -228,16 +221,21 @@ impl App {
                         self.rura_widget.history.push(&command.to_string())
                     } else {
                         // in live mode only save commands that were successfully executed
-                        if let Output::Ok(_) = result.output {
+                        if let Some(Output::Ok(_)) = result.outputs.last() {
                             self.rura_widget.history.push(&command.to_string())
                         }
                     }
                 }
-                self.output_widget.handle_command_output(&result.output);
-                if let Output::Ok(bytes) = result.output {
-                    self.success_output_bytes = bytes;
+                if let Some(last_output) = result.outputs.last() {
+                    self.output_widget.handle_command_output(last_output);
+                    if let Output::Ok(bytes) = last_output {
+                        self.success_output_bytes = bytes.clone();
+                    }
+                } else {
+                    self.output_widget
+                        .handle_command_output(&Output::Ok(result.stdin.clone()));
                 }
-                self.rura_widget.failed_subcommand = result.failed_subcommand;
+                self.rura_widget.failed_subcommand = result.failed_subcommand();
             }
             ResetHighlight => self.rura_widget.highlight_until = None,
             Debounced => {
@@ -257,6 +255,10 @@ impl App {
             }
             StopProgress => {
                 self.in_progress = None;
+            }
+            Failure(err) => {
+                self.output_widget
+                    .handle_command_output(&Output::Err(Arc::from(err.as_bytes()), None));
             }
         }
     }
@@ -855,16 +857,8 @@ fn handle_command_task(
                     let _ = action_tx.send(CommandCompleted(command, result));
                 }
                 Err(e) => {
-                    // todo use dedicated status widget for such errors?
-                    let cmd_out = CmdResult {
-                        output: Output::Err(
-                            Arc::from("Failed running command, check logs".as_bytes()),
-                            None,
-                        ),
-                        failed_subcommand: None,
-                    };
-                    action_tx.send(CommandCompleted(command, cmd_out))?;
-                    error!("{}", e)
+                    error!("Failed running command {:?}: {}", command, e);
+                    action_tx.send(Failure("Failed running command, check logs".into()))?;
                 }
             }
 
@@ -925,6 +919,7 @@ fn reset_highlight_task(rx: Receiver<()>, tx: Sender<Action>, duration_ms: u64) 
 enum Action {
     UserInput(Event),
     CommandCompleted(RuraCommand, CmdResult),
+    Failure(String),
     ResetHighlight,
     Debounced,
     StartProgress(SystemTime),
@@ -1131,8 +1126,8 @@ mod tests {
         app.input_mode = InputMode::LiveFull;
 
         let cmd_res = |output: Output| CmdResult {
-            output,
-            failed_subcommand: None,
+            stdin: Arc::from("".as_bytes()),
+            outputs: vec![output],
         };
 
         app.handle_action(CommandCompleted("g".into(), cmd_res(Output::err_str(""))));
@@ -1159,8 +1154,8 @@ mod tests {
         let mut app = App::default();
 
         let cmd_res = |output: Output| CmdResult {
-            output,
-            failed_subcommand: None,
+            stdin: Arc::from("".as_bytes()),
+            outputs: vec![output],
         };
 
         app.handle_action(CommandCompleted("g".into(), cmd_res(Output::err_str(""))));

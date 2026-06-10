@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Output {
     Ok(Arc<[u8]>),
     Err(Arc<[u8]>, Option<i32>),

@@ -35,10 +35,13 @@ impl CmdRunner for CachedCmdRunner {
 
         info!("executing: '{command:?}'");
 
+        let cached_commands = cache.iter().map(|(c, _)| c.clone()).collect_vec();
+        debug!("cache: {:?}", cached_commands);
+
         if command.is_empty() {
             return Ok(CmdResult {
-                output: Output::Ok(self.stdin.clone()),
-                failed_subcommand: None,
+                stdin: self.stdin.clone(),
+                outputs: vec![],
             });
         }
 
@@ -55,9 +58,12 @@ impl CmdRunner for CachedCmdRunner {
             }
         }
 
+        let mut outputs = vec![];
+
         for (i, subcommand) in command.trimmed().iter().enumerate() {
-            if cache.get(i).is_some() {
-                debug!("  using cached output for command: '{subcommand}'");
+            if let Some((_, output)) = cache.get(i) {
+                debug!("reuse: '{subcommand}'");
+                outputs.push(Output::Ok(output.clone()));
                 continue;
             }
 
@@ -67,24 +73,26 @@ impl CmdRunner for CachedCmdRunner {
                 &self.stdin
             };
 
-            debug!("  executing sub command: '{subcommand}'");
+            debug!("exec: '{subcommand}'");
 
             let now_sub = SystemTime::now();
 
             let cmd = self.builder.build(subcommand);
             let output = self.exec.exec(cmd, current_stdin.clone())?;
 
-            debug!("    time: {:?}, ", now_sub.elapsed()?);
+            debug!("t: {:?}", now_sub.elapsed()?);
+
+            outputs.push(output.clone());
 
             match output {
                 Output::Ok(bytes) => {
                     cache.push((subcommand.clone(), bytes));
                 }
-                Output::Err(bytes, code) => {
+                Output::Err(_bytes, _code) => {
                     debug!("  failed - aborting further execution");
                     return Ok(CmdResult {
-                        output: Output::Err(bytes, code),
-                        failed_subcommand: Some(i),
+                        stdin: self.stdin.clone(),
+                        outputs,
                     });
                 }
             }
@@ -94,18 +102,16 @@ impl CmdRunner for CachedCmdRunner {
         // "until cursor prev" action so the full command might be still called
         // with all subcommands
 
+        let elapsed = now.elapsed()?;
+        debug!("total: {elapsed:?}");
+
         let cached_commands = cache.iter().map(|(c, _)| c.clone()).collect_vec();
 
-        debug!("  cached commands: {:?}", cached_commands);
-
-        let cached = cache.get(command.len() - 1).unwrap();
-
-        let elapsed = now.elapsed()?;
-        debug!("  command exec took {elapsed:?}");
+        debug!("cache: {:?}", cached_commands);
 
         Ok(CmdResult {
-            output: Output::Ok(cached.1.clone()),
-            failed_subcommand: None,
+            stdin: self.stdin.clone(),
+            outputs,
         })
     }
 }
@@ -144,7 +150,7 @@ mod tests {
 
         let result = runner.run(&vec![].into()).unwrap();
 
-        assert_eq!(result.output, Output::ok_str("stdin"))
+        assert_eq!(result.outputs, vec![])
     }
 
     #[test]
@@ -159,8 +165,16 @@ mod tests {
             .run(&vec!["cmd1".into(), "cmd2".into(), "cmd3".into()].into())
             .unwrap();
 
-        // output of the last called command
-        assert_eq!(result.output, Output::ok_str("cmd3-output"));
+        assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
+
+        assert_eq!(
+            result.outputs,
+            vec![
+                Output::ok_str("cmd1-output"),
+                Output::ok_str("cmd2-output"),
+                Output::ok_str("cmd3-output")
+            ]
+        );
 
         // input for the command is the output of the previous command
         assert_eq!(
@@ -200,8 +214,10 @@ mod tests {
         // second run
         let result = runner.run(&vec!["cmd1".into()].into()).unwrap();
 
-        // output of the last called command - cmd3
-        assert_eq!(result.output, Output::ok_str("cmd1-output"));
+        assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
+
+        // only cmd1 is in the output
+        assert_eq!(result.outputs, vec![Output::ok_str("cmd1-output"),]);
 
         // no calls since the command is cached
         assert_eq!(*calls.borrow(), vec![]);
@@ -236,8 +252,17 @@ mod tests {
             .run(&vec!["cmd1".into(), "cmd2".into(), "cmd3".into(), "cmd4".into()].into())
             .unwrap();
 
-        // output of the last called command
-        assert_eq!(result.output, Output::ok_str("cmd4-output"));
+        assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
+
+        assert_eq!(
+            result.outputs,
+            vec![
+                Output::ok_str("cmd1-output"),
+                Output::ok_str("cmd2-output"),
+                Output::ok_str("cmd3-output"),
+                Output::ok_str("cmd4-output"),
+            ]
+        );
 
         // only cmd3 is called since is's the only one not cached
         assert_eq!(
@@ -278,8 +303,16 @@ mod tests {
             .run(&vec!["cmd1".into(), "cmd2mod".into()].into())
             .unwrap();
 
-        // output of the last called command
-        assert_eq!(result.output, Output::ok_str("cmd2mod-output"));
+        assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
+
+        // all outputs of the last called command
+        assert_eq!(
+            result.outputs,
+            vec![
+                Output::ok_str("cmd1-output"),
+                Output::ok_str("cmd2mod-output"),
+            ]
+        );
 
         // cmd2mod is called since it's modified
         assert_eq!(
@@ -315,8 +348,17 @@ mod tests {
             .run(&vec!["cmd1".into(), "cmd2mod".into(), "cmd3".into()].into())
             .unwrap();
 
-        // output of the last called command
-        assert_eq!(result.output, Output::ok_str("cmd3-output"));
+        assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
+
+        // all outputs of the last called command
+        assert_eq!(
+            result.outputs,
+            vec![
+                Output::ok_str("cmd1-output"),
+                Output::ok_str("cmd2mod-output"),
+                Output::ok_str("cmd3-output")
+            ]
+        );
 
         // cmd2mod is called since it's modified
         // cmd3 is also called because it was after modified command
@@ -351,8 +393,16 @@ mod tests {
             .run(&vec!["cmd1".into(), "cmd2err".into(), "cmd3".into()].into())
             .unwrap();
 
-        // output of the last called command
-        assert_eq!(result.output, Output::err_str("cmd2err-output"));
+        assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
+
+        // all outputs of the last called command - breaks on first error
+        assert_eq!(
+            result.outputs,
+            vec![
+                Output::ok_str("cmd1-output"),
+                Output::err_str("cmd2err-output"),
+            ]
+        );
 
         // cmd2mod is called since it's modified
         // cmd3 is also called because it was after modified command
@@ -388,7 +438,16 @@ mod tests {
             .run(&vec!["cmd1".into(), "cmd2err".into(), "cmd3".into()].into())
             .unwrap();
 
-        assert_eq!(result.output, Output::err_str("cmd2err-output"));
+        assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
+
+        // all outputs of the last called command - breaks on first error
+        assert_eq!(
+            result.outputs,
+            vec![
+                Output::ok_str("cmd1-output"),
+                Output::err_str("cmd2err-output"),
+            ]
+        );
 
         // cmd1 not called because it's cached
         assert_eq!(
