@@ -1,5 +1,6 @@
 use crate::config::ThemeConfig;
 use crate::content_widget::{ContentWidget, Position};
+use crate::shell::cmd_runner::CmdResult;
 use crate::shell::output::Output;
 use crate::theme::Theme;
 use itertools::Itertools;
@@ -59,9 +60,9 @@ impl OutputWidget {
         self.content.output_len()
     }
 
-    pub fn handle_command_output(&mut self, output: &Output) {
-        match output {
-            Output::Ok(bytes) => {
+    pub fn handle_command_result(&mut self, result: &CmdResult) {
+        match result.outputs.last() {
+            Some(Output::Ok(bytes)) => {
                 let str = String::from_utf8_lossy(&bytes);
                 let lines = str.lines().map(|a| a.into()).collect_vec();
                 if self.content.lines.len() != lines.len() {
@@ -71,11 +72,21 @@ impl OutputWidget {
 
                 self.error_output_opt = None;
             }
-            Output::Err(bytes, code) => {
+            Some(Output::Err(bytes, code)) => {
                 let str = String::from_utf8_lossy(&bytes);
                 let lines = str.lines().map(|a| a.into()).collect_vec();
 
                 self.error_output_opt = Some((lines, *code));
+            }
+            None => {
+                let str = String::from_utf8_lossy(&result.stdin);
+                let lines = str.lines().map(|a| a.into()).collect_vec();
+                if self.content.lines.len() != lines.len() {
+                    self.content.offset = Position::default();
+                }
+                self.content.lines = lines;
+
+                self.error_output_opt = None;
             }
         }
 
@@ -186,6 +197,7 @@ mod tests {
     use insta::assert_snapshot;
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
+    use std::sync::Arc;
 
     struct TestTerminal(Terminal<TestBackend>);
 
@@ -203,6 +215,13 @@ mod tests {
         }
     }
 
+    fn result(output: Output) -> CmdResult {
+        CmdResult {
+            stdin: Arc::from("".as_bytes()),
+            outputs: vec![output],
+        }
+    }
+
     #[test]
     fn errors_pane_top() {
         let mut terminal = TestTerminal::default().0;
@@ -210,8 +229,8 @@ mod tests {
         let mut widget = OutputWidget::default();
         widget.error_pane_placement = ErrorPanePlacement::Top;
 
-        widget.handle_command_output(&Output::ok_str("out1\nout2\nout3"));
-        widget.handle_command_output(&Output::err_str("errors1\nerrors2\nerrors3"));
+        widget.handle_command_result(&result(Output::ok_str("out1\nout2\nout3")));
+        widget.handle_command_result(&result(Output::err_str("errors1\nerrors2\nerrors3")));
 
         terminal
             .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
@@ -227,8 +246,8 @@ mod tests {
         let mut widget = OutputWidget::default();
         widget.error_pane_placement = ErrorPanePlacement::Bottom;
 
-        widget.handle_command_output(&Output::ok_str("out1\nout2\nout3"));
-        widget.handle_command_output(&Output::err_str("errors1\nerrors2\nerrors3"));
+        widget.handle_command_result(&result(Output::ok_str("out1\nout2\nout3")));
+        widget.handle_command_result(&result(Output::err_str("errors1\nerrors2\nerrors3")));
 
         terminal
             .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))

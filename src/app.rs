@@ -226,16 +226,14 @@ impl App {
                         }
                     }
                 }
-                if let Some(last_output) = result.outputs.last() {
-                    self.output_widget.handle_command_output(last_output);
-                    if let Output::Ok(bytes) = last_output {
-                        self.success_output_bytes = bytes.clone();
-                    }
-                } else {
-                    self.output_widget
-                        .handle_command_output(&Output::Ok(result.stdin.clone()));
-                }
+
                 self.rura_widget.failed_subcommand = result.failed_subcommand();
+
+                self.output_widget.handle_command_result(&result);
+
+                if let Some(Output::Ok(bytes)) = result.outputs.last() {
+                    self.success_output_bytes = bytes.clone();
+                }
             }
             ResetHighlight => self.rura_widget.highlight_until = None,
             Debounced => {
@@ -257,8 +255,11 @@ impl App {
                 self.in_progress = None;
             }
             Failure(err) => {
-                self.output_widget
-                    .handle_command_output(&Output::Err(Arc::from(err.as_bytes()), None));
+                let result = CmdResult {
+                    stdin: Arc::from("".as_bytes()),
+                    outputs: vec![Output::Err(Arc::from(err.as_bytes()), None)],
+                };
+                self.output_widget.handle_command_result(&result);
             }
         }
     }
