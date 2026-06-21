@@ -1,3 +1,10 @@
+## v1.6.0 - 2026-06-21
+
+### Features
+
+- Added diffing mode for comparing command outputs
+- *(ui)* Added `toggle_live` and `toggle_live_until_cursor` keybindings
+
 ## v1.5.0 - 2026-06-05
 
 ### Features
