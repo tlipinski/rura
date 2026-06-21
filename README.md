@@ -38,6 +38,17 @@ Rura is a terminal UI for building shell pipelines. Edit a pipe like `grep | sor
 
 ![Made with VHS](https://vhs.charm.sh/vhs-3LJycZIMoAJjLqwmpboLdp.gif)
 
+**Command and filename completion**
+
+![Made with VHS](https://vhs.charm.sh/vhs-734scXMBN5VuOmc6nVlXjx.gif)
+
+<details>
+<summary>More demos</summary>
+
+**Configurable layout**
+
+![Made with VHS](https://vhs.charm.sh/vhs-2WVQxVCGJ8tbSNgVoChMpC.gif)
+
 **History**
 
 ![Made with VHS](https://vhs.charm.sh/vhs-7m80OhHcR9MohlEa32I1WI.gif)
@@ -46,17 +57,11 @@ Rura is a terminal UI for building shell pipelines. Edit a pipe like `grep | sor
 
 ![Made with VHS](https://vhs.charm.sh/vhs-WDHLj84DGQsjmYVKbsMJi.gif)
 
-**Configurable layout**
-
-![Made with VHS](https://vhs.charm.sh/vhs-2WVQxVCGJ8tbSNgVoChMpC.gif)
-
-**Command and filename completion**
-
-![Made with VHS](https://vhs.charm.sh/vhs-734scXMBN5VuOmc6nVlXjx.gif)
-
 **Line wrapping**
 
 ![Made with VHS](https://vhs.charm.sh/vhs-5yI8kU23FHKtOa2B7O4QNT.gif)
+
+</details>
 
 ## Installation
 
