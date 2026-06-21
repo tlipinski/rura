@@ -284,3 +284,7 @@ Application logs are useful for troubleshooting. They are stored at:
 - **Linux**: `~/.cache/rura/logs.txt`
 - **macOS**: `~/Library/Caches/rura/logs.txt`
 - **Windows**: `%LOCALAPPDATA%\rura\logs.txt`
+
+## License
+
+Licensed under the [MIT License](LICENSE).
