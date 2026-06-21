@@ -1,6 +1,6 @@
 <img src="rura.svg" height="80">
 
-Rura transforms the tedious "edit, up-arrow, rerun" shell cycle into a fluid, interactive TUI scratchpad. It features live previews, syntax highlighting, and partial execution, allowing you to debug and iterate on commands in real time.
+Rura is a terminal UI for building shell pipelines. Edit a pipe like `grep | sort | uniq`, see the output update live, inspect any stage's output, and diff between runs — replacing the usual edit, up-arrow, rerun loop.
 
 ![Made with VHS](https://vhs.charm.sh/vhs-1Fv1rbJ2qMfPYx21lF5tDG.gif)
 
