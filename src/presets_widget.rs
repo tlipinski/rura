@@ -100,10 +100,12 @@ impl PresetsWidget {
     }
 
     pub fn cancel_edit(&mut self) {
-        if let DisplayMode::Edit(index) = self.display_mode {
-            self.presets.remove(index);
+        if let DisplayMode::Edit(index, editing_new) = self.display_mode {
+            if editing_new {
+                self.presets.remove(index);
+                self.selected = None;
+            }
             self.display_mode = DisplayMode::Select;
-            self.selected = None;
         }
     }
 
@@ -140,11 +142,11 @@ impl PresetsWidget {
             shortcut: self.shortcut_input.value().parse().ok(),
         };
         if let Some(s) = self.selected {
-            self.display_mode = DisplayMode::Edit(s + 1); // insert after selected
+            self.display_mode = DisplayMode::Edit(s + 1, true); // insert after selected
             self.presets.insert(s + 1, preset);
             self.selected = Some(s + 1);
         } else {
-            self.display_mode = DisplayMode::Edit(self.presets.len());
+            self.display_mode = DisplayMode::Edit(self.presets.len(), true);
             self.presets.insert(self.presets.len(), preset);
             self.selected = Some(self.presets.len() - 1);
         }
@@ -162,7 +164,7 @@ impl PresetsWidget {
                     .map(|a| a.to_string())
                     .unwrap_or_default(),
             );
-            self.display_mode = DisplayMode::Edit(s);
+            self.display_mode = DisplayMode::Edit(s, false);
             self.edit_mode = EditMode::Command;
         }
     }
@@ -186,7 +188,7 @@ impl PresetsWidget {
         match self.display_mode {
             DisplayMode::Select => {}
             DisplayMode::ConfirmDelete(_) => {}
-            DisplayMode::Edit(index) => {
+            DisplayMode::Edit(index, _) => {
                 let current_value = self.command_input.value().trim();
                 if !current_value.is_empty() {
                     self.presets[index].command = current_value.into();
@@ -263,7 +265,7 @@ impl Widget for &PresetsWidget {
         let presets = match self.display_mode {
             DisplayMode::Select => self.presets.clone(),
             DisplayMode::ConfirmDelete(_) => self.presets.clone(),
-            DisplayMode::Edit(index) => {
+            DisplayMode::Edit(index, _) => {
                 let mut p = self.presets.clone();
                 p.remove(index);
                 p.insert(
@@ -356,7 +358,7 @@ impl Widget for &PresetsWidget {
                     .centered()
                     .render(inner, buf);
             }
-            DisplayMode::Edit(index) => match self.edit_mode {
+            DisplayMode::Edit(index, _) => match self.edit_mode {
                 EditMode::Command => {
                     let x = self
                         .command_input
@@ -381,7 +383,7 @@ impl Widget for &PresetsWidget {
 pub enum DisplayMode {
     Select,
     ConfirmDelete(usize),
-    Edit(usize),
+    Edit(usize, bool),
 }
 
 enum EditMode {

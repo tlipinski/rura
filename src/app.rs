@@ -451,7 +451,7 @@ impl App {
                     _ => {}
                 },
             },
-            DisplayMode::Edit(_) => match (code, mods) {
+            DisplayMode::Edit { .. } => match (code, mods) {
                 (Esc, KeyModifiers::NONE) => self.presets_widget.cancel_edit(),
                 (Tab, KeyModifiers::NONE) => {
                     self.presets_widget.toggle_edit_mode();
