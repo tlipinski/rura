@@ -163,6 +163,12 @@ impl RuraWidget {
             let cursor = r.insert_after(value);
             self.command_input.with_value(r.to_string());
             self.command_input.handle(InputRequest::SetCursor(cursor));
+        } else if self.command_input.cursor() == self.command_input.value().len() {
+            // special case that allows inserting value even if
+            // rura command might not be valid, for instance - `grep abc | `
+            let new_val = format!("{}{}", self.command_input.value(), value);
+            self.command_input.with_value(new_val);
+            self.command_input.handle(InputRequest::GoToEnd);
         }
     }
 
@@ -174,6 +180,12 @@ impl RuraWidget {
             let _cursor = r.insert_before(value);
             self.command_input.with_value(r.to_string());
             // self.command_input.handle(InputRequest::SetCursor(cursor));
+        } else if self.command_input.cursor() == self.command_input.value().len() {
+            // special case that allows inserting value even if
+            // rura command might not be valid, for instance - `grep abc | `
+            let new_val = format!("{}{}", self.command_input.value(), value);
+            self.command_input.with_value(new_val);
+            self.command_input.handle(InputRequest::GoToEnd);
         }
     }
 
