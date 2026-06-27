@@ -8,6 +8,15 @@ repository = "https://github.com/tlipinski/rura"
 homepage = "https://github.com/tlipinski/rura"
 authors = ["Tomasz Lipiński"]
 
+[package.metadata.generate-rpm]
+assets = [
+    { source = "target/release/rura", dest = "/usr/bin/rura", mode = "755" },
+    { source = "LICENSE", dest = "/usr/share/licenses/rura/LICENSE", mode = "644", doc = true },
+    { source = "README.md", dest = "/usr/share/doc/rura/README.md", mode = "644", doc = true },
+    { source = "CHANGELOG.md", dest = "/usr/share/doc/rura/CHANGELOG.md", mode = "644", doc = true },
+    { source = "rura.svg", dest = "/usr/share/icons/hicolor/scalable/apps/rura.svg", mode = "644" }
+]
+
 [dependencies]
 clap = { version = "4.6.1", features = ["derive"] }
 dirs = "6.0.0"
