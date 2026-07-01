@@ -5,5 +5,5 @@ expression: terminal.backend()
 " 3 line3 ▲"
 " 4 line4 ║"
 " 5 line5 █"
-" 6 line6 ║"
+" 6 line6 █"
 " 7 line7 ▼"
