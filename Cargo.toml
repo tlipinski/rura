@@ -25,11 +25,11 @@ ratatui = { version = "0.30.2", features = ["unstable-rendered-line-info"] }
 serde = { version = "1.0.228", features = ["derive"] }
 toml = "1.1.2"
 tui-input = "0.15.3"
-log = "0.4.29"
+log = "0.4.33"
 crossterm = { version = "0.29.0" }
 unicode-width = "0.2.2"
-itertools = "0.14.0"
-regex = "1.12.3"
+itertools = "0.15.0"
+regex = "1.12.4"
 anyhow = "1.0.102"
 cfg-if = "1.0.4"
 similar = { version = "3.1.1", features = ["inline"] }
@@ -38,7 +38,7 @@ similar = { version = "3.1.1", features = ["inline"] }
 crossterm = { version = "0.29.0", features = ["use-dev-tty"] }
 
 [dev-dependencies]
-insta = "1.46.3"
+insta = "1.48.0"
 
 [profile.release]
 codegen-units = 1
