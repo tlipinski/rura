@@ -32,9 +32,9 @@ use ratatui::layout::{Constraint, Direction, Layout, Margin, Rect};
 use ratatui::prelude::Span;
 use ratatui::prelude::Stylize;
 use ratatui::style::Color::Yellow;
-use ratatui::style::Style;
+use ratatui::style::{Style, Styled};
 use ratatui::text::{Line, Text};
-use ratatui::widgets::{Block, BorderType, Widget};
+use ratatui::widgets::{Block, BorderType, Borders, Clear, Paragraph, Widget};
 use ratatui::{DefaultTerminal, Frame};
 use serde::{Deserialize, Serialize};
 use std::io::{Read, stdin};
@@ -44,7 +44,6 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, SystemTime};
 use std::{env, thread};
 use tui_input::Input;
-use tui_popup::Popup;
 
 pub struct App {
     rura_widget: RuraWidget,
@@ -999,7 +998,7 @@ impl App {
     fn render_live_confirm(&self, frame: &mut Frame) {
         let body = Text::from(vec![
             Line::from("").centered(),
-            Line::from("   WARNING: THIS MIGHT BE DANGEROUS!   ")
+            Line::from("  WARNING: THIS MIGHT BE DANGEROUS!   ")
                 .centered()
                 .yellow()
                 .reversed(),
@@ -1009,10 +1008,25 @@ impl App {
             Line::from("[Y]es / [N]o").centered(),
             Line::from("").centered(),
         ]);
-        let popup = Popup::new(body)
+
+        let max_width = body
+            .iter()
+            .map(|line| line.width())
+            .max()
+            .unwrap_or_default();
+
+        let centered_area = frame.area().centered(
+            Constraint::Length(max_width as u16 + 2),
+            Constraint::Length(body.height() as u16 + 2),
+        );
+        Clear.render(centered_area, frame.buffer_mut());
+        Block::default()
+            .borders(Borders::ALL)
             .title(" Confirm entering LIVE mode ")
-            .style(self.theme.popup);
-        frame.render_widget(popup, frame.area());
+            .set_style(self.theme.popup)
+            .render(centered_area, frame.buffer_mut());
+
+        Paragraph::new(body).render(centered_area.inner(Margin::new(1, 1)), frame.buffer_mut());
     }
 
     fn hints_widget(&self) -> Line<'_> {

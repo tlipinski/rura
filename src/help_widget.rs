@@ -1,12 +1,12 @@
 use crate::config::KeyBindingsConfig;
 use crate::theme::Theme;
 use ratatui::buffer::Buffer;
-use ratatui::layout::Rect;
+use ratatui::layout::{Constraint, Margin, Rect};
 use ratatui::prelude::Widget;
-use ratatui::style::Stylize;
+use ratatui::style::{Styled, Stylize};
 use ratatui::text::Line;
+use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 use std::cell::Cell;
-use tui_popup::Popup;
 
 pub struct HelpWidget {
     kb_config: KeyBindingsConfig,
@@ -152,9 +152,23 @@ impl Widget for &HelpWidget {
             display_lines.extend(lines[start..end].iter().cloned());
         }
 
-        Popup::new(ratatui::text::Text::from(display_lines))
+        let max_width = display_lines
+            .iter()
+            .map(|line| line.width())
+            .max()
+            .unwrap_or_default();
+
+        let centered_area = area.centered(
+            Constraint::Length(max_width as u16 + 2),
+            Constraint::Length(display_lines.len() as u16 + 2),
+        );
+        Clear.render(centered_area, buf);
+        Block::default()
+            .borders(Borders::ALL)
             .title(" Keys ")
-            .style(self.theme.popup)
-            .render(area, buf);
+            .set_style(self.theme.popup)
+            .render(centered_area, buf);
+
+        Paragraph::new(display_lines).render(centered_area.inner(Margin::new(1, 1)), buf);
     }
 }
