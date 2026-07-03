@@ -34,7 +34,7 @@ use ratatui::prelude::Stylize;
 use ratatui::style::Color::Yellow;
 use ratatui::style::{Style, Styled};
 use ratatui::text::{Line, Text};
-use ratatui::widgets::{Block, BorderType, Borders, Clear, Paragraph, Widget};
+use ratatui::widgets::{Block, BorderType, Borders, Clear, Paragraph, Shadow, Widget};
 use ratatui::{DefaultTerminal, Frame};
 use serde::{Deserialize, Serialize};
 use std::io::{Read, stdin};
@@ -1024,6 +1024,7 @@ impl App {
             .borders(Borders::ALL)
             .title(" Confirm entering LIVE mode ")
             .set_style(self.theme.popup)
+            .shadow(Shadow::dark_shade())
             .render(centered_area, frame.buffer_mut());
 
         Paragraph::new(body).render(centered_area.inner(Margin::new(1, 1)), frame.buffer_mut());

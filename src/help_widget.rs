@@ -5,7 +5,7 @@ use ratatui::layout::{Constraint, Margin, Rect};
 use ratatui::prelude::Widget;
 use ratatui::style::{Styled, Stylize};
 use ratatui::text::Line;
-use ratatui::widgets::{Block, Borders, Clear, Paragraph};
+use ratatui::widgets::{Block, Borders, Clear, Paragraph, Shadow};
 use std::cell::Cell;
 
 pub struct HelpWidget {
@@ -167,6 +167,7 @@ impl Widget for &HelpWidget {
             .borders(Borders::ALL)
             .title(" Keys ")
             .set_style(self.theme.popup)
+            .shadow(Shadow::dark_shade())
             .render(centered_area, buf);
 
         Paragraph::new(display_lines).render(centered_area.inner(Margin::new(1, 1)), buf);

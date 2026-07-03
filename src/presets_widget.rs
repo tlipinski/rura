@@ -10,7 +10,7 @@ use ratatui::prelude::Stylize;
 use ratatui::prelude::{Text, Widget};
 use ratatui::style::{Style, Styled};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Clear, List, ListState, Paragraph, StatefulWidget};
+use ratatui::widgets::{Block, Borders, Clear, List, ListState, Paragraph, Shadow, StatefulWidget};
 use std::cell::Cell;
 use tui_input::Input;
 use tui_input::backend::crossterm::EventHandler;
@@ -320,6 +320,7 @@ impl Widget for &PresetsWidget {
             .borders(Borders::ALL)
             .title(" Presets ")
             .set_style(self.theme.popup)
+            .shadow(Shadow::dark_shade())
             .render(centered_area, buf);
 
         let mut state = ListState::default();

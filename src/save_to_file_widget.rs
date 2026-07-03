@@ -5,7 +5,7 @@ use ratatui::layout::Constraint::Length;
 use ratatui::layout::{Constraint, Direction, Layout, Margin, Rect};
 use ratatui::prelude::{Line, Stylize, Widget};
 use ratatui::style::Styled;
-use ratatui::widgets::{Block, Borders, Clear, Paragraph};
+use ratatui::widgets::{Block, Borders, Clear, Paragraph, Shadow};
 use std::cell::Cell;
 
 pub struct SaveToFileWidget {
@@ -57,6 +57,7 @@ impl Widget for &SaveToFileWidget {
             .borders(Borders::ALL)
             .title(self.title.clone())
             .set_style(self.theme.popup)
+            .shadow(Shadow::dark_shade())
             .render(centered_area, buf);
 
         let path_input_area = centered_inner_area.inner(Margin::new(1, 1));
