@@ -83,6 +83,7 @@ impl HelpWidget {
             Line::from(format!("{:012} - Toggle line numbers",self.kb_config.toggle_line_nums.first().unwrap().to_string())),
             Line::from(""),
             Line::from("Presets").reversed().centered(),
+            Line::from(format!("{:012} - Show presets popup",self.kb_config.toggle_presets.first().unwrap().to_string())),
             Line::from("ctrl+n       - Create new preset".to_string()),
             Line::from("ctrl+t       - Create new preset from current command".to_string()),
             Line::from("ctrl+d       - Delete preset".to_string()),
