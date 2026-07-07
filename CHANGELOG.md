@@ -1,3 +1,13 @@
+## v1.8.0 - 2026-07-07
+
+### Features
+
+- Build DEB and RPM packages
+
+### Bug Fixes
+
+- Added missing "Show presets" shortcut to help widget
+
 ## v1.7.0 - 2026-06-25
 
 ### Features
