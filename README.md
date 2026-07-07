@@ -84,6 +84,18 @@ yay -S rura-bin
 yay -S rura-git
 ```
 
+**Debian/Ubuntu**:
+Download the `.deb` package from the [Releases](https://github.com/tlipinski/rura/releases) page and install it with:
+```bash
+sudo dpkg -i rura_<version>_<arch>.deb
+```
+
+**Fedora/RHEL**:
+Download the `.rpm` package from the [Releases](https://github.com/tlipinski/rura/releases) page and install it with:
+```bash
+sudo rpm -ivh rura_<version>_<arch>.rpm
+```
+
 **NixOS**:
 ```aiignore
 nix-shell -p rura
