@@ -47,7 +47,7 @@ on:
 jobs:
   # Run 'dist plan' (or host) to determine what tasks we need to do
   plan:
-    runs-on: "ubuntu-22.04"
+    runs-on: "ubuntu-24.04"
     outputs:
       val: ${{ steps.plan.outputs.manifest }}
       tag: ${{ !github.event.pull_request && github.ref_name || '' }}
@@ -166,11 +166,67 @@ jobs:
             ${{ env.BUILD_MANIFEST_NAME }}
 
   # Build and package all the platform-agnostic(ish) things
+  build-linux-packages:
+    name: build-linux-packages (${{ matrix.target }})
+    needs:
+      - plan
+    if: ${{ fromJson(needs.plan.outputs.val).ci.github.artifacts_matrix.include != null && needs.plan.outputs.publishing == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            rpm_arch: x86_64
+          - target: aarch64-unknown-linux-gnu
+            rpm_arch: aarch64
+    runs-on: "ubuntu-24.04"
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          submodules: recursive
+      - name: Install Rust
+        run: |
+          rustup update stable
+          rustup target add ${{ matrix.target }}
+      - name: Install tools
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deb,cargo-generate-rpm
+      - name: Setup cross-toolchain
+        uses: taiki-e/setup-cross-toolchain-action@v1
+        with:
+          target: ${{ matrix.target }}
+      - name: Build release binary
+        run: cargo build --release --target ${{ matrix.target }}
+      - name: Build deb package
+        run: cargo deb --target ${{ matrix.target }} --no-build
+      - name: Build rpm package
+        run: |
+          # Copy binary to where cargo-generate-rpm expects it based on Cargo.toml
+          mkdir -p target/release
+          cp target/${{ matrix.target }}/release/rura target/release/rura
+          cargo generate-rpm --arch ${{ matrix.rpm_arch }}
+      - name: Prepare artifacts
+        run: |
+          mkdir -p target/packages
+          # Collect packages from their respective build locations
+          cp target/debian/*.deb target/packages/ 2>/dev/null || true
+          cp target/*/debian/*.deb target/packages/ 2>/dev/null || true
+          cp target/generate-rpm/*.rpm target/packages/ 2>/dev/null || true
+      - name: "Upload artifacts"
+        uses: actions/upload-artifact@v7
+        with:
+          name: artifacts-build-linux-packages-${{ matrix.target }}
+          path: target/packages/*
+
   build-global-artifacts:
     needs:
       - plan
       - build-local-artifacts
-    runs-on: "ubuntu-22.04"
+    runs-on: "ubuntu-24.04"
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       BUILD_MANIFEST_NAME: target/distrib/global-dist-manifest.json
@@ -217,11 +273,12 @@ jobs:
       - plan
       - build-local-artifacts
       - build-global-artifacts
+      - build-linux-packages
     # Only run if we're "publishing", and only if plan, local and global didn't fail (skipped is fine)
-    if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.publishing == 'true' && (needs.build-global-artifacts.result == 'skipped' || needs.build-global-artifacts.result == 'success') && (needs.build-local-artifacts.result == 'skipped' || needs.build-local-artifacts.result == 'success') }}
+    if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.publishing == 'true' && (needs.build-global-artifacts.result == 'skipped' || needs.build-global-artifacts.result == 'success') && (needs.build-local-artifacts.result == 'skipped' || needs.build-local-artifacts.result == 'success') && (needs.build-linux-packages.result == 'skipped' || needs.build-linux-packages.result == 'success') }}
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    runs-on: "ubuntu-22.04"
+    runs-on: "ubuntu-24.04"
     outputs:
       val: ${{ steps.host.outputs.manifest }}
     steps:
@@ -264,6 +321,9 @@ jobs:
           merge-multiple: true
       - name: Cleanup
         run: |
+          # Flatten subdirectories if any
+          find artifacts -mindepth 2 -type f -exec mv -t artifacts/ {} +
+          find artifacts -mindepth 1 -type d -delete
           # Remove the granular manifests
           rm -f artifacts/*-dist-manifest.json
       - name: Create GitHub Release
@@ -286,7 +346,7 @@ jobs:
     # still allowing individual publish jobs to skip themselves (for prereleases).
     # "host" however must run to completion, no skipping allowed!
     if: ${{ always() && needs.host.result == 'success' }}
-    runs-on: "ubuntu-22.04"
+    runs-on: "ubuntu-24.04"
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
