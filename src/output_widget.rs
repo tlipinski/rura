@@ -1,7 +1,6 @@
 use crate::config::ThemeConfig;
 use crate::content_widget::{ContentLine, ContentWidget, Position};
 use crate::shell::cmd_runner::CmdResult;
-use crate::shell::output::Output;
 use crate::theme::Theme;
 use itertools::Itertools;
 use log::debug;
@@ -80,7 +79,8 @@ impl OutputWidget {
             error_pane_placement,
             cmd_result: CmdResult {
                 stdin: Arc::from("".as_bytes()),
-                outputs: vec![],
+                ok_outputs: vec![],
+                error_output: None,
             },
             content_mode: ContentMode::Normal,
             diff_base: None,
@@ -107,15 +107,11 @@ impl OutputWidget {
         if self.diff_ready {
             return;
         }
-        let ok_bytes = self.cmd_result.ok_bytes();
+        let ok_bytes = self.cmd_result.ok_outputs.clone();
         let last_bytes = ok_bytes.last().unwrap_or(&self.cmd_result.stdin);
         let stdin_bytes = if let Some(base) = self.diff_base {
-            if let Some(b) = self.cmd_result.outputs.get(base) {
-                if let Output::Ok(b) = b {
-                    b.as_ref()
-                } else {
-                    return;
-                }
+            if let Some(b) = self.cmd_result.ok_outputs.get(base) {
+                b.as_ref()
             } else {
                 return;
             }
@@ -201,23 +197,24 @@ impl OutputWidget {
     pub fn handle_command_result(&mut self, result: CmdResult) {
         self.cmd_result = result;
 
-        debug!("handle_command_result: {:?}", self.cmd_result.outputs.len());
+        debug!(
+            "handle_command_result: {:?}",
+            self.cmd_result.ok_outputs.len()
+        );
 
-        match self.cmd_result.outputs.last() {
-            Some(Output::Ok(bytes)) => {
+        if let Some((bytes, code)) = &self.cmd_result.error_output {
+            let str = String::from_utf8_lossy(&bytes);
+            let lines = str.lines().map(|a| a.into()).collect_vec();
+
+            self.error_output_opt = Some((lines, *code));
+        } else {
+            if let Some(bytes) = &self.cmd_result.ok_outputs.last() {
                 let str = String::from_utf8_lossy(&bytes);
                 let lines = str.lines().map(|a| a.into()).collect_vec();
                 self.content.with_content(lines);
 
                 self.error_output_opt = None;
-            }
-            Some(Output::Err(bytes, code)) => {
-                let str = String::from_utf8_lossy(&bytes);
-                let lines = str.lines().map(|a| a.into()).collect_vec();
-
-                self.error_output_opt = Some((lines, *code));
-            }
-            None => {
+            } else {
                 let str = String::from_utf8_lossy(&self.cmd_result.stdin);
                 let lines = str.lines().map(|a| a.into()).collect_vec();
                 self.content.with_content(lines);
@@ -225,6 +222,7 @@ impl OutputWidget {
                 self.error_output_opt = None;
             }
         }
+
         self.diff_ready = false;
 
         match self.content_mode {
@@ -397,9 +395,17 @@ mod tests {
     }
 
     fn result(output: Output) -> CmdResult {
-        CmdResult {
-            stdin: Arc::from("".as_bytes()),
-            outputs: vec![output],
+        match output {
+            Output::Ok(bytes) => CmdResult {
+                stdin: Arc::from("".as_bytes()),
+                ok_outputs: vec![bytes],
+                error_output: None,
+            },
+            Output::Err(bytes, code) => CmdResult {
+                stdin: Arc::from("".as_bytes()),
+                ok_outputs: vec![],
+                error_output: Some((Arc::from(bytes), code).into()),
+            },
         }
     }
 
@@ -441,10 +447,11 @@ mod tests {
     fn highlighting_in_diff_mode() {
         let mut widget = OutputWidget::default();
         let stdin = Arc::from("line1\nline2\nline3".as_bytes());
-        let output = Output::ok_str("line1\nline2 modified\nline3");
+        let output = "line1\nline2 modified\nline3";
         widget.handle_command_result(CmdResult {
             stdin,
-            outputs: vec![output],
+            ok_outputs: vec![Arc::from(output.as_bytes())],
+            error_output: None,
         });
 
         widget.toggle_diff(); // Switch to diff mode

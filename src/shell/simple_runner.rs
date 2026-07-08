@@ -2,6 +2,7 @@ use crate::rura::RuraCommand;
 use crate::shell::builder::CommandBuilder;
 use crate::shell::cmd_runner::{CmdResult, CmdRunner};
 use crate::shell::exec::Exec;
+use crate::shell::output::Output;
 use log::{debug, info};
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -35,7 +36,8 @@ impl CmdRunner for SimpleCmdRunner {
         if command.is_empty() {
             return Ok(CmdResult {
                 stdin: self.stdin.clone(),
-                outputs: vec![],
+                ok_outputs: vec![],
+                error_output: None,
             });
         }
 
@@ -47,10 +49,18 @@ impl CmdRunner for SimpleCmdRunner {
         let elapsed = now.elapsed()?;
         debug!("command exec took {elapsed:?}");
 
-        Ok(CmdResult {
-            stdin: self.stdin.clone(),
-            outputs: vec![output],
-        })
+        match output {
+            Output::Ok(bytes) => Ok(CmdResult {
+                stdin: self.stdin.clone(),
+                ok_outputs: vec![bytes],
+                error_output: None,
+            }),
+            Output::Err(bytes, code) => Ok(CmdResult {
+                stdin: self.stdin.clone(),
+                ok_outputs: vec![],
+                error_output: Some((bytes, code)),
+            }),
+        }
     }
 }
 
@@ -60,8 +70,8 @@ mod tests {
     use crate::shell::cmd_runner::CmdRunner;
     use crate::shell::exec::Exec;
     use crate::shell::exec::MockExec;
-    use crate::shell::output::Output;
     use crate::shell::simple_runner::SimpleCmdRunner;
+    use itertools::Itertools;
     use std::cell::RefCell;
     use std::rc::Rc;
     use std::sync::Arc;
@@ -72,6 +82,12 @@ mod tests {
             stdin,
             builder: Box::new(TestBuilder {}),
         }
+    }
+
+    fn as_strings(o: Vec<Arc<[u8]>>) -> Vec<String> {
+        o.iter()
+            .map(|a| String::from_utf8_lossy(a).into_owned())
+            .collect_vec()
     }
 
     #[test]
@@ -85,7 +101,7 @@ mod tests {
         let result = runner.run(&"echo hello".into()).unwrap();
 
         assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
-        assert_eq!(result.outputs, vec![Output::ok_str("echo hello-output")])
+        assert_eq!(as_strings(result.ok_outputs), vec!["echo hello-output"])
     }
 
     #[test]
@@ -99,6 +115,6 @@ mod tests {
         let result = runner.run(&vec![].into()).unwrap();
 
         assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
-        assert_eq!(result.outputs, vec![])
+        assert_eq!(as_strings(result.ok_outputs), Vec::<String>::new())
     }
 }

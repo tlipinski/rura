@@ -15,7 +15,6 @@ use crate::rura_widget::RuraWidget;
 use crate::save_to_file_widget::SaveToFileWidget;
 use crate::search_widget::SearchWidget;
 use crate::shell::cmd_runner::{CmdResult, CmdRunner, CmdRunners};
-use crate::shell::output::Output;
 use crate::theme::Theme;
 use crate::uicmd::{KeyBindings, UiCmd, to_ui_command};
 use KeyCode::{Enter, Esc, F, Tab};
@@ -236,7 +235,7 @@ impl App {
                         self.rura_widget.history.push(&command.to_string())
                     } else {
                         // in live mode only save commands that were successfully executed
-                        if let Some(Output::Ok(_)) = result.outputs.last() {
+                        if result.all_ok() {
                             self.rura_widget.history.push(&command.to_string())
                         }
                     }
@@ -244,8 +243,10 @@ impl App {
 
                 self.rura_widget.failed_subcommand = result.failed_subcommand();
 
-                if let Some(Output::Ok(bytes)) = result.outputs.last() {
-                    self.success_output_bytes = bytes.clone();
+                if result.all_ok() {
+                    if let Some(bytes) = result.ok_outputs.last() {
+                        self.success_output_bytes = bytes.clone();
+                    }
                 }
 
                 self.output_widget.handle_command_result(result);
@@ -272,7 +273,8 @@ impl App {
             Failure(err) => {
                 let result = CmdResult {
                     stdin: Arc::from("".as_bytes()),
-                    outputs: vec![Output::Err(Arc::from(err.as_bytes()), None)],
+                    ok_outputs: vec![],
+                    error_output: Some((Arc::from(err.as_bytes()), None)),
                 };
                 self.output_widget.handle_command_result(result);
             }
@@ -1144,6 +1146,7 @@ enum InputMode {
 mod tests {
     use super::*;
     use crate::config::{KeyBindingsConfig, ThemeConfig};
+    use crate::shell::output::Output;
     use crossterm::event::Event::Key;
     use crossterm::event::{KeyEvent, KeyEventKind, KeyEventState};
     use insta::assert_snapshot;
@@ -1333,9 +1336,17 @@ mod tests {
         let mut app = App::default();
         app.input_mode = InputMode::LiveFull;
 
-        let cmd_res = |output: Output| CmdResult {
-            stdin: Arc::from("".as_bytes()),
-            outputs: vec![output],
+        let cmd_res = |output: Output| match output {
+            Output::Ok(bytes) => CmdResult {
+                stdin: Arc::from("".as_bytes()),
+                ok_outputs: vec![bytes],
+                error_output: None,
+            },
+            Output::Err(bytes, code) => CmdResult {
+                stdin: Arc::from("".as_bytes()),
+                ok_outputs: vec![],
+                error_output: Some((Arc::from(bytes), code).into()),
+            },
         };
 
         app.handle_action(CommandCompleted("g".into(), cmd_res(Output::err_str(""))));
@@ -1361,9 +1372,17 @@ mod tests {
     fn saving_to_history_all_outputs_in_normal_mode() {
         let mut app = App::default();
 
-        let cmd_res = |output: Output| CmdResult {
-            stdin: Arc::from("".as_bytes()),
-            outputs: vec![output],
+        let cmd_res = |output: Output| match output {
+            Output::Ok(bytes) => CmdResult {
+                stdin: Arc::from("".as_bytes()),
+                ok_outputs: vec![bytes],
+                error_output: None,
+            },
+            Output::Err(bytes, code) => CmdResult {
+                stdin: Arc::from("".as_bytes()),
+                ok_outputs: vec![],
+                error_output: Some((Arc::from(bytes), code).into()),
+            },
         };
 
         app.handle_action(CommandCompleted("g".into(), cmd_res(Output::err_str(""))));

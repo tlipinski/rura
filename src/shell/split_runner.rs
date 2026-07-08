@@ -32,7 +32,8 @@ impl CmdRunner for SplitCmdRunner {
         if command.is_empty() {
             return Ok(CmdResult {
                 stdin: self.stdin.clone(),
-                outputs: vec![Output::Ok(self.stdin.clone())],
+                ok_outputs: vec![self.stdin.clone()],
+                error_output: None,
             });
         }
 
@@ -40,7 +41,7 @@ impl CmdRunner for SplitCmdRunner {
 
         let mut current_stdin = self.stdin.clone();
 
-        let mut outputs: Vec<Output> = Vec::new();
+        let mut outputs: Vec<Arc<[u8]>> = Vec::new();
 
         for subcommand in command.trimmed().iter() {
             debug!("exec: '{subcommand}'");
@@ -50,19 +51,19 @@ impl CmdRunner for SplitCmdRunner {
             let cmd = self.builder.build(subcommand);
             let output = self.exec.exec(cmd, current_stdin.clone())?;
 
-            outputs.push(output.clone());
-
             debug!("t: {:?}", now_sub.elapsed()?);
 
             match output {
                 Output::Ok(bytes) => {
                     current_stdin = bytes.clone();
+                    outputs.push(bytes);
                 }
-                Output::Err(_, _) => {
+                Output::Err(bytes, code) => {
                     debug!("failed - aborting further execution");
                     return Ok(CmdResult {
                         stdin: self.stdin.clone(),
-                        outputs,
+                        ok_outputs: outputs,
+                        error_output: Some((bytes, code)),
                     });
                 }
             }
@@ -73,7 +74,8 @@ impl CmdRunner for SplitCmdRunner {
 
         Ok(CmdResult {
             stdin: self.stdin.clone(),
-            outputs,
+            ok_outputs: outputs,
+            error_output: None,
         })
     }
 }
@@ -83,8 +85,8 @@ mod tests {
     use crate::shell::builder::TestBuilder;
     use crate::shell::cmd_runner::CmdRunner;
     use crate::shell::exec::{Exec, MockExec};
-    use crate::shell::output::Output;
     use crate::shell::split_runner::SplitCmdRunner;
+    use itertools::Itertools;
     use std::cell::RefCell;
     use std::rc::Rc;
     use std::sync::Arc;
@@ -95,6 +97,12 @@ mod tests {
             stdin,
             builder: Box::new(TestBuilder),
         }
+    }
+
+    fn as_strings(o: Vec<Arc<[u8]>>) -> Vec<String> {
+        o.iter()
+            .map(|a| String::from_utf8_lossy(a).into_owned())
+            .collect_vec()
     }
 
     #[test]
@@ -109,10 +117,7 @@ mod tests {
 
         assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
 
-        assert_eq!(
-            result.outputs,
-            vec![Output::Ok(Arc::from("stdin".as_bytes()))]
-        );
+        assert_eq!(as_strings(result.ok_outputs), vec!["stdin"]);
 
         assert_eq!(*calls.borrow(), vec![])
     }
@@ -132,12 +137,8 @@ mod tests {
         assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
 
         assert_eq!(
-            result.outputs,
-            vec![
-                Output::ok_str("cmd1-output"),
-                Output::ok_str("cmd2-output"),
-                Output::ok_str("cmd3-output")
-            ]
+            as_strings(result.ok_outputs),
+            vec!["cmd1-output", "cmd2-output", "cmd3-output"]
         );
 
         // input for the command is the output of the previous command
@@ -165,12 +166,10 @@ mod tests {
 
         assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
 
+        assert_eq!(as_strings(result.ok_outputs), vec!["cmd1-output",]);
         assert_eq!(
-            result.outputs,
-            vec![
-                Output::ok_str("cmd1-output"),
-                Output::err_str("cmd2err-output")
-            ]
+            result.error_output,
+            Some((Arc::from("cmd2err-output".as_bytes()), Some(1)))
         );
     }
 }
