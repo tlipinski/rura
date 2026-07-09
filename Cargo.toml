@@ -7,6 +7,8 @@ description = "Interactive TUI pipeline editor built for rapid iteration"
 repository = "https://github.com/tlipinski/rura"
 homepage = "https://github.com/tlipinski/rura"
 authors = ["Tomasz Lipiński"]
+categories = ["command-line-utilities", "development-tools"]
+keywords = ["tui", "terminal", "shell", "pipeline", "interactive"]
 
 [package.metadata.generate-rpm]
 assets = [
