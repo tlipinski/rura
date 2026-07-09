@@ -244,6 +244,12 @@ rura --last
 
 In the save popup, type a destination path (Tab completes paths) and press Enter to write. Existing files are not overwritten.
 
+### Stdin
+
+| Key | Action |
+| --- |---|
+| `F5` | Toggle continuous stdin reading. *(dev)* |
+
 ### General
 
 | Key | Action |
@@ -269,14 +275,15 @@ The configuration path is determined as follows:
 
 ### General Options
 
-| Option | Description |
-| --- | --- |
-| `shell` | The shell to use for execution and completions (e.g., `"bash"`, `"zsh"`, `"fish"`, `"nu"`). |
-| `command_line_placement` | Set to `"top"` or `"bottom"` (default) to change where the input field is rendered. |
+| Option | Description                                                                                       |
+| --- |---------------------------------------------------------------------------------------------------|
+| `shell` | The shell to use for execution and completions (e.g., `"bash"`, `"zsh"`, `"fish"`, `"nu"`).       |
+| `command_line_placement` | Set to `"top"` or `"bottom"` (default) to change where the input field is rendered.               |
 | `highlight_duration_ms` | Duration in milliseconds for the temporary highlighting when executing commands (default: `250`). |
-| `debounce_duration_ms` | Duration in milliseconds to wait before executing commands in live mode (default: `500`). |
-| `no_cache` | Disable caching of command output when set to `true` (default: `false`). |
-| `log_level` | Set the logging level (e.g., `"info"`, `"debug"`, `"error"`). Default is `"info"`. |
+| `debounce_duration_ms` | Duration in milliseconds to wait before executing commands in live mode (default: `500`).         |
+| `no_cache` | Disable caching of command output when set to `true` (default: `false`).                          |
+| `log_level` | Set the logging level (e.g., `"info"`, `"debug"`, `"error"`). Default is `"info"`.                |
+| `stdin_reading_interval_ms` | Duration in milliseconds between stdin updates (default: `1000`). *(dev)*                         |
 
 ### Customizing Key Bindings
 

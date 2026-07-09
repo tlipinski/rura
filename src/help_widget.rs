@@ -107,6 +107,9 @@ impl HelpWidget {
             Line::from("Saving to file").reversed().centered(),
             Line::from(format!("{:012} - Save output to file", self.kb_config.save_output.first().unwrap().to_string())),
             Line::from(format!("{:012} - Save command to file",self.kb_config.save_command.first().unwrap().to_string())),
+            Line::from(""),
+            Line::from("Stdin").reversed().centered(),
+            Line::from(format!("{:012} - Toggle stdin reading", self.kb_config.toggle_stdin_reading.first().unwrap().to_string())),
         ]
     }
 }
