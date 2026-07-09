@@ -1,6 +1,7 @@
 use crate::app::Action::{
     CommandCompleted, Debounced, Failure, ResetHighlight, StartProgress, StopProgress, UserInput,
 };
+use crate::app::CmdRunnerAction::UpdateStdin;
 use crate::args::Args;
 use crate::completable_input::CompletableInput;
 use crate::config::{Config, history_path, search_history_path};
@@ -15,16 +16,17 @@ use crate::rura_widget::RuraWidget;
 use crate::save_to_file_widget::SaveToFileWidget;
 use crate::search_widget::SearchWidget;
 use crate::shell::cmd_runner::{CmdResult, CmdRunner, CmdRunners};
+use crate::stdin::{StdinControllerAction, start_input_read_task};
 use crate::theme::Theme;
 use crate::uicmd::{KeyBindings, UiCmd, to_ui_command};
+use Action::StdinCompleted;
 use KeyCode::{Enter, Esc, F, Tab};
-use anyhow::{Error, Result};
+use anyhow::Result;
 use cfg_if::cfg_if;
 use crossterm::event::KeyCode::Char;
 use crossterm::event::{KeyCode, KeyModifiers};
-use crossterm::tty::IsTty;
 use itertools::Itertools;
-use log::{debug, error, info};
+use log::{debug, error};
 use ratatui::crossterm::event;
 use ratatui::crossterm::event::Event;
 use ratatui::layout::{Constraint, Direction, Layout, Margin, Rect};
@@ -36,7 +38,6 @@ use ratatui::text::{Line, Text};
 use ratatui::widgets::{Block, BorderType, Borders, Clear, Paragraph, Shadow, Widget};
 use ratatui::{DefaultTerminal, Frame};
 use serde::{Deserialize, Serialize};
-use std::io::{Read, stdin};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender};
@@ -53,7 +54,8 @@ pub struct App {
     save_command_widget: SaveToFileWidget,
     presets_widget: PresetsWidget,
     action_rx: Receiver<Action>,
-    command_tx: Sender<RuraCommand>,
+    command_tx: Sender<CmdRunnerAction>,
+    stdin_controller_tx: Sender<StdinControllerAction>,
     key_bindings: KeyBindings,
     command_line_placement: CommandLinePlacement,
     input_mode: InputMode,
@@ -64,6 +66,7 @@ pub struct App {
     theme: Theme,
     file_saver: Box<dyn FileSaver>,
     success_output_bytes: Arc<[u8]>,
+    stdin_state: StdinState,
     exit: bool,
 }
 
@@ -97,45 +100,31 @@ impl App {
         debug!("Shell: {:?}", shell);
 
         let (action_tx, action_rx) = std::sync::mpsc::channel::<Action>();
-        let (command_tx, command_rx) = std::sync::mpsc::channel::<RuraCommand>();
         let (highlight_reset_tx, highlight_reset_rx) = std::sync::mpsc::channel::<()>();
         let (debouncer_tx, debouncer_rx) = std::sync::mpsc::channel::<()>();
+        let (command_tx, command_rx) = std::sync::mpsc::channel::<CmdRunnerAction>();
 
         let s1 = action_tx.clone();
         thread::spawn(move || handle_input_task(s1).unwrap());
 
+        let stdin_tx = start_input_read_task(
+            args.file.clone(),
+            &action_tx,
+            &command_tx,
+            Duration::from_millis(config.stdin_reading_interval_ms),
+        );
+
         let no_cache = args.no_cache || config.no_cache;
-        let value = shell.clone();
+
         let s2 = action_tx.clone();
-        let s3 = action_tx.clone();
-        let ctx = command_tx.clone();
+        let shell_clone = shell.clone();
         thread::spawn(move || {
-            let stdin_res = if let Some(file) = args.file {
-                read_file_task(file)
-            } else {
-                read_stdin_task()
-            };
-
-            match stdin_res {
-                Ok(stdin) => {
-                    thread::spawn(move || {
-                        handle_command_task(
-                            CmdRunners::new(&value, Arc::from(stdin), no_cache),
-                            command_rx,
-                            s2,
-                        )
-                        .unwrap();
-                    });
-
-                    while let Err(_) = ctx.send(RuraCommand::empty()) {
-                        thread::sleep(Duration::from_millis(100));
-                        debug!("Waiting for command_rx to accept commands");
-                    }
-                }
-                Err(e) => {
-                    s3.send(Failure(e.to_string())).unwrap();
-                }
-            }
+            handle_command_task(
+                CmdRunners::new(&shell_clone, Arc::from("".as_bytes()), no_cache),
+                command_rx,
+                s2,
+            )
+            .unwrap();
         });
 
         let s4 = action_tx.clone();
@@ -200,6 +189,7 @@ impl App {
             action_rx,
             command_tx,
             debouncer_tx,
+            stdin_controller_tx: stdin_tx,
             key_bindings: KeyBindings::from_config(&config.keybindings),
             command_line_placement: config.command_line_placement,
             help_widget: HelpWidget::new(config.keybindings, Theme::from_config(&config.theme)),
@@ -210,6 +200,11 @@ impl App {
             theme: Theme::from_config(&config.theme),
             file_saver: FileSavers::new(&shell),
             success_output_bytes: Arc::from(Vec::new()),
+            stdin_state: if args.file.is_some() {
+                StdinState::Completed
+            } else {
+                StdinState::Reading
+            },
             exit: false,
         }
     }
@@ -229,6 +224,7 @@ impl App {
         match action {
             UserInput(event) => self.handle_event(&event),
             CommandCompleted(command, result) => {
+                debug!("Command completed: {:?}", command);
                 if !command.is_empty() {
                     if matches!(self.input_mode, InputMode::Normal) {
                         // in normal mode save all commands to history
@@ -277,6 +273,9 @@ impl App {
                     error_output: Some((Arc::from(err.as_bytes()), None)),
                 };
                 self.output_widget.handle_command_result(result);
+            }
+            StdinCompleted => {
+                self.stdin_state = StdinState::Completed;
             }
         }
     }
@@ -654,7 +653,9 @@ impl App {
                     UiCmd::ExecuteUntilCurrent => self.handle_execute(ExecuteType::UntilCurrent),
                     UiCmd::ExecuteUntilPrev => self.handle_execute(ExecuteType::UntilCurrentPrev),
                     UiCmd::ResetInput => {
-                        self.command_tx.send(RuraCommand::empty()).unwrap();
+                        self.command_tx
+                            .send(CmdRunnerAction::RunCommand(RuraCommand::empty()))
+                            .unwrap();
                     }
                     UiCmd::SubcommandNext => {
                         self.rura_widget.subcommand_next();
@@ -782,6 +783,23 @@ impl App {
                     UiCmd::ToggleLineNums => {
                         self.output_widget.toggle_line_nums();
                     }
+                    UiCmd::ToggleStdinReading => {
+                        match self.stdin_state {
+                            StdinState::Reading => {
+                                self.stdin_state = StdinState::Paused;
+                                self.stdin_controller_tx
+                                    .send(StdinControllerAction::Toggle)
+                                    .unwrap()
+                            }
+                            StdinState::Paused => {
+                                self.stdin_state = StdinState::Reading;
+                                self.stdin_controller_tx
+                                    .send(StdinControllerAction::Toggle)
+                                    .unwrap()
+                            }
+                            StdinState::Completed => {}
+                        };
+                    }
                 },
                 _ => {
                     if self.rura_widget.handle_event(event) {
@@ -814,7 +832,10 @@ impl App {
 
     fn handle_execute(&mut self, kind: ExecuteType) {
         match self.rura_widget.execute(kind) {
-            Ok(command) => self.command_tx.send(command).unwrap(),
+            Ok(command) => self
+                .command_tx
+                .send(CmdRunnerAction::RunCommand(command))
+                .unwrap(),
             Err(_) => {}
         }
     }
@@ -917,10 +938,12 @@ impl App {
             ])
             .areas(status_area);
 
-        let [exec_area, _, diff_area, _, live_area] = Layout::default()
+        let [exec_area, _, stdin_area, _, diff_area, _, live_area] = Layout::default()
             .direction(Direction::Horizontal)
             .constraints(vec![
                 Constraint::Length(3),
+                Constraint::Length(1), // separator
+                Constraint::Length(5),
                 Constraint::Length(1), // separator
                 Constraint::Length(4),
                 Constraint::Length(1), // separator
@@ -953,6 +976,16 @@ impl App {
             InputMode::LiveUntilCursor => {
                 frame.render_widget("live uc".reversed(), live_area);
             }
+        }
+
+        match self.stdin_state {
+            StdinState::Reading => {
+                frame.render_widget("stdin".reversed(), stdin_area);
+            }
+            StdinState::Paused => {
+                frame.render_widget("stdin", stdin_area);
+            }
+            StdinState::Completed => {}
         }
 
         // Render progress indicator only if command runs for more than defined time
@@ -1044,30 +1077,6 @@ impl App {
     }
 }
 
-fn handle_command_task(
-    cmd_runner: Box<dyn CmdRunner>,
-    command_rx: Receiver<RuraCommand>,
-    action_tx: Sender<Action>,
-) -> Result<()> {
-    loop {
-        if let Ok(command) = command_rx.recv() {
-            action_tx.send(StartProgress(SystemTime::now()))?;
-
-            match cmd_runner.run(&command) {
-                Ok(result) => {
-                    let _ = action_tx.send(CommandCompleted(command, result));
-                }
-                Err(e) => {
-                    error!("Failed running command {:?}: {}", command, e);
-                    action_tx.send(Failure("Failed running command, check logs".into()))?;
-                }
-            }
-
-            action_tx.send(StopProgress)?;
-        }
-    }
-}
-
 fn handle_input_task(tx: Sender<Action>) -> Result<()> {
     loop {
         if let Ok(event) = event::read() {
@@ -1076,35 +1085,6 @@ fn handle_input_task(tx: Sender<Action>) -> Result<()> {
                 event => tx.send(UserInput(event))?,
             }
         }
-    }
-}
-
-fn read_stdin_task() -> Result<Vec<u8>> {
-    let mut buff = vec![];
-    let tty = stdin().is_tty();
-    if !tty {
-        let result = stdin().read_to_end(&mut buff);
-        match result {
-            Ok(_) => Ok(buff),
-            Err(e) => Err(Error::msg(format!(
-                "Failed reading stdin: {}",
-                e.to_string()
-            ))),
-        }
-    } else {
-        Ok("".into())
-    }
-}
-
-fn read_file_task(file: String) -> Result<Vec<u8>> {
-    info!("reading input file {file}");
-    match std::fs::read(file.clone()) {
-        Ok(content) => Ok(content),
-        Err(e) => Err(Error::msg(format!(
-            "Failed reading input file {}: {}",
-            file,
-            e.to_string()
-        ))),
     }
 }
 
@@ -1117,7 +1097,61 @@ fn reset_highlight_task(rx: Receiver<()>, tx: Sender<Action>, duration_ms: u64) 
     }
 }
 
-enum Action {
+fn handle_command_task(
+    mut cmd_runner: Box<dyn CmdRunner>,
+    command_rx: Receiver<CmdRunnerAction>,
+    action_tx: Sender<Action>,
+) -> Result<()> {
+    let mut last_command: Option<RuraCommand> = None;
+
+    loop {
+        if let Ok(runner_action) = command_rx.recv() {
+            match runner_action {
+                CmdRunnerAction::RunCommand(command) => {
+                    action_tx.send(Action::StartProgress(SystemTime::now()))?;
+
+                    match cmd_runner.run(&command) {
+                        Ok(result) => {
+                            last_command = Some(command.clone());
+                            let _ = action_tx.send(Action::CommandCompleted(command, result));
+                        }
+                        Err(e) => {
+                            error!("Failed running command {:?}: {}", command, e);
+                            action_tx.send(Action::Failure(
+                                "Failed running command, check logs".into(),
+                            ))?;
+                        }
+                    }
+
+                    action_tx.send(Action::StopProgress)?;
+                }
+                UpdateStdin(stdin) => {
+                    cmd_runner.update_stdin(stdin);
+
+                    let command = last_command.clone().unwrap_or(RuraCommand::empty()).clone();
+
+                    action_tx.send(Action::StartProgress(SystemTime::now()))?;
+
+                    match cmd_runner.run(&command) {
+                        Ok(result) => {
+                            let _ = action_tx.send(Action::CommandCompleted(command, result));
+                        }
+                        Err(e) => {
+                            error!("Failed running command {:?}: {}", command, e);
+                            action_tx.send(Action::Failure(
+                                "Failed running command, check logs".into(),
+                            ))?;
+                        }
+                    }
+
+                    action_tx.send(Action::StopProgress)?;
+                }
+            }
+        }
+    }
+}
+
+pub enum Action {
     UserInput(Event),
     CommandCompleted(RuraCommand, CmdResult),
     Failure(String),
@@ -1125,6 +1159,7 @@ enum Action {
     Debounced,
     StartProgress(SystemTime),
     StopProgress,
+    StdinCompleted,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -1165,9 +1200,10 @@ mod tests {
     impl Default for App {
         fn default() -> Self {
             let (_, action_rx) = std::sync::mpsc::channel::<Action>();
-            let (command_tx, _) = std::sync::mpsc::channel::<RuraCommand>();
+            let (command_tx, _) = std::sync::mpsc::channel::<CmdRunnerAction>();
             let (highlight_reset_tx, _) = std::sync::mpsc::channel::<()>();
             let (debouncer_tx, _) = std::sync::mpsc::channel::<()>();
+            let (stdin_agr_tx, _) = std::sync::mpsc::channel::<StdinControllerAction>();
 
             let theme_config = ThemeConfig::default();
             let kb_config = KeyBindingsConfig::default();
@@ -1206,6 +1242,7 @@ mod tests {
                 action_rx,
                 command_tx,
                 debouncer_tx,
+                stdin_controller_tx: stdin_agr_tx,
                 exit: false,
                 key_bindings: KeyBindings::from_config(&kb_config),
                 command_line_placement: CommandLinePlacement::Bottom,
@@ -1216,6 +1253,7 @@ mod tests {
                 theme: Theme::from_config(&theme_config),
                 file_saver: FileSavers::new(""),
                 success_output_bytes: Arc::from([]),
+                stdin_state: StdinState::Completed,
                 in_progress: None,
             }
         }
@@ -1471,4 +1509,15 @@ enum ActiveModal {
     SaveOutput,
     SaveCommand,
     Presets,
+}
+
+pub enum CmdRunnerAction {
+    RunCommand(RuraCommand),
+    UpdateStdin(Arc<[u8]>),
+}
+
+enum StdinState {
+    Reading,
+    Paused,
+    Completed,
 }

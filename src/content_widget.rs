@@ -52,7 +52,7 @@ impl<T: ContentLine> ContentWidget<T> {
     }
 
     pub fn with_content(&mut self, lines: Vec<T>) {
-        if self.lines.len() != lines.len() {
+        if self.offset.row > lines.len() {
             self.offset = Position::default();
         }
         self.lines = lines;

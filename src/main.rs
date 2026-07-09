@@ -17,6 +17,7 @@ mod rura_widget;
 mod save_to_file_widget;
 mod search_widget;
 mod shell;
+mod stdin;
 mod theme;
 mod uicmd;
 

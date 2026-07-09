@@ -62,6 +62,10 @@ impl CmdRunner for SimpleCmdRunner {
             }),
         }
     }
+
+    fn update_stdin(&mut self, stdin: Arc<[u8]>) {
+        self.stdin = stdin;
+    }
 }
 
 #[cfg(test)]

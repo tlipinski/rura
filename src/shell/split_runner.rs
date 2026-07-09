@@ -78,6 +78,10 @@ impl CmdRunner for SplitCmdRunner {
             error_output: None,
         })
     }
+
+    fn update_stdin(&mut self, stdin: Arc<[u8]>) {
+        self.stdin = stdin;
+    }
 }
 
 #[cfg(test)]

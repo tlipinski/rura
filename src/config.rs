@@ -128,6 +128,7 @@ pub struct KeyBindingsConfig {
     pub toggle_live_until_cursor: Vec<String>,
     pub toggle_presets: Vec<String>,
     pub toggle_line_nums: Vec<String>,
+    pub toggle_stdin_reading: Vec<String>,
 }
 
 impl Default for KeyBindingsConfig {
@@ -178,6 +179,7 @@ impl Default for KeyBindingsConfig {
             toggle_live: vec!["f12".into()],
             toggle_presets: vec!["alt+p".into()],
             toggle_line_nums: vec!["alt+n".into()],
+            toggle_stdin_reading: vec!["f5".into()],
         }
     }
 }
@@ -193,6 +195,7 @@ pub struct Config {
     pub debounce_duration_ms: u64,
     pub shell: Option<String>,
     pub no_cache: bool,
+    pub stdin_reading_interval_ms: u64,
 }
 
 impl Default for Config {
@@ -206,6 +209,7 @@ impl Default for Config {
             debounce_duration_ms: 500,
             shell: None,
             no_cache: false,
+            stdin_reading_interval_ms: 1000,
         }
     }
 }

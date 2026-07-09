@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 pub trait CmdRunner {
     fn run(&self, command: &RuraCommand) -> Result<CmdResult>;
+    fn update_stdin(&mut self, stdin: Arc<[u8]>);
 }
 
 pub struct CmdRunners;
