@@ -67,6 +67,7 @@ pub struct App {
     file_saver: Box<dyn FileSaver>,
     success_output_bytes: Arc<[u8]>,
     stdin_state: StdinState,
+    follow: bool,
     exit: bool,
 }
 
@@ -205,6 +206,7 @@ impl App {
             } else {
                 StdinState::Reading
             },
+            follow: true,
             exit: false,
         }
     }
@@ -245,7 +247,14 @@ impl App {
                     }
                 }
 
-                self.output_widget.handle_command_result(result);
+                let can_follow = match self.stdin_state {
+                    StdinState::Reading => true,
+                    StdinState::Paused => false,
+                    StdinState::Completed => false,
+                };
+
+                self.output_widget
+                    .handle_command_result(result, self.follow && can_follow);
             }
             ResetHighlight => self.rura_widget.highlight_until = None,
             Debounced => {
@@ -272,7 +281,7 @@ impl App {
                     ok_outputs: vec![],
                     error_output: Some((Arc::from(err.as_bytes()), None)),
                 };
-                self.output_widget.handle_command_result(result);
+                self.output_widget.handle_command_result(result, false);
             }
             StdinCompleted => {
                 self.stdin_state = StdinState::Completed;
@@ -800,6 +809,9 @@ impl App {
                             StdinState::Completed => {}
                         };
                     }
+                    UiCmd::ToggleFollow => {
+                        self.follow = !self.follow;
+                    }
                 },
                 _ => {
                     if self.rura_widget.handle_event(event) {
@@ -938,12 +950,24 @@ impl App {
             ])
             .areas(status_area);
 
-        let [exec_area, _, stdin_area, _, diff_area, _, live_area] = Layout::default()
+        let [
+            exec_area,
+            _,
+            stdin_area,
+            _,
+            follow_area,
+            _,
+            diff_area,
+            _,
+            live_area,
+        ] = Layout::default()
             .direction(Direction::Horizontal)
             .constraints(vec![
                 Constraint::Length(3),
                 Constraint::Length(1), // separator
                 Constraint::Length(5),
+                Constraint::Length(1), // separator
+                Constraint::Length(1),
                 Constraint::Length(1), // separator
                 Constraint::Length(4),
                 Constraint::Length(1), // separator
@@ -981,6 +1005,11 @@ impl App {
         match self.stdin_state {
             StdinState::Reading => {
                 frame.render_widget("stdin".reversed(), stdin_area);
+                if self.follow {
+                    frame.render_widget("f".reversed(), follow_area);
+                } else {
+                    frame.render_widget("f", follow_area);
+                }
             }
             StdinState::Paused => {
                 frame.render_widget("stdin", stdin_area);
@@ -1254,6 +1283,7 @@ mod tests {
                 file_saver: FileSavers::new(""),
                 success_output_bytes: Arc::from([]),
                 stdin_state: StdinState::Completed,
+                follow: true,
                 in_progress: None,
             }
         }

@@ -1,0 +1,14 @@
+---
+source: src/content_widget.rs
+expression: terminal.backend()
+---
+"11 line11    ▲"
+"12 line12    ║"
+"13 line13    ║"
+"14 line14    ║"
+"15 line15    ║"
+"16 line16    █"
+"17 line17    █"
+"18 line18    █"
+"19 line19    █"
+"20 line20    ▼"

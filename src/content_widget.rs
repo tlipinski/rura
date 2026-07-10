@@ -51,9 +51,18 @@ impl<T: ContentLine> ContentWidget<T> {
         }
     }
 
+    pub fn follow(&mut self) {
+        self.offset.row = self
+            .lines
+            .len()
+            .saturating_sub(self.output_content_area_size.get().height as usize);
+    }
+
     pub fn with_content(&mut self, lines: Vec<T>) {
-        if self.offset.row > lines.len() {
-            self.offset = Position::default();
+        if lines.len() <= self.offset.row {
+            self.offset.row = lines
+                .len()
+                .saturating_sub(self.output_content_area_size.get().height as usize);
         }
         self.lines = lines;
 
@@ -681,5 +690,77 @@ mod tests {
                 Part::OutsideRange("89".into())
             ]
         );
+    }
+
+    #[test]
+    fn content_follow() {
+        let mut terminal = Terminal::new(TestBackend::new(10, 5)).unwrap();
+
+        let mut widget: ContentWidget<String> = ContentWidget::default();
+
+        widget.with_content(generate_lines(10));
+
+        // call render once so output height is properly determined
+        terminal
+            .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
+            .unwrap();
+
+        widget.follow();
+
+        terminal
+            .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
+            .unwrap();
+
+        assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn extended_content_cursor_stays() {
+        let mut terminal = Terminal::new(TestBackend::new(14, 10)).unwrap();
+
+        let mut widget: ContentWidget<String> = ContentWidget::default();
+
+        widget.with_content(generate_lines(4));
+
+        // call render once so output height is properly determined
+        terminal
+            .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
+            .unwrap();
+        assert_snapshot!("before", terminal.backend());
+
+        widget.scroll_down();
+
+        widget.with_content(generate_lines(100));
+
+        terminal
+            .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
+            .unwrap();
+
+        assert_snapshot!("after", terminal.backend());
+    }
+
+    #[test]
+    fn shorter_content_cursor_at_the_end() {
+        let mut terminal = Terminal::new(TestBackend::new(14, 10)).unwrap();
+
+        let mut widget: ContentWidget<String> = ContentWidget::default();
+
+        widget.with_content(generate_lines(100));
+
+        // call render once so output height is properly determined
+        terminal
+            .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
+            .unwrap();
+        assert_snapshot!("shorter_content_before", terminal.backend());
+
+        widget.follow();
+
+        widget.with_content(generate_lines(20));
+
+        terminal
+            .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
+            .unwrap();
+
+        assert_snapshot!("shorter_content_after", terminal.backend());
     }
 }

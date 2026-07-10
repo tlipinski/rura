@@ -194,7 +194,7 @@ impl OutputWidget {
         }
     }
 
-    pub fn handle_command_result(&mut self, result: CmdResult) {
+    pub fn handle_command_result(&mut self, result: CmdResult, follow: bool) {
         self.cmd_result = result;
 
         debug!(
@@ -226,8 +226,17 @@ impl OutputWidget {
         self.diff_ready = false;
 
         match self.content_mode {
-            ContentMode::Normal => {}
-            ContentMode::Diff => self.diff(),
+            ContentMode::Normal => {
+                if follow {
+                    self.content.follow()
+                }
+            }
+            ContentMode::Diff => {
+                self.diff();
+                if follow {
+                    self.diff.follow()
+                }
+            }
         }
 
         self.clear_highlight();
@@ -416,8 +425,8 @@ mod tests {
         let mut widget = OutputWidget::default();
         widget.error_pane_placement = ErrorPanePlacement::Top;
 
-        widget.handle_command_result(result(Output::ok_str("out1\nout2\nout3")));
-        widget.handle_command_result(result(Output::err_str("errors1\nerrors2\nerrors3")));
+        widget.handle_command_result(result(Output::ok_str("out1\nout2\nout3")), false);
+        widget.handle_command_result(result(Output::err_str("errors1\nerrors2\nerrors3")), false);
 
         terminal
             .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
@@ -433,8 +442,8 @@ mod tests {
         let mut widget = OutputWidget::default();
         widget.error_pane_placement = ErrorPanePlacement::Bottom;
 
-        widget.handle_command_result(result(Output::ok_str("out1\nout2\nout3")));
-        widget.handle_command_result(result(Output::err_str("errors1\nerrors2\nerrors3")));
+        widget.handle_command_result(result(Output::ok_str("out1\nout2\nout3")), false);
+        widget.handle_command_result(result(Output::err_str("errors1\nerrors2\nerrors3")), false);
 
         terminal
             .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
@@ -448,11 +457,14 @@ mod tests {
         let mut widget = OutputWidget::default();
         let stdin = Arc::from("line1\nline2\nline3".as_bytes());
         let output = "line1\nline2 modified\nline3";
-        widget.handle_command_result(CmdResult {
-            stdin,
-            ok_outputs: vec![Arc::from(output.as_bytes())],
-            error_output: None,
-        });
+        widget.handle_command_result(
+            CmdResult {
+                stdin,
+                ok_outputs: vec![Arc::from(output.as_bytes())],
+                error_output: None,
+            },
+            false,
+        );
 
         widget.toggle_diff(); // Switch to diff mode
         assert!(matches!(widget.content_mode, ContentMode::Diff));

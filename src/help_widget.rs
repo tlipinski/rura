@@ -110,6 +110,7 @@ impl HelpWidget {
             Line::from(""),
             Line::from("Stdin").reversed().centered(),
             Line::from(format!("{:012} - Toggle stdin reading", self.kb_config.toggle_stdin_reading.first().unwrap().to_string())),
+            Line::from(format!("{:012} - Toggle stdin follow", self.kb_config.toggle_follow.first().unwrap().to_string())),
         ]
     }
 }

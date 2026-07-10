@@ -17,8 +17,10 @@
 <details>
 <summary>More features</summary>
 
-- **Syntax & Error Highlighting**: Visual feedback for subcommand boundaries, quotes, and pipes, plus highlighting of failed subcommands.
-- **Custom Shell Support**: Specify which shell to use for command execution and completions (supports `sh`, `bash`, `zsh`, `fish` on Unix and `powershell` on Windows).
+- **Syntax & Error Highlighting**: Visual feedback for subcommand boundaries, quotes, and pipes, plus highlighting of
+  failed subcommands.
+- **Custom Shell Support**: Specify which shell to use for command execution and completions (supports `sh`, `bash`,
+  `zsh`, `fish` on Unix and `powershell` on Windows).
 - **Search**: Search and highlight text within the output pane with regex support.
 - **Command Formatting**: Automatically format your command pipeline.
 - **Subcommand Editing**: Quick copy, cut, and paste of subcommands.
@@ -27,6 +29,7 @@
 - **Save to File**: Save current output or command to a file.
 - **Line Wrapping**: Toggle whether long output lines wrap to fit the view.
 - **Line Numbers**: Toggle line numbers in the output pane.
+- **Output Follow**: Automatically scroll to the end of output as new data arrives from stdin.
 
 </details>
 
@@ -70,6 +73,7 @@
 Check the [Releases](https://github.com/tlipinski/rura/releases) page for pre-compiled binaries for your platform.
 
 **Homebrew (macOS/Linux)**:
+
 ```bash
 brew install rura
 ```
@@ -86,23 +90,29 @@ yay -S rura-git
 
 **Debian/Ubuntu**:
 Download the `.deb` package from the [Releases](https://github.com/tlipinski/rura/releases) page and install it with:
+
 ```bash
 sudo dpkg -i rura_<version>_<arch>.deb
 ```
 
 **Fedora/RHEL**:
 Download the `.rpm` package from the [Releases](https://github.com/tlipinski/rura/releases) page and install it with:
+
 ```bash
 sudo rpm -ivh rura_<version>_<arch>.rpm
 ```
 
 **NixOS**:
+
 ```aiignore
 nix-shell -p rura
 ```
-For other Nix-based installation methods and options, see [search.nixos.org](https://search.nixos.org/packages?channel=unstable&query=rura#show=rura).
+
+For other Nix-based installation methods and options,
+see [search.nixos.org](https://search.nixos.org/packages?channel=unstable&query=rura#show=rura).
 
 **Cargo**:
+
 ```bash
 # From crates.io
 cargo install rura
@@ -131,141 +141,145 @@ rura --last
 
 ### CLI Arguments
 
-| Argument | Description |
-| --- | --- |
-| `-f, --file <FILE>` | Path to the input file. |
-| `-c, --command <COMMAND>` | Initial command to populate the input field. |
-| `-C, --config <FILE>` | Path to a custom TOML configuration file. |
-| `-l, --last` | Print the last command from history and exit. |
-| `--no-cache` | Disable caching of command output. |
-| `-s, --shell <SHELL>` | Specify the shell to use for execution and completions (e.g., `bash`, `zsh`, `fish`). Defaults to `sh` on Unix and `powershell` on Windows. |
-| `-V, --version` | Print version information. |
+| Argument                  | Description                                                                                                                                 |
+|---------------------------|---------------------------------------------------------------------------------------------------------------------------------------------|
+| `-f, --file <FILE>`       | Path to the input file.                                                                                                                     |
+| `-c, --command <COMMAND>` | Initial command to populate the input field.                                                                                                |
+| `-C, --config <FILE>`     | Path to a custom TOML configuration file.                                                                                                   |
+| `-l, --last`              | Print the last command from history and exit.                                                                                               |
+| `--no-cache`              | Disable caching of command output.                                                                                                          |
+| `-s, --shell <SHELL>`     | Specify the shell to use for execution and completions (e.g., `bash`, `zsh`, `fish`). Defaults to `sh` on Unix and `powershell` on Windows. |
+| `-V, --version`           | Print version information.                                                                                                                  |
 
 ## Key Bindings
 
 ### Command Execution
 
-| Key | Action |
-| --- | --- |
-| `Enter` | Execute the full command pipeline. |
-| `Alt + \` | Execute the pipeline up to the current subcommand (where your cursor is). |
-| `Alt + \|` | Execute the pipeline up to the *previous* subcommand. |
-| `Alt + i` | Reset view to show the original input data. |
+| Key        | Action                                                                    |
+|------------|---------------------------------------------------------------------------|
+| `Enter`    | Execute the full command pipeline.                                        |
+| `Alt + \`  | Execute the pipeline up to the current subcommand (where your cursor is). |
+| `Alt + \|` | Execute the pipeline up to the *previous* subcommand.                     |
+| `Alt + i`  | Reset view to show the original input data.                               |
 
 ### Navigation & View
 
-| Key | Action |
-| --- | --- |
-| `Arrows` <br> `Alt + h / j / k / l` | Scroll the output (Left, Down, Up, Right). |
-| `PageUp / PageDown` <br> `Alt + Up / Down` <br> `Alt + Shift + j / k` <br> `Ctrl + u / d` | Scroll the output up/down by page. |
-| `Alt + Shift + h / l` | Scroll the output left/right by page. |
-| `Alt + w` | Toggle line wrapping. |
-| `Alt + n` | Toggle line numbers. |
+| Key                                                                                       | Action                                     |
+|-------------------------------------------------------------------------------------------|--------------------------------------------|
+| `Arrows` <br> `Alt + h / j / k / l`                                                       | Scroll the output (Left, Down, Up, Right). |
+| `PageUp / PageDown` <br> `Alt + Up / Down` <br> `Alt + Shift + j / k` <br> `Ctrl + u / d` | Scroll the output up/down by page.         |
+| `Alt + Shift + h / l`                                                                     | Scroll the output left/right by page.      |
+| `Alt + w`                                                                                 | Toggle line wrapping.                      |
+| `Alt + n`                                                                                 | Toggle line numbers.                       |
 
 ### Search
 
-| Key | Action |
-| --- | --- |
+| Key                           | Action                                    |
+|-------------------------------|-------------------------------------------|
 | `F3 / F4` <br> `Ctrl + f / b` | Search forward or backward in the output. |
-| `Alt + x` | Toggle regex mode. |
-| `Alt + c` | Toggle case sensitivity. |
-| `Ctrl + p` | Previous search query in history. |
-| `Ctrl + n` | Next search query in history. |
+| `Alt + x`                     | Toggle regex mode.                        |
+| `Alt + c`                     | Toggle case sensitivity.                  |
+| `Ctrl + p`                    | Previous search query in history.         |
+| `Ctrl + n`                    | Next search query in history.             |
 
 ### Live Execution Modes
 
-| Key | Action |
-| --- | --- |
+| Key   | Action                                                                                                                                                                     |
+|-------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `F11` | Toggle "Live Until Cursor" mode. Executes the pipeline up to the cursor as you type (requires confirmation). When already in "Live Full", switches to "Live Until Cursor". |
-| `F12` | Toggle "Live Full" mode. Executes the entire pipeline as you type (requires confirmation). When already in "Live Until Cursor", switches to "Live Full". |
+| `F12` | Toggle "Live Full" mode. Executes the entire pipeline as you type (requires confirmation). When already in "Live Until Cursor", switches to "Live Full".                   |
 
 ### Diff
 
-| Key | Action |
-| --- | --- |
+| Key       | Action                                                                                  |
+|-----------|-----------------------------------------------------------------------------------------|
 | `Alt + d` | Toggle diff mode. Shows a line-based diff between the diff base and the current output. |
-| `Alt + /` | Set the current subcommand's output as the diff base. |
-| `Alt + ?` | Reset the diff base back to the original stdin. |
+| `Alt + /` | Set the current subcommand's output as the diff base.                                   |
+| `Alt + ?` | Reset the diff base back to the original stdin.                                         |
 
 ### Command Input & Subcommands
 
-| Key | Action |
-| --- | --- |
-| `Tab` | Trigger forward command or file completion (requires `bash`, `zsh`, or `fish` available). |
-| `Shift + Tab` | Trigger backward command or file completion. |
-| `Alt + Right` | Move cursor to the next subcommand. |
-| `Alt + Left` | Move cursor to the previous subcommand. |
-| `Alt + o` | Format the command pipeline. |
-| `Alt + c` | Copy the current subcommand. |
-| `Alt + x` | Cut the current subcommand. |
-| `Alt + v` | Paste the copied/cut subcommand after the current one. |
-| `Home / End` <br> `Ctrl + a / e` | Move cursor to the beginning or end of the command line. |
-| `Ctrl + p` | Previous command in history. |
-| `Ctrl + n` | Next command in history. |
+| Key                              | Action                                                                                    |
+|----------------------------------|-------------------------------------------------------------------------------------------|
+| `Tab`                            | Trigger forward command or file completion (requires `bash`, `zsh`, or `fish` available). |
+| `Shift + Tab`                    | Trigger backward command or file completion.                                              |
+| `Alt + Right`                    | Move cursor to the next subcommand.                                                       |
+| `Alt + Left`                     | Move cursor to the previous subcommand.                                                   |
+| `Alt + o`                        | Format the command pipeline.                                                              |
+| `Alt + c`                        | Copy the current subcommand.                                                              |
+| `Alt + x`                        | Cut the current subcommand.                                                               |
+| `Alt + v`                        | Paste the copied/cut subcommand after the current one.                                    |
+| `Home / End` <br> `Ctrl + a / e` | Move cursor to the beginning or end of the command line.                                  |
+| `Ctrl + p`                       | Previous command in history.                                                              |
+| `Ctrl + n`                       | Next command in history.                                                                  |
 
 ### Presets
 
-| Key | Action |
-| --- | --- |
+| Key       | Action                        |
+|-----------|-------------------------------|
 | `Alt + p` | Open/close the presets panel. |
 
 **In the presets panel (select mode):**
 
-| Key | Action |
-| --- | --- |
-| `Up / Down` | Navigate the preset list. |
-| `Enter` | Insert the selected preset after the current subcommand and close the panel. |
-| `Alt + Enter` | Insert the selected preset before the current subcommand and close the panel. |
-| `<shortcut>` | Insert the preset with that shortcut after the current subcommand and close the panel. |
+| Key                  | Action                                                                                  |
+|----------------------|-----------------------------------------------------------------------------------------|
+| `Up / Down`          | Navigate the preset list.                                                               |
+| `Enter`              | Insert the selected preset after the current subcommand and close the panel.            |
+| `Alt + Enter`        | Insert the selected preset before the current subcommand and close the panel.           |
+| `<shortcut>`         | Insert the preset with that shortcut after the current subcommand and close the panel.  |
 | `Shift + <shortcut>` | Insert the preset with that shortcut before the current subcommand and close the panel. |
-| `Ctrl + n` | Add a new empty preset. |
-| `Ctrl + t` | Add a new preset pre-filled with the current command. |
-| `Ctrl + e` | Edit the selected preset. |
-| `Ctrl + k` | Duplicate the selected preset. |
-| `Ctrl + d` | Delete the selected preset (asks for confirmation). |
-| `Ctrl + Up` | Move the selected preset up. |
-| `Ctrl + Down` | Move the selected preset down. |
-| `Esc` | Close the presets panel. |
+| `Ctrl + n`           | Add a new empty preset.                                                                 |
+| `Ctrl + t`           | Add a new preset pre-filled with the current command.                                   |
+| `Ctrl + e`           | Edit the selected preset.                                                               |
+| `Ctrl + k`           | Duplicate the selected preset.                                                          |
+| `Ctrl + d`           | Delete the selected preset (asks for confirmation).                                     |
+| `Ctrl + Up`          | Move the selected preset up.                                                            |
+| `Ctrl + Down`        | Move the selected preset down.                                                          |
+| `Esc`                | Close the presets panel.                                                                |
 
 **When editing a preset:**
 
-| Key | Action |
-| --- | --- |
-| `Tab` | Switch focus between the command and shortcut fields. |
-| `Enter` | Save the preset. |
-| `Esc` | Cancel editing. |
+| Key     | Action                                                |
+|---------|-------------------------------------------------------|
+| `Tab`   | Switch focus between the command and shortcut fields. |
+| `Enter` | Save the preset.                                      |
+| `Esc`   | Cancel editing.                                       |
 
 ### Saving to File
 
-| Key | Action |
-| --- | --- |
-| `Ctrl + s` | Save the current output to a file. |
+| Key              | Action                              |
+|------------------|-------------------------------------|
+| `Ctrl + s`       | Save the current output to a file.  |
 | `Ctrl + Alt + s` | Save the current command to a file. |
 
-In the save popup, type a destination path (Tab completes paths) and press Enter to write. Existing files are not overwritten.
+In the save popup, type a destination path (Tab completes paths) and press Enter to write. Existing files are not
+overwritten.
 
 ### Stdin
 
-| Key | Action |
-| --- |---|
-| `F5` | Toggle continuous stdin reading. *(dev)* |
+| Key       | Action                                                          |
+|-----------|-----------------------------------------------------------------|
+| `F5`      | Toggle continuous stdin reading. *(dev)*                        |
+| `Alt + f` | Toggle output follow (automatically scroll to the end). *(dev)* |
 
 ### General
 
-| Key | Action |
-| --- | --- |
-| `F1` | Toggle help screen. |
+| Key        | Action                                                            |
+|------------|-------------------------------------------------------------------|
+| `F1`       | Toggle help screen.                                               |
 | `Ctrl + c` | Exit Rura. The last executed command is printed to your terminal. |
 
 ## Configuration
 
 Rura can be configured via a TOML file. The shell used by Rura is determined by (in order of priority):
+
 1. The `--shell` (or `-s`) CLI argument.
 2. The `shell` property in the configuration file.
 3. The `SHELL` environment variable.
 4. Default to `sh`.
 
 The configuration path is determined as follows:
+
 1. Path specified by the `--config` (or `-C`) CLI argument.
 2. Path specified by the `RURA_CONFIG` environment variable.
 3. Default path:
@@ -275,19 +289,20 @@ The configuration path is determined as follows:
 
 ### General Options
 
-| Option | Description                                                                                       |
-| --- |---------------------------------------------------------------------------------------------------|
-| `shell` | The shell to use for execution and completions (e.g., `"bash"`, `"zsh"`, `"fish"`, `"nu"`).       |
-| `command_line_placement` | Set to `"top"` or `"bottom"` (default) to change where the input field is rendered.               |
-| `highlight_duration_ms` | Duration in milliseconds for the temporary highlighting when executing commands (default: `250`). |
-| `debounce_duration_ms` | Duration in milliseconds to wait before executing commands in live mode (default: `500`).         |
-| `no_cache` | Disable caching of command output when set to `true` (default: `false`).                          |
-| `log_level` | Set the logging level (e.g., `"info"`, `"debug"`, `"error"`). Default is `"info"`.                |
+| Option                      | Description                                                                                       |
+|-----------------------------|---------------------------------------------------------------------------------------------------|
+| `shell`                     | The shell to use for execution and completions (e.g., `"bash"`, `"zsh"`, `"fish"`, `"nu"`).       |
+| `command_line_placement`    | Set to `"top"` or `"bottom"` (default) to change where the input field is rendered.               |
+| `highlight_duration_ms`     | Duration in milliseconds for the temporary highlighting when executing commands (default: `250`). |
+| `debounce_duration_ms`      | Duration in milliseconds to wait before executing commands in live mode (default: `500`).         |
+| `no_cache`                  | Disable caching of command output when set to `true` (default: `false`).                          |
+| `log_level`                 | Set the logging level (e.g., `"info"`, `"debug"`, `"error"`). Default is `"info"`.                |
 | `stdin_reading_interval_ms` | Duration in milliseconds between stdin updates (default: `1000`). *(dev)*                         |
 
 ### Customizing Key Bindings
 
-You can override any default key binding in the `[keybindings]` section. Multiple keys can be assigned to the same action.
+You can override any default key binding in the `[keybindings]` section. Multiple keys can be assigned to the same
+action.
 
 ```toml
 [keybindings]
@@ -300,28 +315,29 @@ subcommand_next = ["alt+right"]
 
 ### Customizing Theme
 
-Colors and styles can be adjusted in the `[theme]` section. Supported colors include `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `gray`, `black`, `white`, and hex codes (e.g., `"#ffffff"`).
+Colors and styles can be adjusted in the `[theme]` section. Supported colors include `red`, `green`, `yellow`, `blue`,
+`magenta`, `cyan`, `gray`, `black`, `white`, and hex codes (e.g., `"#ffffff"`).
 
 Available theme keys:
 
-| Key | Description |
-| --- | --- |
-| `cmd_regular` | Default command style. |
-| `cmd_regular_pipe` | Style for the pipe character in regular mode. |
-| `cmd_regular_current` | Style for the currently selected subcommand. |
-| `cmd_highlight` | Style for the subcommand being executed. |
-| `cmd_highlight_pipe` | Style for the pipe character during execution. |
-| `cmd_highlight_current` | Style for the current subcommand during execution. |
-| `cmd_quoted` | Style for quoted strings. |
-| `cmd_invalid` | Style for invalid subcommands (if parsing fails). |
-| `cmd_diff_base` | Style for the subcommand currently marked as the diff base. |
-| `output_highlight` | Style for search results in the output. |
-| `output_highlight_current` | Style for the currently selected search result. |
-| `line_nums` | Style for line numbers in the output. |
-| `popup` | Style for popups (e.g., help, save, live mode confirmation). |
-| `diff_addition` | Style for lines added in diff mode. |
-| `diff_deletion` | Style for lines removed in diff mode. |
-| `diff_equal` | Style for unchanged lines in diff mode. |
+| Key                        | Description                                                  |
+|----------------------------|--------------------------------------------------------------|
+| `cmd_regular`              | Default command style.                                       |
+| `cmd_regular_pipe`         | Style for the pipe character in regular mode.                |
+| `cmd_regular_current`      | Style for the currently selected subcommand.                 |
+| `cmd_highlight`            | Style for the subcommand being executed.                     |
+| `cmd_highlight_pipe`       | Style for the pipe character during execution.               |
+| `cmd_highlight_current`    | Style for the current subcommand during execution.           |
+| `cmd_quoted`               | Style for quoted strings.                                    |
+| `cmd_invalid`              | Style for invalid subcommands (if parsing fails).            |
+| `cmd_diff_base`            | Style for the subcommand currently marked as the diff base.  |
+| `output_highlight`         | Style for search results in the output.                      |
+| `output_highlight_current` | Style for the currently selected search result.              |
+| `line_nums`                | Style for line numbers in the output.                        |
+| `popup`                    | Style for popups (e.g., help, save, live mode confirmation). |
+| `diff_addition`            | Style for lines added in diff mode.                          |
+| `diff_deletion`            | Style for lines removed in diff mode.                        |
+| `diff_equal`               | Style for unchanged lines in diff mode.                      |
 
 ```toml
 [theme.cmd_highlight]
@@ -336,25 +352,33 @@ fg = "magenta"
 ## Storage & Logs
 
 ### History
+
 Rura maintains a persistent command history. The history file is located at:
+
 - **Linux**: `~/.local/share/rura/history.txt`
 - **macOS**: `~/Library/Application Support/rura/history.txt`
 - **Windows**: `%APPDATA%\rura\history.txt`
 
 ### Search History
+
 Search queries are persisted across sessions. The search history file is located at:
+
 - **Linux**: `~/.local/share/rura/search_history.txt`
 - **macOS**: `~/Library/Application Support/rura/search_history.txt`
 - **Windows**: `%APPDATA%\rura\search_history.txt`
 
 ### Presets
+
 Presets are saved commands stored in a TOML file:
+
 - **Linux**: `~/.local/share/rura/presets.toml`
 - **macOS**: `~/Library/Application Support/rura/presets.toml`
 - **Windows**: `%APPDATA%\rura\presets.toml`
 
 ### Logs
+
 Application logs are useful for troubleshooting. They are stored at:
+
 - **Linux**: `~/.cache/rura/logs.txt`
 - **macOS**: `~/Library/Caches/rura/logs.txt`
 - **Windows**: `%LOCALAPPDATA%\rura\logs.txt`
