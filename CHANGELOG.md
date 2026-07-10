@@ -1,3 +1,9 @@
+## v1.9.0 - 2026-07-10
+
+### Features
+
+- Added support for continuous stdin reading
+
 ## v1.8.0 - 2026-07-07
 
 ### Features

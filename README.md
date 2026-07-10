@@ -257,10 +257,10 @@ overwritten.
 
 ### Stdin
 
-| Key  | Action                                                          |
-|------|-----------------------------------------------------------------|
-| `F5` | Toggle continuous stdin reading. *(dev)*                        |
-| `F6` | Toggle output follow (automatically scroll to the end). *(dev)* |
+| Key  | Action                                                  |
+|------|---------------------------------------------------------|
+| `F5` | Toggle continuous stdin reading.                        |
+| `F6` | Toggle output follow (automatically scroll to the end). |
 
 ### General
 
@@ -297,7 +297,7 @@ The configuration path is determined as follows:
 | `debounce_duration_ms`      | Duration in milliseconds to wait before executing commands in live mode (default: `500`).         |
 | `no_cache`                  | Disable caching of command output when set to `true` (default: `false`).                          |
 | `log_level`                 | Set the logging level (e.g., `"info"`, `"debug"`, `"error"`). Default is `"info"`.                |
-| `stdin_reading_interval_ms` | Duration in milliseconds between stdin updates (default: `1000`). *(dev)*                         |
+| `stdin_reading_interval_ms` | Duration in milliseconds between stdin updates (default: `1000`).                                 |
 
 ### Customizing Key Bindings
 
