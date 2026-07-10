@@ -61,3 +61,6 @@ strip = true
 [profile.dist]
 inherits = "release"
 lto = "thin"
+
+[package.metadata.release]
+publish = false
