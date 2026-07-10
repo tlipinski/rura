@@ -257,10 +257,10 @@ overwritten.
 
 ### Stdin
 
-| Key       | Action                                                          |
-|-----------|-----------------------------------------------------------------|
-| `F5`      | Toggle continuous stdin reading. *(dev)*                        |
-| `Alt + f` | Toggle output follow (automatically scroll to the end). *(dev)* |
+| Key  | Action                                                          |
+|------|-----------------------------------------------------------------|
+| `F5` | Toggle continuous stdin reading. *(dev)*                        |
+| `F6` | Toggle output follow (automatically scroll to the end). *(dev)* |
 
 ### General
 

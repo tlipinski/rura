@@ -181,7 +181,7 @@ impl Default for KeyBindingsConfig {
             toggle_presets: vec!["alt+p".into()],
             toggle_line_nums: vec!["alt+n".into()],
             toggle_stdin_reading: vec!["f5".into()],
-            toggle_follow: vec!["alt+f".into()],
+            toggle_follow: vec!["f6".into()],
         }
     }
 }
