@@ -4,4 +4,3 @@ pub mod cmd_runner;
 mod exec;
 pub mod output;
 mod simple_runner;
-mod split_runner;

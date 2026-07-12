@@ -1,6 +1,5 @@
 use crate::rura::RuraCommand;
 use crate::shell::cached_runner::CachedCmdRunner;
-use crate::shell::split_runner::SplitCmdRunner;
 use anyhow::Result;
 use std::sync::Arc;
 
@@ -13,11 +12,7 @@ pub struct CmdRunners;
 impl CmdRunners {
     #[cfg(unix)]
     pub fn new(shell: &str, stdin: Arc<[u8]>, no_cache: bool) -> Box<dyn CmdRunner> {
-        if no_cache {
-            Box::new(SplitCmdRunner::new(shell, stdin))
-        } else {
-            Box::new(CachedCmdRunner::new(shell, stdin))
-        }
+        Box::new(CachedCmdRunner::new(shell, stdin, !no_cache))
     }
 
     #[cfg(windows)]
