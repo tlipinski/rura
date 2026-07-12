@@ -70,6 +70,10 @@
 
 ## Installation
 
+<a href="https://repology.org/project/rura/versions">
+    <img src="https://repology.org/badge/vertical-allrepos/rura.svg" alt="Packaging status" align="right">
+</a>
+
 Check the [Releases](https://github.com/tlipinski/rura/releases) page for pre-compiled binaries for your platform.
 
 **Homebrew (macOS/Linux)**:
