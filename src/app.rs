@@ -1,7 +1,7 @@
 use crate::app::Action::{
-    CommandCompleted, Debounced, Failure, ResetHighlight, StartProgress, StopProgress, UserInput,
+    Debounced, Failure, PipelineCompleted, ResetHighlight, StartProgress, StopProgress, UserInput,
 };
-use crate::app::CmdRunnerAction::UpdateStdin;
+use crate::app::PipelineRunnerAction::UpdateStdin;
 use crate::args::Args;
 use crate::completable_input::CompletableInput;
 use crate::config::{Config, history_path, search_history_path};
@@ -11,11 +11,12 @@ use crate::help_widget::HelpWidget;
 use crate::history::History;
 use crate::output_widget::{ContentMode, ErrorPanePlacement, OutputWidget};
 use crate::presets_widget::{DisplayMode, PresetsWidget};
-use crate::rura::{ExecuteType, RuraCommand};
+use crate::rura::Rura;
+use crate::rura_input::ExecuteType;
 use crate::rura_widget::RuraWidget;
 use crate::save_to_file_widget::SaveToFileWidget;
 use crate::search_widget::SearchWidget;
-use crate::shell::cmd_runner::{CmdResult, CmdRunner, CmdRunners};
+use crate::shell::pipeline_runner::{PipelineRun, PipelineRunner, PipelineRunners};
 use crate::stdin::{StdinControllerAction, start_input_read_task};
 use crate::theme::Theme;
 use crate::uicmd::{KeyBindings, UiCmd, to_ui_command};
@@ -54,7 +55,7 @@ pub struct App {
     save_command_widget: SaveToFileWidget,
     presets_widget: PresetsWidget,
     action_rx: Receiver<Action>,
-    command_tx: Sender<CmdRunnerAction>,
+    pipeline_tx: Sender<PipelineRunnerAction>,
     stdin_controller_tx: Sender<StdinControllerAction>,
     key_bindings: KeyBindings,
     command_line_placement: CommandLinePlacement,
@@ -103,7 +104,7 @@ impl App {
         let (action_tx, action_rx) = std::sync::mpsc::channel::<Action>();
         let (highlight_reset_tx, highlight_reset_rx) = std::sync::mpsc::channel::<()>();
         let (debouncer_tx, debouncer_rx) = std::sync::mpsc::channel::<()>();
-        let (command_tx, command_rx) = std::sync::mpsc::channel::<CmdRunnerAction>();
+        let (pipeline_tx, pipeline_rx) = std::sync::mpsc::channel::<PipelineRunnerAction>();
 
         let s1 = action_tx.clone();
         thread::spawn(move || handle_input_task(s1).unwrap());
@@ -111,7 +112,7 @@ impl App {
         let stdin_tx = start_input_read_task(
             args.file.clone(),
             &action_tx,
-            &command_tx,
+            &pipeline_tx,
             Duration::from_millis(config.stdin_reading_interval_ms),
         );
 
@@ -120,9 +121,9 @@ impl App {
         let s2 = action_tx.clone();
         let shell_clone = shell.clone();
         thread::spawn(move || {
-            handle_command_task(
-                CmdRunners::new(&shell_clone, Arc::from("".as_bytes()), no_cache),
-                command_rx,
+            handle_pipeline_task(
+                PipelineRunners::new(&shell_clone, Arc::from("".as_bytes()), no_cache),
+                pipeline_rx,
                 s2,
             )
             .unwrap();
@@ -155,8 +156,8 @@ impl App {
                     .map(|p| History::using_file(p))
                     .unwrap_or(History::in_mem()),
                 highlight_reset_tx,
-                failed_subcommand: None,
-                diff_base_subcommand: None,
+                failed_step_index: None,
+                diff_base_index: None,
                 copied: None,
             },
             output_widget: OutputWidget::new(
@@ -188,7 +189,7 @@ impl App {
             ),
             presets_widget: PresetsWidget::new(Theme::from_config(&config.theme)),
             action_rx,
-            command_tx,
+            pipeline_tx,
             debouncer_tx,
             stdin_controller_tx: stdin_tx,
             key_bindings: KeyBindings::from_config(&config.keybindings),
@@ -225,7 +226,7 @@ impl App {
     fn handle_action(&mut self, action: Action) {
         match action {
             UserInput(event) => self.handle_event(&event),
-            CommandCompleted(command, result) => {
+            PipelineCompleted(command, result) => {
                 debug!("Command completed: {:?}", command);
                 if !command.is_empty() {
                     if matches!(self.input_mode, InputMode::Normal) {
@@ -233,16 +234,16 @@ impl App {
                         self.rura_widget.history.push(&command.to_string())
                     } else {
                         // in live mode only save commands that were successfully executed
-                        if result.all_ok() {
+                        if result.succeeded() {
                             self.rura_widget.history.push(&command.to_string())
                         }
                     }
                 }
 
-                self.rura_widget.failed_subcommand = result.failed_subcommand();
+                self.rura_widget.failed_step_index = result.failed_step_index();
 
-                if result.all_ok() {
-                    if let Some(bytes) = result.ok_outputs().last() {
+                if result.succeeded() {
+                    if let Some(bytes) = result.step_bytes().last() {
                         self.success_output_bytes = bytes.clone();
                     }
                 }
@@ -254,7 +255,7 @@ impl App {
                 };
 
                 self.output_widget
-                    .handle_command_result(result, self.follow && can_follow);
+                    .handle_pipeline_run(result, self.follow && can_follow);
             }
             ResetHighlight => self.rura_widget.highlight_until = None,
             Debounced => {
@@ -275,9 +276,10 @@ impl App {
             StopProgress => {
                 self.in_progress = None;
             }
+            // todo do not use output_widget for general error handling
             Failure(err) => {
-                let result = CmdResult::error(err, None);
-                self.output_widget.handle_command_result(result, false);
+                let result = PipelineRun::error(err, None);
+                self.output_widget.handle_pipeline_run(result, false);
             }
             StdinCompleted => {
                 self.stdin_state = StdinState::Completed;
@@ -658,8 +660,8 @@ impl App {
                     UiCmd::ExecuteUntilCurrent => self.handle_execute(ExecuteType::UntilCurrent),
                     UiCmd::ExecuteUntilPrev => self.handle_execute(ExecuteType::UntilCurrentPrev),
                     UiCmd::ResetInput => {
-                        self.command_tx
-                            .send(CmdRunnerAction::RunCommand(RuraCommand::empty()))
+                        self.pipeline_tx
+                            .send(PipelineRunnerAction::Run(Rura::empty()))
                             .unwrap();
                     }
                     UiCmd::SubcommandNext => {
@@ -739,23 +741,22 @@ impl App {
                         self.output_widget.toggle_diff();
                         match self.output_widget.content_mode {
                             ContentMode::Normal => {
-                                self.rura_widget.diff_base_subcommand = None;
+                                self.rura_widget.diff_base_index = None;
                             }
                             ContentMode::Diff => {
-                                self.rura_widget.diff_base_subcommand =
-                                    self.output_widget.diff_base();
+                                self.rura_widget.diff_base_index = self.output_widget.diff_base();
                             }
                         }
                     }
                     UiCmd::DiffBaseStdin => {
                         self.output_widget.set_diff_base(None);
-                        self.rura_widget.diff_base_subcommand = None;
+                        self.rura_widget.diff_base_index = None;
                     }
                     UiCmd::DiffBase => {
                         let idx = self.rura_widget.current_index();
                         if let Some(idx) = idx {
                             self.output_widget.set_diff_base(Some(idx));
-                            self.rura_widget.diff_base_subcommand = Some(idx);
+                            self.rura_widget.diff_base_index = Some(idx);
                         }
                     }
                     UiCmd::ToggleLive => match self.input_mode {
@@ -841,8 +842,8 @@ impl App {
     fn handle_execute(&mut self, kind: ExecuteType) {
         match self.rura_widget.execute(kind) {
             Ok(command) => self
-                .command_tx
-                .send(CmdRunnerAction::RunCommand(command))
+                .pipeline_tx
+                .send(PipelineRunnerAction::Run(command))
                 .unwrap(),
             Err(_) => {}
         }
@@ -1122,26 +1123,26 @@ fn reset_highlight_task(rx: Receiver<()>, tx: Sender<Action>, duration_ms: u64) 
     }
 }
 
-fn handle_command_task(
-    mut cmd_runner: Box<dyn CmdRunner>,
-    command_rx: Receiver<CmdRunnerAction>,
+fn handle_pipeline_task(
+    mut pipeline_runner: Box<dyn PipelineRunner>,
+    pipeline_rx: Receiver<PipelineRunnerAction>,
     action_tx: Sender<Action>,
 ) -> Result<()> {
-    let mut last_command: Option<RuraCommand> = None;
+    let mut last_command: Option<Rura> = None;
 
     loop {
-        if let Ok(runner_action) = command_rx.recv() {
+        if let Ok(runner_action) = pipeline_rx.recv() {
             match runner_action {
-                CmdRunnerAction::RunCommand(command) => {
+                PipelineRunnerAction::Run(rura) => {
                     action_tx.send(Action::StartProgress(SystemTime::now()))?;
 
-                    match cmd_runner.run(&command) {
+                    match pipeline_runner.run(&rura) {
                         Ok(result) => {
-                            last_command = Some(command.clone());
-                            let _ = action_tx.send(Action::CommandCompleted(command, result));
+                            last_command = Some(rura.clone());
+                            let _ = action_tx.send(Action::PipelineCompleted(rura, result));
                         }
                         Err(e) => {
-                            error!("Failed running command {:?}: {}", command, e);
+                            error!("Failed running command {:?}: {}", rura, e);
                             action_tx.send(Action::Failure(
                                 "Failed running command, check logs".into(),
                             ))?;
@@ -1151,15 +1152,15 @@ fn handle_command_task(
                     action_tx.send(Action::StopProgress)?;
                 }
                 UpdateStdin(stdin) => {
-                    cmd_runner.update_stdin(stdin);
+                    pipeline_runner.update_stdin(stdin);
 
-                    let command = last_command.clone().unwrap_or(RuraCommand::empty()).clone();
+                    let command = last_command.clone().unwrap_or(Rura::empty()).clone();
 
                     action_tx.send(Action::StartProgress(SystemTime::now()))?;
 
-                    match cmd_runner.run(&command) {
+                    match pipeline_runner.run(&command) {
                         Ok(result) => {
-                            let _ = action_tx.send(Action::CommandCompleted(command, result));
+                            let _ = action_tx.send(Action::PipelineCompleted(command, result));
                         }
                         Err(e) => {
                             error!("Failed running command {:?}: {}", command, e);
@@ -1178,7 +1179,7 @@ fn handle_command_task(
 
 pub enum Action {
     UserInput(Event),
-    CommandCompleted(RuraCommand, CmdResult),
+    PipelineCompleted(Rura, PipelineRun),
     Failure(String),
     ResetHighlight,
     Debounced,
@@ -1224,7 +1225,7 @@ mod tests {
     impl Default for App {
         fn default() -> Self {
             let (_, action_rx) = std::sync::mpsc::channel::<Action>();
-            let (command_tx, _) = std::sync::mpsc::channel::<CmdRunnerAction>();
+            let (command_tx, _) = std::sync::mpsc::channel::<PipelineRunnerAction>();
             let (highlight_reset_tx, _) = std::sync::mpsc::channel::<()>();
             let (debouncer_tx, _) = std::sync::mpsc::channel::<()>();
             let (stdin_agr_tx, _) = std::sync::mpsc::channel::<StdinControllerAction>();
@@ -1239,8 +1240,8 @@ mod tests {
                     theme: Theme::from_config(&theme_config),
                     history: History::in_mem(),
                     highlight_reset_tx,
-                    failed_subcommand: None,
-                    diff_base_subcommand: None,
+                    failed_step_index: None,
+                    diff_base_index: None,
                     copied: None,
                 },
                 output_widget: OutputWidget::new(&theme_config, ErrorPanePlacement::Bottom),
@@ -1264,7 +1265,7 @@ mod tests {
                     history: History::in_mem(),
                 },
                 action_rx,
-                command_tx,
+                pipeline_tx: command_tx,
                 debouncer_tx,
                 stdin_controller_tx: stdin_agr_tx,
                 exit: false,
@@ -1284,12 +1285,12 @@ mod tests {
         }
     }
 
-    fn cmd_res_err(s: &str) -> CmdResult {
-        CmdResult::error_bytes(Arc::from(s.as_bytes()), Some(1))
+    fn failed_run(s: &str) -> PipelineRun {
+        PipelineRun::error_bytes(Arc::from(s.as_bytes()), Some(1))
     }
 
-    fn cmd_res_ok(s: &str) -> CmdResult {
-        CmdResult::from_bytes(Arc::from(s.as_bytes()))
+    fn success_run(s: &str) -> PipelineRun {
+        PipelineRun::from_bytes(Arc::from(s.as_bytes()))
     }
 
     #[test]
@@ -1407,12 +1408,12 @@ mod tests {
         let mut app = App::default();
         app.input_mode = InputMode::LiveFull;
 
-        app.handle_action(CommandCompleted("g".into(), cmd_res_err("")));
-        app.handle_action(CommandCompleted("gr".into(), cmd_res_err("")));
-        app.handle_action(CommandCompleted("gre".into(), cmd_res_err("")));
-        app.handle_action(CommandCompleted("grep".into(), cmd_res_ok("")));
-        app.handle_action(CommandCompleted("grep 'abc'".into(), cmd_res_ok("")));
-        app.handle_action(CommandCompleted("gp 'abc'".into(), cmd_res_err("")));
+        app.handle_action(PipelineCompleted("g".into(), failed_run("")));
+        app.handle_action(PipelineCompleted("gr".into(), failed_run("")));
+        app.handle_action(PipelineCompleted("gre".into(), failed_run("")));
+        app.handle_action(PipelineCompleted("grep".into(), success_run("")));
+        app.handle_action(PipelineCompleted("grep 'abc'".into(), success_run("")));
+        app.handle_action(PipelineCompleted("gp 'abc'".into(), failed_run("")));
 
         assert_eq!(
             *app.rura_widget.history.history(),
@@ -1424,8 +1425,8 @@ mod tests {
     fn saving_to_history_all_outputs_in_normal_mode() {
         let mut app = App::default();
 
-        app.handle_action(CommandCompleted("g".into(), cmd_res_err("")));
-        app.handle_action(CommandCompleted("grep".into(), cmd_res_ok("")));
+        app.handle_action(PipelineCompleted("g".into(), failed_run("")));
+        app.handle_action(PipelineCompleted("grep".into(), success_run("")));
 
         assert_eq!(
             *app.rura_widget.history.history(),
@@ -1512,8 +1513,8 @@ enum ActiveModal {
     Presets,
 }
 
-pub enum CmdRunnerAction {
-    RunCommand(RuraCommand),
+pub enum PipelineRunnerAction {
+    Run(Rura),
     UpdateStdin(Arc<[u8]>),
 }
 

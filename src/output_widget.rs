@@ -1,6 +1,6 @@
 use crate::config::ThemeConfig;
 use crate::content_widget::{ContentLine, ContentWidget, Position};
-use crate::shell::cmd_runner::CmdResult;
+use crate::shell::pipeline_runner::PipelineRun;
 use crate::theme::Theme;
 use itertools::Itertools;
 use log::{debug, info};
@@ -20,7 +20,7 @@ pub struct OutputWidget {
     error_output_opt: Option<(Vec<String>, Option<i32>)>,
     theme: Theme,
     error_pane_placement: ErrorPanePlacement,
-    cmd_result: CmdResult,
+    pipeline_run: PipelineRun,
     pub content_mode: ContentMode,
     diff_base: Option<usize>,
     diff_ready: bool,
@@ -76,7 +76,7 @@ impl OutputWidget {
             error_output_opt: None,
             theme: Theme::from_config(theme_config),
             error_pane_placement,
-            cmd_result: CmdResult::new(),
+            pipeline_run: PipelineRun::new(),
             content_mode: ContentMode::Normal,
             diff_base: None,
             diff_ready: false,
@@ -102,9 +102,9 @@ impl OutputWidget {
         if self.diff_ready {
             return;
         }
-        let ok_bytes = self.cmd_result.ok_outputs().clone();
-        let last_bytes = ok_bytes.last().unwrap_or(&self.cmd_result.stdin);
-        let vec = self.cmd_result.ok_outputs();
+        let step_bytes = self.pipeline_run.step_bytes().clone();
+        let last_bytes = step_bytes.last().unwrap_or(&self.pipeline_run.stdin);
+        let vec = self.pipeline_run.step_bytes();
         let stdin_bytes = if let Some(base) = self.diff_base {
             if let Some(b) = vec.get(base) {
                 b.as_ref()
@@ -112,7 +112,7 @@ impl OutputWidget {
                 return;
             }
         } else {
-            self.cmd_result.stdin.as_ref()
+            self.pipeline_run.stdin.as_ref()
         };
 
         let old = String::from_utf8_lossy(&stdin_bytes);
@@ -190,29 +190,29 @@ impl OutputWidget {
         }
     }
 
-    pub fn handle_command_result(&mut self, result: CmdResult, follow: bool) {
-        info!("Command result: {:?}", result);
-        self.cmd_result = result;
+    pub fn handle_pipeline_run(&mut self, pipeline_run: PipelineRun, follow: bool) {
+        info!("Command result: {:?}", pipeline_run);
+        self.pipeline_run = pipeline_run;
 
         debug!(
             "handle_command_result: {:?}",
-            self.cmd_result.ok_outputs().len()
+            self.pipeline_run.step_bytes().len()
         );
 
-        if let Some(err_output) = &self.cmd_result.error_output {
-            let str = String::from_utf8_lossy(&err_output.bytes);
+        if let Some(step_failure) = &self.pipeline_run.failure {
+            let str = String::from_utf8_lossy(&step_failure.bytes);
             let lines = str.lines().map(|a| a.into()).collect_vec();
 
-            self.error_output_opt = Some((lines, err_output.code));
+            self.error_output_opt = Some((lines, step_failure.code));
         } else {
-            if let Some(bytes) = &self.cmd_result.ok_outputs().last() {
+            if let Some(bytes) = &self.pipeline_run.step_bytes().last() {
                 let str = String::from_utf8_lossy(&bytes);
                 let lines = str.lines().map(|a| a.into()).collect_vec();
                 self.content.with_content(lines);
 
                 self.error_output_opt = None;
             } else {
-                let str = String::from_utf8_lossy(&self.cmd_result.stdin);
+                let str = String::from_utf8_lossy(&self.pipeline_run.stdin);
                 let lines = str.lines().map(|a| a.into()).collect_vec();
                 self.content.with_content(lines);
 
@@ -399,12 +399,12 @@ mod tests {
         }
     }
 
-    fn result_ok(s: &str) -> CmdResult {
-        CmdResult::from_bytes(Arc::from(s.as_bytes()))
+    fn result_ok(s: &str) -> PipelineRun {
+        PipelineRun::from_bytes(Arc::from(s.as_bytes()))
     }
 
-    fn result_err(s: &str) -> CmdResult {
-        CmdResult::error_bytes(Arc::from(s.as_bytes()), Some(1))
+    fn result_err(s: &str) -> PipelineRun {
+        PipelineRun::error_bytes(Arc::from(s.as_bytes()), Some(1))
     }
 
     #[test]
@@ -414,8 +414,8 @@ mod tests {
         let mut widget = OutputWidget::default();
         widget.error_pane_placement = ErrorPanePlacement::Top;
 
-        widget.handle_command_result(result_ok("out1\nout2\nout3"), false);
-        widget.handle_command_result(result_err("errors1\nerrors2\nerrors3"), false);
+        widget.handle_pipeline_run(result_ok("out1\nout2\nout3"), false);
+        widget.handle_pipeline_run(result_err("errors1\nerrors2\nerrors3"), false);
 
         terminal
             .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
@@ -431,8 +431,8 @@ mod tests {
         let mut widget = OutputWidget::default();
         widget.error_pane_placement = ErrorPanePlacement::Bottom;
 
-        widget.handle_command_result(result_ok("out1\nout2\nout3"), false);
-        widget.handle_command_result(result_err("errors1\nerrors2\nerrors3"), false);
+        widget.handle_pipeline_run(result_ok("out1\nout2\nout3"), false);
+        widget.handle_pipeline_run(result_err("errors1\nerrors2\nerrors3"), false);
 
         terminal
             .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
@@ -446,8 +446,8 @@ mod tests {
         let mut widget = OutputWidget::default();
         let stdin = Arc::from("line1\nline2\nline3".as_bytes());
         let output = "line1\nline2 modified\nline3";
-        widget.handle_command_result(
-            CmdResult::from_bytes_with_stdin(Arc::from(output.as_bytes()), stdin),
+        widget.handle_pipeline_run(
+            PipelineRun::from_bytes_with_stdin(Arc::from(output.as_bytes()), stdin),
             false,
         );
 

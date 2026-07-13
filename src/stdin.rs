@@ -1,4 +1,4 @@
-use crate::app::{Action, CmdRunnerAction};
+use crate::app::{Action, PipelineRunnerAction};
 use anyhow::Error;
 use anyhow::Result;
 use crossterm::tty::IsTty;
@@ -12,7 +12,7 @@ use std::time::{Duration, SystemTime};
 pub fn start_input_read_task(
     file_arg: Option<String>,
     action_tx: &Sender<Action>,
-    command_tx: &Sender<CmdRunnerAction>,
+    command_tx: &Sender<PipelineRunnerAction>,
     update_interval: Duration,
 ) -> Sender<StdinControllerAction> {
     let (stdin_action_tx, stdin_action_rx) = std::sync::mpsc::channel::<StdinControllerAction>();
@@ -30,7 +30,8 @@ pub fn start_input_read_task(
                     let arc: Arc<[u8]> = Arc::from(stdin);
                     // In case of reading file there's just one update of stdin therefore,
                     // we're waiting for the command_rx to accept commands
-                    while let Err(_) = command_tx_c1.send(CmdRunnerAction::UpdateStdin(arc.clone()))
+                    while let Err(_) =
+                        command_tx_c1.send(PipelineRunnerAction::UpdateStdin(arc.clone()))
                     {
                         thread::sleep(Duration::from_millis(100));
                         debug!("Waiting for command_rx to accept commands");
@@ -66,7 +67,7 @@ pub fn start_input_read_task(
 fn stdin_controller_task(
     reader_rx: Receiver<ReaderMsg>,
     action_tx: Sender<Action>,
-    command_tx: Sender<CmdRunnerAction>,
+    command_tx: Sender<PipelineRunnerAction>,
     backpressure_tx: Sender<BackpressureMsg>,
     stdin_controller_rx: Receiver<StdinControllerAction>,
     duration: Duration,
@@ -80,7 +81,9 @@ fn stdin_controller_task(
         'receiving: loop {
             if now.elapsed()? > duration && new_data {
                 new_data = false;
-                command_tx.send(CmdRunnerAction::UpdateStdin(Arc::from(stdin_bytes.clone())))?;
+                command_tx.send(PipelineRunnerAction::UpdateStdin(Arc::from(
+                    stdin_bytes.clone(),
+                )))?;
                 now = SystemTime::now();
                 if pause_after_first_update && !first_stdin_update {
                     first_stdin_update = true;
@@ -97,7 +100,7 @@ fn stdin_controller_task(
                         ReaderMsg::Completed => {
                             action_tx.send(Action::StdinCompleted)?;
                             command_tx
-                                .send(CmdRunnerAction::UpdateStdin(Arc::from(stdin_bytes)))?;
+                                .send(PipelineRunnerAction::UpdateStdin(Arc::from(stdin_bytes)))?;
                             return Ok(());
                         }
                     },

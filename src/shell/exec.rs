@@ -1,4 +1,4 @@
-use crate::shell::output::Output;
+use crate::shell::output::ExecOutput;
 use anyhow::anyhow;
 use std::io::Write;
 use std::process::{Command, Stdio};
@@ -6,13 +6,13 @@ use std::sync::Arc;
 use std::thread;
 
 pub trait Exec {
-    fn exec(&self, command: Command, stdin: Arc<[u8]>) -> anyhow::Result<Output>;
+    fn exec(&self, command: Command, stdin: Arc<[u8]>) -> anyhow::Result<ExecOutput>;
 }
 
 pub struct SystemExec;
 
 impl Exec for SystemExec {
-    fn exec(&self, mut command: Command, stdin: Arc<[u8]>) -> anyhow::Result<Output> {
+    fn exec(&self, mut command: Command, stdin: Arc<[u8]>) -> anyhow::Result<ExecOutput> {
         let mut child = command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -32,10 +32,13 @@ impl Exec for SystemExec {
         match child.wait_with_output() {
             Ok(output) => {
                 if output.status.success() {
-                    Ok(Output::Ok(Arc::from(output.stdout)))
+                    Ok(ExecOutput::Ok(Arc::from(output.stdout)))
                 } else {
                     // failed successfully!
-                    Ok(Output::Err(Arc::from(output.stderr), output.status.code()))
+                    Ok(ExecOutput::Err(
+                        Arc::from(output.stderr),
+                        output.status.code(),
+                    ))
                 }
             }
             Err(e) => Err(anyhow!("Failed to execute command '{command:?}': {e}")),
@@ -50,18 +53,18 @@ pub struct MockExec {
 
 #[cfg(test)]
 impl Exec for MockExec {
-    fn exec(&self, command: Command, stdin: Arc<[u8]>) -> anyhow::Result<Output> {
+    fn exec(&self, command: Command, stdin: Arc<[u8]>) -> anyhow::Result<ExecOutput> {
         let program = command.get_program().to_string_lossy().into_owned();
         self.calls
             .borrow_mut()
             .push((program.clone(), String::from_utf8_lossy(&stdin).into()));
         if program.ends_with("err") {
-            Ok(Output::Err(
+            Ok(ExecOutput::Err(
                 Arc::from(format!("{}-output", program).into_bytes()),
                 Some(1),
             ))
         } else {
-            Ok(Output::Ok(Arc::from(
+            Ok(ExecOutput::Ok(Arc::from(
                 format!("{}-output", program).into_bytes(),
             )))
         }

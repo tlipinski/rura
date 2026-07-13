@@ -13,6 +13,7 @@ mod presets;
 mod presets_widget;
 mod props;
 mod rura;
+mod rura_input;
 mod rura_widget;
 mod save_to_file_widget;
 mod search_widget;

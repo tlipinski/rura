@@ -1,6 +1,7 @@
 use crate::completable_input::CompletableInput;
 use crate::history::History;
-use crate::rura::{ExecuteType, Rura, RuraCommand};
+use crate::rura::Rura;
+use crate::rura_input::{ExecuteType, RuraInput};
 use crate::theme::Theme;
 use anyhow::Result;
 use crossterm::event::Event;
@@ -21,8 +22,8 @@ pub struct RuraWidget {
     pub theme: Theme,
     pub history: History,
     pub highlight_reset_tx: Sender<()>,
-    pub failed_subcommand: Option<usize>,
-    pub diff_base_subcommand: Option<usize>,
+    pub failed_step_index: Option<usize>,
+    pub diff_base_index: Option<usize>,
     pub copied: Option<String>,
 }
 
@@ -32,15 +33,15 @@ impl Widget for &RuraWidget {
         Self: Sized,
     {
         let command_input_line = {
-            match Rura::new(
+            match RuraInput::new(
                 self.command_input.value(),
                 self.command_input.visual_cursor(),
             ) {
                 Ok(r) => to_line(
                     r,
                     self.highlight_until,
-                    self.failed_subcommand,
-                    self.diff_base_subcommand,
+                    self.failed_step_index,
+                    self.diff_base_index,
                     &self.theme,
                 ),
                 Err(_) => Line::from(self.command_input.value()),
@@ -77,14 +78,14 @@ impl RuraWidget {
             .unwrap_or(false);
 
         if changed_value {
-            self.failed_subcommand = None
+            self.failed_step_index = None
         }
 
         changed_value
     }
 
     pub fn subcommand_next(&mut self) {
-        if let Ok(r) = Rura::new(
+        if let Ok(r) = RuraInput::new(
             self.command_input.value(),
             self.command_input.visual_cursor(),
         ) {
@@ -97,7 +98,7 @@ impl RuraWidget {
     }
 
     pub fn subcommand_prev(&mut self) {
-        if let Ok(r) = Rura::new(
+        if let Ok(r) = RuraInput::new(
             self.command_input.value(),
             self.command_input.visual_cursor(),
         ) {
@@ -110,7 +111,7 @@ impl RuraWidget {
     }
 
     pub fn copy_current(&mut self) {
-        if let Ok(r) = Rura::new(
+        if let Ok(r) = RuraInput::new(
             self.command_input.value(),
             self.command_input.visual_cursor(),
         ) {
@@ -119,7 +120,7 @@ impl RuraWidget {
     }
 
     pub fn cut_current(&mut self) {
-        if let Ok(mut r) = Rura::new(
+        if let Ok(mut r) = RuraInput::new(
             self.command_input.value(),
             self.command_input.visual_cursor(),
         ) {
@@ -132,7 +133,7 @@ impl RuraWidget {
     }
 
     pub fn current_index(&mut self) -> Option<usize> {
-        if let Ok(r) = Rura::new(
+        if let Ok(r) = RuraInput::new(
             self.command_input.value(),
             self.command_input.visual_cursor(),
         ) {
@@ -143,7 +144,7 @@ impl RuraWidget {
     }
 
     pub fn paste_after_current(&mut self) {
-        if let Ok(mut r) = Rura::new(
+        if let Ok(mut r) = RuraInput::new(
             self.command_input.value(),
             self.command_input.visual_cursor(),
         ) {
@@ -156,7 +157,7 @@ impl RuraWidget {
     }
 
     pub fn insert_after_current(&mut self, value: &str) {
-        if let Ok(mut r) = Rura::new(
+        if let Ok(mut r) = RuraInput::new(
             self.command_input.value(),
             self.command_input.visual_cursor(),
         ) {
@@ -173,7 +174,7 @@ impl RuraWidget {
     }
 
     pub fn insert_before_current(&mut self, value: &str) {
-        if let Ok(mut r) = Rura::new(
+        if let Ok(mut r) = RuraInput::new(
             self.command_input.value(),
             self.command_input.visual_cursor(),
         ) {
@@ -194,7 +195,7 @@ impl RuraWidget {
             .with_value(self.history.next(self.command_input.value()));
 
         self.command_input.clear_completions();
-        self.failed_subcommand = None;
+        self.failed_step_index = None;
     }
 
     pub fn history_prev(&mut self) {
@@ -202,11 +203,11 @@ impl RuraWidget {
             .with_value(self.history.previous(self.command_input.value()));
 
         self.command_input.clear_completions();
-        self.failed_subcommand = None;
+        self.failed_step_index = None;
     }
 
     pub fn format(&mut self) {
-        if let Ok(mut r) = Rura::new(
+        if let Ok(mut r) = RuraInput::new(
             self.command_input.value(),
             self.command_input.visual_cursor(),
         ) {
@@ -216,11 +217,11 @@ impl RuraWidget {
         }
     }
 
-    pub fn execute(&mut self, execute_type: ExecuteType) -> Result<RuraCommand> {
+    pub fn execute(&mut self, execute_type: ExecuteType) -> Result<Rura> {
         if self.command_input.value().is_empty() {
-            return Ok(RuraCommand::empty());
+            return Ok(Rura::empty());
         }
-        match Rura::new(
+        match RuraInput::new(
             self.command_input.value(),
             self.command_input.visual_cursor(),
         ) {
@@ -261,7 +262,7 @@ pub fn render_line(line: Vec<StyledGrapheme>, area: Rect, buf: &mut Buffer, y: u
 }
 
 fn to_line<'a>(
-    r: Rura,
+    r: RuraInput,
     highlight_until: Option<usize>,
     highlight_failed: Option<usize>,
     highlight_base: Option<usize>,
@@ -385,8 +386,8 @@ mod tests {
                 theme: Theme::from_config(&theme_config),
                 history: History::in_mem(),
                 highlight_reset_tx,
-                failed_subcommand: None,
-                diff_base_subcommand: None,
+                failed_step_index: None,
+                diff_base_index: None,
                 copied: None,
             }
         }

@@ -1,14 +1,14 @@
-use crate::rura::RuraCommand;
+use crate::rura::Rura;
 use crate::shell::builder::{CommandBuilder, UsrBinEnvCommandBuilder};
-use crate::shell::cmd_runner::{CmdResult, CmdRunner, ErrOutput, OkOutput};
 use crate::shell::exec::{Exec, SystemExec};
-use crate::shell::output::Output;
+use crate::shell::output::ExecOutput;
+use crate::shell::pipeline_runner::{PipelineRun, PipelineRunner, StepFailure, StepOutput};
 use log::{debug, info};
 use std::cell::RefCell;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-pub struct CachedCmdRunner {
+pub struct CachedPipelineRunner {
     exec: Box<dyn Exec>,
     builder: Box<dyn CommandBuilder>,
     stdin: Arc<[u8]>,
@@ -16,7 +16,7 @@ pub struct CachedCmdRunner {
     use_cache: bool,
 }
 
-impl CachedCmdRunner {
+impl CachedPipelineRunner {
     pub fn new(shell: &str, stdin: Arc<[u8]>, use_cache: bool) -> Self {
         Self {
             exec: Box::new(SystemExec),
@@ -30,24 +30,24 @@ impl CachedCmdRunner {
     }
 }
 
-impl CmdRunner for CachedCmdRunner {
-    fn run(&self, command: &RuraCommand) -> anyhow::Result<CmdResult> {
+impl PipelineRunner for CachedPipelineRunner {
+    fn run(&self, rura: &Rura) -> anyhow::Result<PipelineRun> {
         let mut cache = self.cache.borrow_mut();
 
-        info!("executing: '{command:?}'");
+        info!("executing: '{rura:?}'");
 
-        if command.is_empty() {
-            return Ok(CmdResult {
+        if rura.is_empty() {
+            return Ok(PipelineRun {
                 stdin: self.stdin.clone(),
-                ok_outputs: vec![],
-                error_output: None,
+                steps: vec![],
+                failure: None,
             });
         }
 
         // check how many subcommands are equal between command and cache
         // and truncate cache to only keep those subcommands
         for (i, (cached_command_str, _)) in cache.iter().enumerate() {
-            if let Some(command_str) = command.trimmed().get(i) {
+            if let Some(command_str) = rura.trimmed().get(i) {
                 if cached_command_str != command_str {
                     cache.truncate(i);
                     break;
@@ -55,19 +55,19 @@ impl CmdRunner for CachedCmdRunner {
             }
         }
 
-        let mut outputs: Vec<OkOutput> = vec![];
+        let mut steps: Vec<StepOutput> = vec![];
 
-        for (i, subcommand) in command.trimmed().iter().enumerate() {
-            if let Some((_, output)) = cache.get(i) {
-                outputs.push(OkOutput {
-                    bytes: output.clone(),
-                    command: subcommand.clone(),
+        for (i, step) in rura.trimmed().iter().enumerate() {
+            if let Some((_, bytes)) = cache.get(i) {
+                steps.push(StepOutput {
+                    bytes: bytes.clone(),
+                    command: step.clone(),
                     duration: None,
                 });
                 continue;
             }
 
-            let current_stdin = if let Some(cached_bytes) = outputs.last() {
+            let current_stdin = if let Some(cached_bytes) = steps.last() {
                 &cached_bytes.bytes
             } else {
                 &self.stdin
@@ -75,29 +75,29 @@ impl CmdRunner for CachedCmdRunner {
 
             let now_sub = SystemTime::now();
 
-            let cmd = self.builder.build(subcommand);
-            let output = self.exec.exec(cmd, current_stdin.clone())?;
+            let command = self.builder.build(step);
+            let exec_output = self.exec.exec(command, current_stdin.clone())?;
 
             let exec_duration = now_sub.elapsed()?;
 
-            match output {
-                Output::Ok(bytes) => {
+            match exec_output {
+                ExecOutput::Ok(bytes) => {
                     if self.use_cache {
-                        cache.push((subcommand.clone(), bytes.clone()));
+                        cache.push((step.clone(), bytes.clone()));
                     }
-                    outputs.push(OkOutput {
+                    steps.push(StepOutput {
                         bytes,
-                        command: subcommand.clone(),
+                        command: step.clone(),
                         duration: Some(exec_duration),
                     });
                 }
-                Output::Err(bytes, code) => {
+                ExecOutput::Err(bytes, code) => {
                     debug!("  failed - aborting further execution");
-                    return Ok(CmdResult {
+                    return Ok(PipelineRun {
                         stdin: self.stdin.clone(),
-                        ok_outputs: outputs,
-                        error_output: Some(ErrOutput {
-                            command: subcommand.clone(),
+                        steps,
+                        failure: Some(StepFailure {
+                            command: step.clone(),
                             bytes,
                             code,
                             duration: exec_duration,
@@ -111,10 +111,10 @@ impl CmdRunner for CachedCmdRunner {
         // "until cursor prev" action so the full command might be still called
         // with all subcommands
 
-        Ok(CmdResult {
+        Ok(PipelineRun {
             stdin: self.stdin.clone(),
-            ok_outputs: outputs,
-            error_output: None,
+            steps,
+            failure: None,
         })
     }
 
@@ -133,11 +133,11 @@ mod tests {
     use std::cell::RefCell;
     use std::rc::Rc;
 
-    use crate::shell::cmd_runner::CmdRunner;
     use crate::shell::exec::Exec;
+    use crate::shell::pipeline_runner::PipelineRunner;
 
-    fn cached_runner(exec: Box<dyn Exec>, stdin: Arc<[u8]>) -> CachedCmdRunner {
-        CachedCmdRunner {
+    fn cached_runner(exec: Box<dyn Exec>, stdin: Arc<[u8]>) -> CachedPipelineRunner {
+        CachedPipelineRunner {
             exec,
             builder: Box::new(TestBuilder {}),
             stdin,
@@ -166,11 +166,11 @@ mod tests {
 
         let result = runner.run(&vec![].into()).unwrap();
 
-        assert_eq!(result.ok_outputs(), vec![])
+        assert_eq!(result.step_bytes(), vec![])
     }
 
     #[test]
-    fn test_cmd_runner_calling_three_subcommands() {
+    fn test_runner_calling_three_subcommands() {
         let calls = Rc::new(RefCell::new(vec![]));
         let mock_exec = MockExec {
             calls: calls.clone(),
@@ -184,7 +184,7 @@ mod tests {
         assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
 
         assert_eq!(
-            as_strings(result.ok_outputs()),
+            as_strings(result.step_bytes()),
             vec!["cmd1-output", "cmd2-output", "cmd3-output"]
         );
 
@@ -210,7 +210,7 @@ mod tests {
     }
 
     #[test]
-    fn test_cmd_runner_shorter_command() {
+    fn test_runner_shorter_command() {
         let calls = Rc::new(RefCell::new(vec![]));
         let mock_exec = MockExec {
             calls: calls.clone(),
@@ -229,7 +229,7 @@ mod tests {
         assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
 
         // only cmd1 is in the output
-        assert_eq!(as_strings(result.ok_outputs()), vec!["cmd1-output",]);
+        assert_eq!(as_strings(result.step_bytes()), vec!["cmd1-output",]);
 
         // no calls since the command is cached
         assert_eq!(*calls.borrow(), vec![]);
@@ -246,7 +246,7 @@ mod tests {
     }
 
     #[test]
-    fn test_cmd_runner_extended_command() {
+    fn test_runner_extended_command() {
         let calls = Rc::new(RefCell::new(vec![]));
         let mock_exec = MockExec {
             calls: calls.clone(),
@@ -267,7 +267,7 @@ mod tests {
         assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
 
         assert_eq!(
-            as_strings(result.ok_outputs()),
+            as_strings(result.step_bytes()),
             vec!["cmd1-output", "cmd2-output", "cmd3-output", "cmd4-output",]
         );
 
@@ -293,7 +293,7 @@ mod tests {
     }
 
     #[test]
-    fn test_cmd_runner_modified_in_the_middle() {
+    fn test_runner_modified_in_the_middle() {
         let calls = Rc::new(RefCell::new(vec![]));
         let mock_exec = MockExec {
             calls: calls.clone(),
@@ -314,7 +314,7 @@ mod tests {
 
         // all outputs of the last called command
         assert_eq!(
-            as_strings(result.ok_outputs()),
+            as_strings(result.step_bytes()),
             vec!["cmd1-output", "cmd2mod-output",]
         );
 
@@ -335,7 +335,7 @@ mod tests {
     }
 
     #[test]
-    fn test_cmd_runner_modified_in_the_middle_and_extended() {
+    fn test_runner_modified_in_the_middle_and_extended() {
         let calls = Rc::new(RefCell::new(vec![]));
         let mock_exec = MockExec {
             calls: calls.clone(),
@@ -356,7 +356,7 @@ mod tests {
 
         // all outputs of the last called command
         assert_eq!(
-            as_strings(result.ok_outputs()),
+            as_strings(result.step_bytes()),
             vec!["cmd1-output", "cmd2mod-output", "cmd3-output"]
         );
 
@@ -382,7 +382,7 @@ mod tests {
     }
 
     #[test]
-    fn test_cmd_runner_errors() {
+    fn test_runner_errors() {
         let calls = Rc::new(RefCell::new(vec![]));
         let mock_exec = MockExec {
             calls: calls.clone(),
@@ -396,9 +396,9 @@ mod tests {
         assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
 
         // all outputs of the last called command - breaks on first error
-        assert_eq!(as_strings(result.ok_outputs()), vec!["cmd1-output",]);
+        assert_eq!(as_strings(result.step_bytes()), vec!["cmd1-output",]);
         assert_eq!(
-            result.err_output(),
+            result.failure_bytes(),
             Some((Arc::from("cmd2err-output".as_bytes()), Some(1))),
         );
 
@@ -420,7 +420,7 @@ mod tests {
     }
 
     #[test]
-    fn test_cmd_runner_errors_clear_cache() {
+    fn test_runner_errors_clear_cache() {
         let calls = Rc::new(RefCell::new(vec![]));
         let mock_exec = MockExec {
             calls: calls.clone(),
@@ -439,9 +439,9 @@ mod tests {
         assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
 
         // all outputs of the last called command - breaks on first error
-        assert_eq!(as_strings(result.ok_outputs()), vec!["cmd1-output",]);
+        assert_eq!(as_strings(result.step_bytes()), vec!["cmd1-output",]);
         assert_eq!(
-            result.err_output(),
+            result.failure_bytes(),
             Some((Arc::from("cmd2err-output".as_bytes()), Some(1))),
         );
 
@@ -469,11 +469,11 @@ mod tests_no_cache {
     use std::cell::RefCell;
     use std::rc::Rc;
 
-    use crate::shell::cmd_runner::CmdRunner;
     use crate::shell::exec::Exec;
+    use crate::shell::pipeline_runner::PipelineRunner;
 
-    fn runner(exec: Box<dyn Exec>, stdin: Arc<[u8]>) -> CachedCmdRunner {
-        CachedCmdRunner {
+    fn runner(exec: Box<dyn Exec>, stdin: Arc<[u8]>) -> CachedPipelineRunner {
+        CachedPipelineRunner {
             exec,
             builder: Box::new(TestBuilder {}),
             stdin,
@@ -498,11 +498,11 @@ mod tests_no_cache {
 
         let result = runner.run(&vec![].into()).unwrap();
 
-        assert_eq!(result.ok_outputs(), vec![])
+        assert_eq!(result.step_bytes(), vec![])
     }
 
     #[test]
-    fn test_cmd_runner_calling_three_subcommands() {
+    fn test_runner_calling_three_subcommands() {
         let calls = Rc::new(RefCell::new(vec![]));
         let mock_exec = MockExec {
             calls: calls.clone(),
@@ -516,7 +516,7 @@ mod tests_no_cache {
         assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
 
         assert_eq!(
-            as_strings(result.ok_outputs()),
+            as_strings(result.step_bytes()),
             vec!["cmd1-output", "cmd2-output", "cmd3-output"]
         );
 
@@ -534,7 +534,7 @@ mod tests_no_cache {
     }
 
     #[test]
-    fn test_cmd_runner_shorter_command() {
+    fn test_runner_shorter_command() {
         let calls = Rc::new(RefCell::new(vec![]));
         let mock_exec = MockExec {
             calls: calls.clone(),
@@ -553,7 +553,7 @@ mod tests_no_cache {
         assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
 
         // only cmd1 is in the output
-        assert_eq!(as_strings(result.ok_outputs()), vec!["cmd1-output",]);
+        assert_eq!(as_strings(result.step_bytes()), vec!["cmd1-output",]);
 
         assert_eq!(*calls.borrow(), vec![("cmd1".into(), "stdin".into()),]);
 
@@ -561,7 +561,7 @@ mod tests_no_cache {
     }
 
     #[test]
-    fn test_cmd_runner_extended_command() {
+    fn test_runner_extended_command() {
         let calls = Rc::new(RefCell::new(vec![]));
         let mock_exec = MockExec {
             calls: calls.clone(),
@@ -581,7 +581,7 @@ mod tests_no_cache {
         assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
 
         assert_eq!(
-            as_strings(result.ok_outputs()),
+            as_strings(result.step_bytes()),
             vec!["cmd1-output", "cmd2-output", "cmd3-output", "cmd4-output",]
         );
 
@@ -599,7 +599,7 @@ mod tests_no_cache {
     }
 
     #[test]
-    fn test_cmd_runner_modified_in_the_middle() {
+    fn test_runner_modified_in_the_middle() {
         let calls = Rc::new(RefCell::new(vec![]));
         let mock_exec = MockExec {
             calls: calls.clone(),
@@ -619,7 +619,7 @@ mod tests_no_cache {
 
         // all outputs of the last called command
         assert_eq!(
-            as_strings(result.ok_outputs()),
+            as_strings(result.step_bytes()),
             vec!["cmd1-output", "cmd2mod-output",]
         );
 
@@ -635,7 +635,7 @@ mod tests_no_cache {
     }
 
     #[test]
-    fn test_cmd_runner_modified_in_the_middle_and_extended() {
+    fn test_runner_modified_in_the_middle_and_extended() {
         let calls = Rc::new(RefCell::new(vec![]));
         let mock_exec = MockExec {
             calls: calls.clone(),
@@ -655,7 +655,7 @@ mod tests_no_cache {
 
         // all outputs of the last called command
         assert_eq!(
-            as_strings(result.ok_outputs()),
+            as_strings(result.step_bytes()),
             vec!["cmd1-output", "cmd2mod-output", "cmd3-output"]
         );
 
@@ -674,7 +674,7 @@ mod tests_no_cache {
     }
 
     #[test]
-    fn test_cmd_runner_errors() {
+    fn test_runner_errors() {
         let calls = Rc::new(RefCell::new(vec![]));
         let mock_exec = MockExec {
             calls: calls.clone(),
@@ -688,9 +688,9 @@ mod tests_no_cache {
         assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
 
         // all outputs of the last called command - breaks on first error
-        assert_eq!(as_strings(result.ok_outputs()), vec!["cmd1-output",]);
+        assert_eq!(as_strings(result.step_bytes()), vec!["cmd1-output",]);
         assert_eq!(
-            result.err_output(),
+            result.failure_bytes(),
             Some((Arc::from("cmd2err-output".as_bytes()), Some(1))),
         );
 
@@ -708,7 +708,7 @@ mod tests_no_cache {
     }
 
     #[test]
-    fn test_cmd_runner_errors_clear_cache() {
+    fn test_runner_errors_clear_cache() {
         let calls: Rc<RefCell<Vec<(String, String)>>> = Rc::new(RefCell::new(vec![]));
         let mock_exec = MockExec {
             calls: calls.clone(),
@@ -727,9 +727,9 @@ mod tests_no_cache {
         assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
 
         // all outputs of the last called command - breaks on first error
-        assert_eq!(as_strings(result.ok_outputs()), vec!["cmd1-output",]);
+        assert_eq!(as_strings(result.step_bytes()), vec!["cmd1-output",]);
         assert_eq!(
-            result.err_output(),
+            result.failure_bytes(),
             Some((Arc::from("cmd2err-output".as_bytes()), Some(1))),
         );
 

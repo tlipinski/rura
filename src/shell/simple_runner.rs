@@ -1,25 +1,25 @@
-use crate::rura::RuraCommand;
+use crate::rura::Rura;
 use crate::shell::builder::CommandBuilder;
-use crate::shell::cmd_runner::{CmdResult, CmdRunner, ErrOutput, OkOutput};
 use crate::shell::exec::Exec;
-use crate::shell::output::Output;
+use crate::shell::output::ExecOutput;
+use crate::shell::pipeline_runner::{PipelineRun, PipelineRunner, StepFailure, StepOutput};
 use log::info;
 use std::sync::Arc;
 use std::time::SystemTime;
 
 #[allow(dead_code)]
-pub struct SimpleCmdRunner {
+pub struct SimplePipelineRunner {
     exec: Box<dyn Exec>,
     builder: Box<dyn CommandBuilder>,
     stdin: Arc<[u8]>,
 }
 
-impl SimpleCmdRunner {
+impl SimplePipelineRunner {
     #[cfg(windows)]
     pub fn new(shell: &str, stdin: Arc<[u8]>) -> Self {
         use crate::shell::builder::PwshCommandBuilder;
         use crate::shell::exec::SystemExec;
-        SimpleCmdRunner {
+        SimplePipelineRunner {
             exec: Box::new(SystemExec),
             builder: Box::new(PwshCommandBuilder {
                 shell: shell.into(),
@@ -29,40 +29,40 @@ impl SimpleCmdRunner {
     }
 }
 
-impl CmdRunner for SimpleCmdRunner {
-    fn run(&self, command: &RuraCommand) -> anyhow::Result<CmdResult> {
-        info!("executing: '{command:?}'");
+impl PipelineRunner for SimplePipelineRunner {
+    fn run(&self, rura: &Rura) -> anyhow::Result<PipelineRun> {
+        info!("executing: '{rura:?}'");
 
-        if command.is_empty() {
-            return Ok(CmdResult {
+        if rura.is_empty() {
+            return Ok(PipelineRun {
                 stdin: self.stdin.clone(),
-                ok_outputs: vec![],
-                error_output: None,
+                steps: vec![],
+                failure: None,
             });
         }
 
         let now = SystemTime::now();
 
-        let cmd = self.builder.build(&command.to_string());
-        let output = self.exec.exec(cmd, self.stdin.clone())?;
+        let command = self.builder.build(&rura.to_string());
+        let exec_output = self.exec.exec(command, self.stdin.clone())?;
 
         let elapsed = now.elapsed()?;
 
-        match output {
-            Output::Ok(bytes) => Ok(CmdResult {
+        match exec_output {
+            ExecOutput::Ok(bytes) => Ok(PipelineRun {
                 stdin: self.stdin.clone(),
-                ok_outputs: vec![OkOutput {
+                steps: vec![StepOutput {
                     bytes,
-                    command: command.to_string(),
+                    command: rura.to_string(),
                     duration: Some(elapsed),
                 }],
-                error_output: None,
+                failure: None,
             }),
-            Output::Err(bytes, code) => Ok(CmdResult {
+            ExecOutput::Err(bytes, code) => Ok(PipelineRun {
                 stdin: self.stdin.clone(),
-                ok_outputs: vec![],
-                error_output: Some(ErrOutput {
-                    command: command.to_string(),
+                steps: vec![],
+                failure: Some(StepFailure {
+                    command: rura.to_string(),
                     bytes,
                     code,
                     duration: elapsed,
@@ -79,17 +79,17 @@ impl CmdRunner for SimpleCmdRunner {
 #[cfg(test)]
 mod tests {
     use crate::shell::builder::TestBuilder;
-    use crate::shell::cmd_runner::CmdRunner;
     use crate::shell::exec::Exec;
     use crate::shell::exec::MockExec;
-    use crate::shell::simple_runner::SimpleCmdRunner;
+    use crate::shell::pipeline_runner::PipelineRunner;
+    use crate::shell::simple_runner::SimplePipelineRunner;
     use itertools::Itertools;
     use std::cell::RefCell;
     use std::rc::Rc;
     use std::sync::Arc;
 
-    fn simple_runner(exec: Box<dyn Exec>, stdin: Arc<[u8]>) -> SimpleCmdRunner {
-        SimpleCmdRunner {
+    fn simple_runner(exec: Box<dyn Exec>, stdin: Arc<[u8]>) -> SimplePipelineRunner {
+        SimplePipelineRunner {
             exec,
             stdin,
             builder: Box::new(TestBuilder {}),
@@ -113,7 +113,7 @@ mod tests {
         let result = runner.run(&"echo hello".into()).unwrap();
 
         assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
-        assert_eq!(as_strings(result.ok_outputs()), vec!["echo hello-output"])
+        assert_eq!(as_strings(result.step_bytes()), vec!["echo hello-output"])
     }
 
     #[test]
@@ -127,6 +127,6 @@ mod tests {
         let result = runner.run(&vec![].into()).unwrap();
 
         assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
-        assert_eq!(as_strings(result.ok_outputs()), Vec::<String>::new())
+        assert_eq!(as_strings(result.step_bytes()), Vec::<String>::new())
     }
 }
