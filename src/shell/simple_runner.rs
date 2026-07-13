@@ -1,6 +1,6 @@
 use crate::rura::RuraCommand;
 use crate::shell::builder::CommandBuilder;
-use crate::shell::cmd_runner::{CmdResult, CmdRunner, OkOutput};
+use crate::shell::cmd_runner::{CmdResult, CmdRunner, ErrOutput, OkOutput};
 use crate::shell::exec::Exec;
 use crate::shell::output::Output;
 use log::info;
@@ -61,7 +61,12 @@ impl CmdRunner for SimpleCmdRunner {
             Output::Err(bytes, code) => Ok(CmdResult {
                 stdin: self.stdin.clone(),
                 ok_outputs: vec![],
-                error_output: Some((bytes, code)),
+                error_output: Some(ErrOutput {
+                    command: command.to_string(),
+                    bytes,
+                    code,
+                    duration: elapsed,
+                }),
             }),
         }
     }

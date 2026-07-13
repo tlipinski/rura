@@ -199,11 +199,11 @@ impl OutputWidget {
             self.cmd_result.ok_outputs().len()
         );
 
-        if let Some((bytes, code)) = &self.cmd_result.error_output {
-            let str = String::from_utf8_lossy(&bytes);
+        if let Some(err_output) = &self.cmd_result.error_output {
+            let str = String::from_utf8_lossy(&err_output.bytes);
             let lines = str.lines().map(|a| a.into()).collect_vec();
 
-            self.error_output_opt = Some((lines, *code));
+            self.error_output_opt = Some((lines, err_output.code));
         } else {
             if let Some(bytes) = &self.cmd_result.ok_outputs().last() {
                 let str = String::from_utf8_lossy(&bytes);

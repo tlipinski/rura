@@ -33,6 +33,14 @@ pub struct OkOutput {
     pub(crate) duration: Option<Duration>,
 }
 
+#[derive(Clone)]
+pub struct ErrOutput {
+    pub(crate) command: String,
+    pub(crate) bytes: Arc<[u8]>,
+    pub(crate) code: Option<i32>,
+    pub(crate) duration: Duration,
+}
+
 impl Debug for OkOutput {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -46,20 +54,35 @@ impl Debug for OkOutput {
     }
 }
 
+impl Debug for ErrOutput {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{{ command: \"{}\", duration: {:?}, size: {} ({}), error_code: {:?} }}",
+            self.command,
+            self.duration,
+            self.bytes.len(),
+            self.bytes.len().format_size(humansize::BINARY),
+            self.code
+        )
+    }
+}
+
 pub struct CmdResult {
     pub(crate) stdin: Arc<[u8]>,
     pub(crate) ok_outputs: Vec<OkOutput>,
-    pub(crate) error_output: Option<(Arc<[u8]>, Option<i32>)>,
+    pub(crate) error_output: Option<ErrOutput>,
 }
 
 impl Debug for CmdResult {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "CmdResult {{ stdin: {} ({}), ok_outputs: {:?}, duration: {:?} }}",
+            "CmdResult {{ stdin: {} ({}), ok_outputs: {:?}, error_output: {:?}, duration: {:?} }}",
             self.stdin.len(),
             self.stdin.len().format_size(humansize::DECIMAL),
             self.ok_outputs,
+            self.error_output,
             self.total_duration()
         )
     }
@@ -78,7 +101,12 @@ impl CmdResult {
         CmdResult {
             stdin: Arc::from("".as_bytes()),
             ok_outputs: vec![],
-            error_output: Some((Arc::from(err.as_bytes()), code)),
+            error_output: Some(ErrOutput {
+                command: "".into(),
+                bytes: Arc::from(err.as_bytes()),
+                code,
+                duration: Duration::from_millis(1),
+            }),
         }
     }
 
@@ -86,7 +114,12 @@ impl CmdResult {
         CmdResult {
             stdin: Arc::from("".as_bytes()),
             ok_outputs: vec![],
-            error_output: Some((Arc::from(err), code)),
+            error_output: Some(ErrOutput {
+                command: "".into(),
+                bytes: Arc::from(err),
+                code,
+                duration: Duration::from_millis(1),
+            }),
         }
     }
 
@@ -106,6 +139,12 @@ impl CmdResult {
             .iter()
             .map(|a| a.bytes.clone())
             .collect_vec()
+    }
+
+    pub fn err_output(&self) -> Option<(Arc<[u8]>, Option<i32>)> {
+        self.error_output
+            .as_ref()
+            .map(|o| (o.bytes.clone(), o.code.clone()))
     }
 
     pub fn failed_subcommand(&self) -> Option<usize> {

@@ -1,6 +1,6 @@
 use crate::rura::RuraCommand;
 use crate::shell::builder::{CommandBuilder, UsrBinEnvCommandBuilder};
-use crate::shell::cmd_runner::{CmdResult, CmdRunner, OkOutput};
+use crate::shell::cmd_runner::{CmdResult, CmdRunner, ErrOutput, OkOutput};
 use crate::shell::exec::{Exec, SystemExec};
 use crate::shell::output::Output;
 use log::{debug, info};
@@ -96,7 +96,12 @@ impl CmdRunner for CachedCmdRunner {
                     return Ok(CmdResult {
                         stdin: self.stdin.clone(),
                         ok_outputs: outputs,
-                        error_output: Some((bytes, code)),
+                        error_output: Some(ErrOutput {
+                            command: subcommand.clone(),
+                            bytes,
+                            code,
+                            duration: exec_duration,
+                        }),
                     });
                 }
             }
@@ -393,7 +398,7 @@ mod tests {
         // all outputs of the last called command - breaks on first error
         assert_eq!(as_strings(result.ok_outputs()), vec!["cmd1-output",]);
         assert_eq!(
-            result.error_output,
+            result.err_output(),
             Some((Arc::from("cmd2err-output".as_bytes()), Some(1))),
         );
 
@@ -436,7 +441,7 @@ mod tests {
         // all outputs of the last called command - breaks on first error
         assert_eq!(as_strings(result.ok_outputs()), vec!["cmd1-output",]);
         assert_eq!(
-            result.error_output,
+            result.err_output(),
             Some((Arc::from("cmd2err-output".as_bytes()), Some(1))),
         );
 
@@ -685,7 +690,7 @@ mod tests_no_cache {
         // all outputs of the last called command - breaks on first error
         assert_eq!(as_strings(result.ok_outputs()), vec!["cmd1-output",]);
         assert_eq!(
-            result.error_output,
+            result.err_output(),
             Some((Arc::from("cmd2err-output".as_bytes()), Some(1))),
         );
 
@@ -724,7 +729,7 @@ mod tests_no_cache {
         // all outputs of the last called command - breaks on first error
         assert_eq!(as_strings(result.ok_outputs()), vec!["cmd1-output",]);
         assert_eq!(
-            result.error_output,
+            result.err_output(),
             Some((Arc::from("cmd2err-output".as_bytes()), Some(1))),
         );
 
