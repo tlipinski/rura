@@ -378,7 +378,6 @@ pub enum ErrorPanePlacement {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::shell::output::Output;
     use insta::assert_snapshot;
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
@@ -400,11 +399,12 @@ mod tests {
         }
     }
 
-    fn result(output: Output) -> CmdResult {
-        match output {
-            Output::Ok(bytes) => CmdResult::from_bytes(bytes),
-            Output::Err(bytes, code) => CmdResult::error_bytes(bytes, code),
-        }
+    fn result_ok(s: &str) -> CmdResult {
+        CmdResult::from_bytes(Arc::from(s.as_bytes()))
+    }
+
+    fn result_err(s: &str) -> CmdResult {
+        CmdResult::error_bytes(Arc::from(s.as_bytes()), Some(1))
     }
 
     #[test]
@@ -414,8 +414,8 @@ mod tests {
         let mut widget = OutputWidget::default();
         widget.error_pane_placement = ErrorPanePlacement::Top;
 
-        widget.handle_command_result(result(Output::ok_str("out1\nout2\nout3")), false);
-        widget.handle_command_result(result(Output::err_str("errors1\nerrors2\nerrors3")), false);
+        widget.handle_command_result(result_ok("out1\nout2\nout3"), false);
+        widget.handle_command_result(result_err("errors1\nerrors2\nerrors3"), false);
 
         terminal
             .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
@@ -431,8 +431,8 @@ mod tests {
         let mut widget = OutputWidget::default();
         widget.error_pane_placement = ErrorPanePlacement::Bottom;
 
-        widget.handle_command_result(result(Output::ok_str("out1\nout2\nout3")), false);
-        widget.handle_command_result(result(Output::err_str("errors1\nerrors2\nerrors3")), false);
+        widget.handle_command_result(result_ok("out1\nout2\nout3"), false);
+        widget.handle_command_result(result_err("errors1\nerrors2\nerrors3"), false);
 
         terminal
             .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))

@@ -1206,7 +1206,6 @@ enum InputMode {
 mod tests {
     use super::*;
     use crate::config::{KeyBindingsConfig, ThemeConfig};
-    use crate::shell::output::Output;
     use crossterm::event::Event::Key;
     use crossterm::event::{KeyEvent, KeyEventKind, KeyEventState};
     use insta::assert_snapshot;
@@ -1283,6 +1282,14 @@ mod tests {
                 in_progress: None,
             }
         }
+    }
+
+    fn cmd_res_err(s: &str) -> CmdResult {
+        CmdResult::error_bytes(Arc::from(s.as_bytes()), Some(1))
+    }
+
+    fn cmd_res_ok(s: &str) -> CmdResult {
+        CmdResult::from_bytes(Arc::from(s.as_bytes()))
     }
 
     #[test]
@@ -1400,23 +1407,12 @@ mod tests {
         let mut app = App::default();
         app.input_mode = InputMode::LiveFull;
 
-        let cmd_res = |output: Output| match output {
-            Output::Ok(bytes) => CmdResult::from_bytes(bytes),
-            Output::Err(bytes, code) => CmdResult::error_bytes(bytes, code),
-        };
-
-        app.handle_action(CommandCompleted("g".into(), cmd_res(Output::err_str(""))));
-        app.handle_action(CommandCompleted("gr".into(), cmd_res(Output::err_str(""))));
-        app.handle_action(CommandCompleted("gre".into(), cmd_res(Output::err_str(""))));
-        app.handle_action(CommandCompleted("grep".into(), cmd_res(Output::ok_str(""))));
-        app.handle_action(CommandCompleted(
-            "grep 'abc'".into(),
-            cmd_res(Output::ok_str("")),
-        ));
-        app.handle_action(CommandCompleted(
-            "gp 'abc'".into(),
-            cmd_res(Output::err_str("")),
-        ));
+        app.handle_action(CommandCompleted("g".into(), cmd_res_err("")));
+        app.handle_action(CommandCompleted("gr".into(), cmd_res_err("")));
+        app.handle_action(CommandCompleted("gre".into(), cmd_res_err("")));
+        app.handle_action(CommandCompleted("grep".into(), cmd_res_ok("")));
+        app.handle_action(CommandCompleted("grep 'abc'".into(), cmd_res_ok("")));
+        app.handle_action(CommandCompleted("gp 'abc'".into(), cmd_res_err("")));
 
         assert_eq!(
             *app.rura_widget.history.history(),
@@ -1428,13 +1424,8 @@ mod tests {
     fn saving_to_history_all_outputs_in_normal_mode() {
         let mut app = App::default();
 
-        let cmd_res = |output: Output| match output {
-            Output::Ok(bytes) => CmdResult::from_bytes(bytes),
-            Output::Err(bytes, code) => CmdResult::error_bytes(bytes, code),
-        };
-
-        app.handle_action(CommandCompleted("g".into(), cmd_res(Output::err_str(""))));
-        app.handle_action(CommandCompleted("grep".into(), cmd_res(Output::ok_str(""))));
+        app.handle_action(CommandCompleted("g".into(), cmd_res_err("")));
+        app.handle_action(CommandCompleted("grep".into(), cmd_res_ok("")));
 
         assert_eq!(
             *app.rura_widget.history.history(),
