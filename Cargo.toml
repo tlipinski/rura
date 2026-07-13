@@ -7,8 +7,8 @@ description = "Interactive TUI for building shell pipelines with per-stage inspe
 repository = "https://github.com/tlipinski/rura"
 homepage = "https://github.com/tlipinski/rura"
 authors = ["Tomasz Lipiński"]
-categories = ["command-line-utilities", "development-tools"]
-keywords = ["tui", "terminal", "shell", "pipeline", "interactive"]
+categories = ["command-line-utilities"]
+keywords = ["tui", "shell", "pipeline", "cli", "diff"]
 
 [package.metadata.generate-rpm]
 assets = [
