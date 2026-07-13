@@ -242,7 +242,7 @@ impl App {
                 self.rura_widget.failed_subcommand = result.failed_subcommand();
 
                 if result.all_ok() {
-                    if let Some(bytes) = result.ok_outputs.last() {
+                    if let Some(bytes) = result.ok_outputs().last() {
                         self.success_output_bytes = bytes.clone();
                     }
                 }
@@ -276,11 +276,7 @@ impl App {
                 self.in_progress = None;
             }
             Failure(err) => {
-                let result = CmdResult {
-                    stdin: Arc::from("".as_bytes()),
-                    ok_outputs: vec![],
-                    error_output: Some((Arc::from(err.as_bytes()), None)),
-                };
+                let result = CmdResult::error(err, None);
                 self.output_widget.handle_command_result(result, false);
             }
             StdinCompleted => {
@@ -1405,16 +1401,8 @@ mod tests {
         app.input_mode = InputMode::LiveFull;
 
         let cmd_res = |output: Output| match output {
-            Output::Ok(bytes) => CmdResult {
-                stdin: Arc::from("".as_bytes()),
-                ok_outputs: vec![bytes],
-                error_output: None,
-            },
-            Output::Err(bytes, code) => CmdResult {
-                stdin: Arc::from("".as_bytes()),
-                ok_outputs: vec![],
-                error_output: Some((Arc::from(bytes), code).into()),
-            },
+            Output::Ok(bytes) => CmdResult::from_bytes(bytes),
+            Output::Err(bytes, code) => CmdResult::error_bytes(bytes, code),
         };
 
         app.handle_action(CommandCompleted("g".into(), cmd_res(Output::err_str(""))));
@@ -1441,16 +1429,8 @@ mod tests {
         let mut app = App::default();
 
         let cmd_res = |output: Output| match output {
-            Output::Ok(bytes) => CmdResult {
-                stdin: Arc::from("".as_bytes()),
-                ok_outputs: vec![bytes],
-                error_output: None,
-            },
-            Output::Err(bytes, code) => CmdResult {
-                stdin: Arc::from("".as_bytes()),
-                ok_outputs: vec![],
-                error_output: Some((Arc::from(bytes), code).into()),
-            },
+            Output::Ok(bytes) => CmdResult::from_bytes(bytes),
+            Output::Err(bytes, code) => CmdResult::error_bytes(bytes, code),
         };
 
         app.handle_action(CommandCompleted("g".into(), cmd_res(Output::err_str(""))));

@@ -3,7 +3,7 @@ use crate::content_widget::{ContentLine, ContentWidget, Position};
 use crate::shell::cmd_runner::CmdResult;
 use crate::theme::Theme;
 use itertools::Itertools;
-use log::debug;
+use log::{debug, info};
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Direction, Layout, Rect, Size};
 use ratatui::prelude::Color::Red;
@@ -12,7 +12,6 @@ use ratatui::widgets::{Block, Paragraph};
 use similar::TextDiff;
 use similar::{Algorithm, ChangeTag};
 use std::cell::Cell;
-use std::sync::Arc;
 use std::time::Duration;
 
 pub struct OutputWidget {
@@ -77,11 +76,7 @@ impl OutputWidget {
             error_output_opt: None,
             theme: Theme::from_config(theme_config),
             error_pane_placement,
-            cmd_result: CmdResult {
-                stdin: Arc::from("".as_bytes()),
-                ok_outputs: vec![],
-                error_output: None,
-            },
+            cmd_result: CmdResult::new(),
             content_mode: ContentMode::Normal,
             diff_base: None,
             diff_ready: false,
@@ -107,10 +102,11 @@ impl OutputWidget {
         if self.diff_ready {
             return;
         }
-        let ok_bytes = self.cmd_result.ok_outputs.clone();
+        let ok_bytes = self.cmd_result.ok_outputs().clone();
         let last_bytes = ok_bytes.last().unwrap_or(&self.cmd_result.stdin);
+        let vec = self.cmd_result.ok_outputs();
         let stdin_bytes = if let Some(base) = self.diff_base {
-            if let Some(b) = self.cmd_result.ok_outputs.get(base) {
+            if let Some(b) = vec.get(base) {
                 b.as_ref()
             } else {
                 return;
@@ -195,11 +191,12 @@ impl OutputWidget {
     }
 
     pub fn handle_command_result(&mut self, result: CmdResult, follow: bool) {
+        info!("Command result: {:?}", result);
         self.cmd_result = result;
 
         debug!(
             "handle_command_result: {:?}",
-            self.cmd_result.ok_outputs.len()
+            self.cmd_result.ok_outputs().len()
         );
 
         if let Some((bytes, code)) = &self.cmd_result.error_output {
@@ -208,7 +205,7 @@ impl OutputWidget {
 
             self.error_output_opt = Some((lines, *code));
         } else {
-            if let Some(bytes) = &self.cmd_result.ok_outputs.last() {
+            if let Some(bytes) = &self.cmd_result.ok_outputs().last() {
                 let str = String::from_utf8_lossy(&bytes);
                 let lines = str.lines().map(|a| a.into()).collect_vec();
                 self.content.with_content(lines);
@@ -405,16 +402,8 @@ mod tests {
 
     fn result(output: Output) -> CmdResult {
         match output {
-            Output::Ok(bytes) => CmdResult {
-                stdin: Arc::from("".as_bytes()),
-                ok_outputs: vec![bytes],
-                error_output: None,
-            },
-            Output::Err(bytes, code) => CmdResult {
-                stdin: Arc::from("".as_bytes()),
-                ok_outputs: vec![],
-                error_output: Some((Arc::from(bytes), code).into()),
-            },
+            Output::Ok(bytes) => CmdResult::from_bytes(bytes),
+            Output::Err(bytes, code) => CmdResult::error_bytes(bytes, code),
         }
     }
 
@@ -458,11 +447,7 @@ mod tests {
         let stdin = Arc::from("line1\nline2\nline3".as_bytes());
         let output = "line1\nline2 modified\nline3";
         widget.handle_command_result(
-            CmdResult {
-                stdin,
-                ok_outputs: vec![Arc::from(output.as_bytes())],
-                error_output: None,
-            },
+            CmdResult::from_bytes_with_stdin(Arc::from(output.as_bytes()), stdin),
             false,
         );
 

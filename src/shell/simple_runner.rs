@@ -1,9 +1,9 @@
 use crate::rura::RuraCommand;
 use crate::shell::builder::CommandBuilder;
-use crate::shell::cmd_runner::{CmdResult, CmdRunner};
+use crate::shell::cmd_runner::{CmdResult, CmdRunner, OkOutput};
 use crate::shell::exec::Exec;
 use crate::shell::output::Output;
-use log::{debug, info};
+use log::info;
 use std::sync::Arc;
 use std::time::SystemTime;
 
@@ -47,12 +47,15 @@ impl CmdRunner for SimpleCmdRunner {
         let output = self.exec.exec(cmd, self.stdin.clone())?;
 
         let elapsed = now.elapsed()?;
-        debug!("command exec took {elapsed:?}");
 
         match output {
             Output::Ok(bytes) => Ok(CmdResult {
                 stdin: self.stdin.clone(),
-                ok_outputs: vec![bytes],
+                ok_outputs: vec![OkOutput {
+                    bytes,
+                    command: command.to_string(),
+                    duration: Some(elapsed),
+                }],
                 error_output: None,
             }),
             Output::Err(bytes, code) => Ok(CmdResult {
@@ -105,7 +108,7 @@ mod tests {
         let result = runner.run(&"echo hello".into()).unwrap();
 
         assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
-        assert_eq!(as_strings(result.ok_outputs), vec!["echo hello-output"])
+        assert_eq!(as_strings(result.ok_outputs()), vec!["echo hello-output"])
     }
 
     #[test]
@@ -119,6 +122,6 @@ mod tests {
         let result = runner.run(&vec![].into()).unwrap();
 
         assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
-        assert_eq!(as_strings(result.ok_outputs), Vec::<String>::new())
+        assert_eq!(as_strings(result.ok_outputs()), Vec::<String>::new())
     }
 }
