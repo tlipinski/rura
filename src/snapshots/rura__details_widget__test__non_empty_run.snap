@@ -1,0 +1,14 @@
+---
+source: src/details_widget.rs
+expression: terminal.backend()
+---
+"Command                      Time       Size      "
+"<stdin>                      -          5 B       "
+"cmd1                         -          10 B      "
+"cmd2                         1000 ms    10 B      "
+"cmd3                         100 ms     1 B       "
+"failed                       10 ms      6 B       "
+"                                                  "
+"                                                  "
+"                                                  "
+"                                                  "

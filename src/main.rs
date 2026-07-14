@@ -5,6 +5,7 @@ mod completion;
 mod config;
 mod content_widget;
 mod debouncer;
+mod details_widget;
 mod file_saver;
 mod help_widget;
 mod history;

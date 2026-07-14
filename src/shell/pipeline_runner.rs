@@ -27,6 +27,7 @@ impl PipelineRunners {
     }
 }
 
+#[derive(Clone)]
 pub struct StepOutput {
     pub command: String,
     pub bytes: Arc<[u8]>,
@@ -68,6 +69,7 @@ impl Debug for StepFailure {
     }
 }
 
+#[derive(Clone)]
 pub struct PipelineRun {
     pub stdin: Arc<[u8]>,
     pub steps: Vec<StepOutput>,

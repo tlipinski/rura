@@ -1,0 +1,14 @@
+---
+source: src/details_widget.rs
+expression: terminal.backend()
+---
+"Command                      Time       Size      "
+"<stdin>                      -          0 B       "
+"                                                  "
+"                                                  "
+"                                                  "
+"                                                  "
+"                                                  "
+"                                                  "
+"                                                  "
+"                                                  "

@@ -130,6 +130,7 @@ pub struct KeyBindingsConfig {
     pub toggle_line_nums: Vec<String>,
     pub toggle_stdin_reading: Vec<String>,
     pub toggle_follow: Vec<String>,
+    pub toggle_details: Vec<String>,
 }
 
 impl Default for KeyBindingsConfig {
@@ -182,6 +183,7 @@ impl Default for KeyBindingsConfig {
             toggle_line_nums: vec!["alt+n".into()],
             toggle_stdin_reading: vec!["f5".into()],
             toggle_follow: vec!["f6".into()],
+            toggle_details: vec!["f9".into()],
         }
     }
 }

@@ -42,6 +42,7 @@ pub enum UiCmd {
     ToggleLineNums,
     ToggleStdinReading,
     ToggleFollow,
+    ToggleDetails,
 }
 
 pub struct KeyBindings {
@@ -127,6 +128,7 @@ impl KeyBindings {
             parse_bindings(&config.toggle_stdin_reading),
         );
         bindings.insert(UiCmd::ToggleFollow, parse_bindings(&config.toggle_follow));
+        bindings.insert(UiCmd::ToggleDetails, parse_bindings(&config.toggle_details));
 
         KeyBindings { bindings }
     }

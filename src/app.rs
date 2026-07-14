@@ -6,6 +6,7 @@ use crate::args::Args;
 use crate::completable_input::CompletableInput;
 use crate::config::{Config, history_path, search_history_path};
 use crate::debouncer::debouncer_task;
+use crate::details_widget::DetailsWidget;
 use crate::file_saver::{FileSaver, FileSavers};
 use crate::help_widget::HelpWidget;
 use crate::history::History;
@@ -54,6 +55,7 @@ pub struct App {
     save_output_widget: SaveToFileWidget,
     save_command_widget: SaveToFileWidget,
     presets_widget: PresetsWidget,
+    details_widget: DetailsWidget,
     action_rx: Receiver<Action>,
     pipeline_tx: Sender<PipelineRunnerAction>,
     stdin_controller_tx: Sender<StdinControllerAction>,
@@ -69,6 +71,7 @@ pub struct App {
     success_output_bytes: Arc<[u8]>,
     stdin_state: StdinState,
     follow: bool,
+    show_details: bool,
     exit: bool,
 }
 
@@ -188,6 +191,7 @@ impl App {
                 Theme::from_config(&config.theme),
             ),
             presets_widget: PresetsWidget::new(Theme::from_config(&config.theme)),
+            details_widget: DetailsWidget::default(),
             action_rx,
             pipeline_tx,
             debouncer_tx,
@@ -208,6 +212,7 @@ impl App {
                 StdinState::Reading
             },
             follow: true,
+            show_details: false,
             exit: false,
         }
     }
@@ -226,7 +231,7 @@ impl App {
     fn handle_action(&mut self, action: Action) {
         match action {
             UserInput(event) => self.handle_event(&event),
-            PipelineCompleted(command, result) => {
+            PipelineCompleted(command, pipeline_run) => {
                 debug!("Command completed: {:?}", command);
                 if !command.is_empty() {
                     if matches!(self.input_mode, InputMode::Normal) {
@@ -234,16 +239,16 @@ impl App {
                         self.rura_widget.history.push(&command.to_string())
                     } else {
                         // in live mode only save commands that were successfully executed
-                        if result.succeeded() {
+                        if pipeline_run.succeeded() {
                             self.rura_widget.history.push(&command.to_string())
                         }
                     }
                 }
 
-                self.rura_widget.failed_step_index = result.failed_step_index();
+                self.rura_widget.failed_step_index = pipeline_run.failed_step_index();
 
-                if result.succeeded() {
-                    if let Some(bytes) = result.step_bytes().last() {
+                if pipeline_run.succeeded() {
+                    if let Some(bytes) = pipeline_run.step_bytes().last() {
                         self.success_output_bytes = bytes.clone();
                     }
                 }
@@ -255,7 +260,9 @@ impl App {
                 };
 
                 self.output_widget
-                    .handle_pipeline_run(result, self.follow && can_follow);
+                    .handle_pipeline_run(pipeline_run.clone(), self.follow && can_follow);
+
+                self.details_widget.pipeline_run = pipeline_run;
             }
             ResetHighlight => self.rura_widget.highlight_until = None,
             Debounced => {
@@ -809,6 +816,9 @@ impl App {
                     UiCmd::ToggleFollow => {
                         self.follow = !self.follow;
                     }
+                    UiCmd::ToggleDetails => {
+                        self.show_details = !self.show_details;
+                    }
                 },
                 _ => {
                     if self.rura_widget.handle_event(event) {
@@ -854,38 +864,45 @@ impl App {
 
         let inner_area = area.inner(margin);
 
-        let (command_input_area, search_input_area, output_area, status_area) = {
+        let (command_input_area, search_input_area, output_area, status_area, details_area) = {
             let search_height = if matches!(self.active_mode, ActiveMode::Search) {
-                self.search_widget.height(inner_area.width) + 2
+                self.search_widget.height(inner_area.width) + 3
+            } else {
+                0
+            };
+            let details_height = if self.show_details {
+                self.details_widget.height() + 2
             } else {
                 0
             };
             match self.command_line_placement {
                 CommandLinePlacement::Top => {
-                    let layout = Layout::default()
+                    let [command, search, output, details, status] = Layout::default()
                         .direction(Direction::Vertical)
                         .constraints(vec![
-                            Constraint::Length(self.rura_widget.height(inner_area.width) + 2), // command
-                            Constraint::Length(search_height), // search
-                            Constraint::Fill(1),               // output
-                            Constraint::Length(1),             // status
+                            Constraint::Length(self.rura_widget.height(inner_area.width) + 2),
+                            Constraint::Length(search_height),
+                            Constraint::Fill(1),
+                            Constraint::Length(details_height),
+                            Constraint::Length(1),
                         ])
-                        .split(area);
+                        .areas(area);
 
-                    (layout[0], layout[1], layout[2], layout[3])
+                    (command, search, output, status, details)
                 }
                 CommandLinePlacement::Bottom => {
-                    let layout = Layout::default()
+                    let [output, details, search, command, status] = Layout::default()
                         .direction(Direction::Vertical)
                         .constraints(vec![
-                            Constraint::Fill(1),                                               // output
-                            Constraint::Length(search_height), // search
-                            Constraint::Length(self.rura_widget.height(inner_area.width) + 2), // command
-                            Constraint::Length(1), // status
+                            Constraint::Fill(1),
+                            Constraint::Length(details_height),
+                            Constraint::Length(search_height),
+                            Constraint::Length(self.rura_widget.height(inner_area.width) + 2),
+                            Constraint::Length(1),
                         ])
-                        .split(area);
+                        .areas(area);
 
-                    (layout[2], layout[1], layout[0], layout[3])
+                    (command, search, output, status, details)
                 }
             }
         };
@@ -929,6 +946,9 @@ impl App {
         }
 
         frame.render_widget(&self.output_widget, output_area);
+
+        frame.render_widget(Block::bordered().title(" Details "), details_area);
+        frame.render_widget(&self.details_widget, details_area.inner(margin));
 
         let [
             _,
@@ -1264,6 +1284,7 @@ mod tests {
                     total: 0,
                     history: History::in_mem(),
                 },
+                details_widget: DetailsWidget::default(),
                 action_rx,
                 pipeline_tx: command_tx,
                 debouncer_tx,
@@ -1280,6 +1301,7 @@ mod tests {
                 success_output_bytes: Arc::from([]),
                 stdin_state: StdinState::Completed,
                 follow: true,
+                show_details: false,
                 in_progress: None,
             }
         }
@@ -1473,6 +1495,35 @@ mod tests {
     // todo
     // add test checking that whatever was piped in through stdin
     // goes in exactly the same form out - jq input_line_number
+
+    #[test]
+    fn show_details() {
+        let mut app = App::default();
+
+        app.show_details = true;
+
+        let mut terminal = TestTerminal::default().0;
+        terminal
+            .draw(|frame| app.render(frame, frame.area()))
+            .unwrap();
+
+        assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn show_details_cmd_top() {
+        let mut app = App::default();
+
+        app.command_line_placement = CommandLinePlacement::Top;
+        app.show_details = true;
+
+        let mut terminal = TestTerminal::default().0;
+        terminal
+            .draw(|frame| app.render(frame, frame.area()))
+            .unwrap();
+
+        assert_snapshot!(terminal.backend());
+    }
 
     fn input_text(app: &mut App, text: &str) {
         for c in text.chars() {
