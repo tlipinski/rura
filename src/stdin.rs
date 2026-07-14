@@ -165,6 +165,7 @@ fn stdin_reader_task(
             }
         }
     } else {
+        reader_tx.send(ReaderMsg::Completed)?;
         Ok(())
     }
 }
