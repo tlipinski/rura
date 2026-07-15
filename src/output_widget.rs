@@ -62,6 +62,7 @@ impl OutputWidget {
                 theme: Theme::from_config(theme_config),
                 output_content_area_size: Cell::new(Size::default()),
                 line_nums: true,
+                main_output_width: 0,
             },
             diff: ContentWidget {
                 offset: Position::default(),
@@ -72,6 +73,7 @@ impl OutputWidget {
                 theme: Theme::from_config(theme_config),
                 output_content_area_size: Cell::new(Size::default()),
                 line_nums: true,
+                main_output_width: 0,
             },
             error_output_opt: None,
             theme: Theme::from_config(theme_config),

@@ -35,6 +35,7 @@ pub struct ContentWidget<T: ContentLine> {
     pub highlight_positions: Vec<(usize, Range<usize>)>,
     pub highlight_index: usize,
     pub line_nums: bool,
+    pub main_output_width: usize,
 }
 
 impl<T: ContentLine> ContentWidget<T> {
@@ -48,6 +49,7 @@ impl<T: ContentLine> ContentWidget<T> {
             highlight_positions: vec![],
             highlight_index: 0,
             line_nums: true,
+            main_output_width: 0,
         }
     }
 
@@ -68,6 +70,7 @@ impl<T: ContentLine> ContentWidget<T> {
 
         self.highlight_index = 0;
         self.highlight_positions = vec![];
+        self.main_output_width = self.main_output_width();
     }
 
     pub fn highlight_info(&self) -> (usize, usize) {
@@ -217,15 +220,15 @@ impl<T: ContentLine> ContentWidget<T> {
     }
 
     pub fn scroll_right(&mut self) {
-        if self.main_output_width() > self.viewport().cols.len() {
-            let max_offset = self.main_output_width().saturating_sub(1); // keep at least one line visible
+        if self.main_output_width > self.viewport().cols.len() {
+            let max_offset = self.main_output_width.saturating_sub(1); // keep at least one line visible
             self.offset.col = self.offset.col.saturating_add(1).min(max_offset);
         }
     }
 
     pub fn scroll_page_right(&mut self) {
-        if self.main_output_width() > self.viewport().cols.len() {
-            let max_offset = self.main_output_width().saturating_sub(1); // keep at least one line visible
+        if self.main_output_width > self.viewport().cols.len() {
+            let max_offset = self.main_output_width.saturating_sub(1); // keep at least one line visible
             let page_size = self.output_content_area_size.get().width as usize / 2;
             self.offset.col = self.offset.col.saturating_add(page_size).min(max_offset);
         }
@@ -273,7 +276,7 @@ impl<T: ContentLine> ContentWidget<T> {
 
         let [main_output_area, h_scroll_area] = {
             let [_, content, _] = lines_content_scroll_layout.areas(area);
-            if !self.wrap && self.main_output_width() > content.width as usize {
+            if !self.wrap && self.main_output_width > content.width as usize {
                 Layout::default()
                     .direction(Direction::Vertical)
                     .constraints(vec![Constraint::Fill(1), Constraint::Length(1)])
@@ -429,7 +432,7 @@ impl<T: ContentLine> Widget for &ContentWidget<T> {
         scroll_bar.render(vscrollbar_area, buf, &mut state);
 
         let scroll_bar_h = Scrollbar::new(ScrollbarOrientation::HorizontalTop);
-        let mut state_h = ScrollbarState::new(self.main_output_width());
+        let mut state_h = ScrollbarState::new(self.main_output_width);
         state_h = state_h.position(self.offset.col.into());
         scroll_bar_h.render(hscrollbar_area, buf, &mut state_h)
     }
