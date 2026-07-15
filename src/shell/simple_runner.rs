@@ -60,12 +60,7 @@ impl PipelineRunner for SimplePipelineRunner {
             ExecOutput::Err(bytes, code) => Ok(PipelineRun {
                 stdin: self.stdin.clone(),
                 steps: vec![],
-                failure: Some(StepFailure {
-                    command: rura.to_string(),
-                    bytes,
-                    code,
-                    duration: elapsed,
-                }),
+                failure: Some(StepFailure::new(rura.to_string(), bytes, code, elapsed)),
             }),
         }
     }

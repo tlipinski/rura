@@ -2,12 +2,12 @@
 source: src/details_widget.rs
 expression: terminal.backend()
 ---
-"Command           Time       Lines      Size      "
-"<stdin>           -          1          5 B       "
-"cmd1              -          1          10 B      "
-"cmd2              -          1          10 B      "
-"cmd3              -          1          1 B       "
-"failed            10 ms      0          6 B       "
+"Command                 Time      Lines       Size"
+"<stdin>                    -          1        5 B"
+"cmd1                       -          1       10 B"
+"cmd2                   20.0s          1       10 B"
+"cmd3                    1.0s          1        1 B"
+"failed                  10ms          1        6 B"
 "                                                  "
 "                                                  "
 "                                                  "

@@ -88,12 +88,7 @@ impl PipelineRunner for CachedPipelineRunner {
                     return Ok(PipelineRun {
                         stdin: self.stdin.clone(),
                         steps,
-                        failure: Some(StepFailure {
-                            command: step.clone(),
-                            bytes,
-                            code,
-                            duration: exec_duration,
-                        }),
+                        failure: Some(StepFailure::new(step.clone(), bytes, code, exec_duration)),
                     });
                 }
             }

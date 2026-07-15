@@ -3,7 +3,7 @@ use crate::content_widget::{ContentLine, ContentWidget, Position};
 use crate::shell::pipeline_runner::PipelineRun;
 use crate::theme::Theme;
 use itertools::Itertools;
-use log::{debug, info};
+use log::debug;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Direction, Layout, Rect, Size};
 use ratatui::prelude::Color::Red;
@@ -193,7 +193,6 @@ impl OutputWidget {
     }
 
     pub fn handle_pipeline_run(&mut self, pipeline_run: PipelineRun, follow: bool) {
-        info!("Command result: {:?}", pipeline_run);
         self.pipeline_run = pipeline_run;
 
         debug!(

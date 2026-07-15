@@ -1,9 +1,7 @@
 use crate::rura::Rura;
 use crate::shell::cached_runner::CachedPipelineRunner;
 use anyhow::Result;
-use humansize::FormatSize;
 use itertools::Itertools;
-use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -37,15 +35,10 @@ pub struct StepOutput {
 
 impl StepOutput {
     pub fn new(command: String, bytes: Arc<[u8]>, duration: Option<Duration>) -> StepOutput {
-        let newlines = bytes.iter().filter(|&&b| b == b'\n').count();
         StepOutput {
             command,
+            lines: line_count(&bytes),
             bytes: bytes.clone(),
-            lines: if !bytes.is_empty() && newlines == 0 {
-                1
-            } else {
-                newlines
-            },
             duration,
         }
     }
@@ -55,34 +48,25 @@ impl StepOutput {
 pub struct StepFailure {
     pub command: String,
     pub bytes: Arc<[u8]>,
+    pub lines: usize,
     pub code: Option<i32>,
     pub duration: Duration,
 }
 
-impl Debug for StepOutput {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{{ command: \"{}\", duration: {:?}, size: {} ({}) }}",
-            self.command,
-            self.duration,
-            self.bytes.len(),
-            self.bytes.len().format_size(humansize::BINARY),
-        )
-    }
-}
-
-impl Debug for StepFailure {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{{ command: \"{}\", duration: {:?}, size: {} ({}), error_code: {:?} }}",
-            self.command,
-            self.duration,
-            self.bytes.len(),
-            self.bytes.len().format_size(humansize::BINARY),
-            self.code
-        )
+impl StepFailure {
+    pub fn new(
+        command: String,
+        bytes: Arc<[u8]>,
+        code: Option<i32>,
+        duration: Duration,
+    ) -> StepFailure {
+        StepFailure {
+            command,
+            lines: line_count(&bytes),
+            bytes,
+            code,
+            duration,
+        }
     }
 }
 
@@ -94,14 +78,9 @@ pub struct Stdin {
 
 impl Stdin {
     pub fn new(bytes: Arc<[u8]>) -> Stdin {
-        let newlines = bytes.iter().filter(|&&b| b == b'\n').count();
         Stdin {
-            bytes: bytes.clone(),
-            lines: if !bytes.is_empty() && newlines == 0 {
-                1
-            } else {
-                newlines
-            },
+            lines: line_count(&bytes),
+            bytes,
         }
     }
 }
@@ -126,20 +105,6 @@ impl Default for PipelineRun {
     }
 }
 
-impl Debug for PipelineRun {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "PipelineRun {{ stdin: {} ({}), steps: {:?}, failure: {:?}, duration: {:?} }}",
-            self.stdin.bytes.len(),
-            self.stdin.bytes.len().format_size(humansize::DECIMAL),
-            self.steps,
-            self.failure,
-            self.total_duration()
-        )
-    }
-}
-
 impl PipelineRun {
     pub fn error(err: String, code: Option<i32>) -> PipelineRun {
         PipelineRun {
@@ -148,12 +113,12 @@ impl PipelineRun {
                 lines: 0,
             },
             steps: vec![],
-            failure: Some(StepFailure {
-                command: "".into(),
-                bytes: Arc::from(err.as_bytes()),
+            failure: Some(StepFailure::new(
+                err,
+                Arc::from("".as_bytes()),
                 code,
-                duration: Duration::from_millis(1),
-            }),
+                Duration::from_millis(1),
+            )),
         }
     }
 
@@ -164,12 +129,12 @@ impl PipelineRun {
                 lines: 0,
             },
             steps: vec![],
-            failure: Some(StepFailure {
-                command: "".into(),
-                bytes: Arc::from(err),
+            failure: Some(StepFailure::new(
+                "".into(),
+                err,
                 code,
-                duration: Duration::from_millis(1),
-            }),
+                Duration::from_millis(1),
+            )),
         }
     }
 
@@ -227,5 +192,14 @@ impl PipelineRun {
             )],
             failure: None,
         }
+    }
+}
+
+fn line_count(bytes: &[u8]) -> usize {
+    let newlines = bytes.iter().filter(|&&b| b == b'\n').count();
+    if !bytes.is_empty() && newlines == 0 {
+        1
+    } else {
+        newlines
     }
 }

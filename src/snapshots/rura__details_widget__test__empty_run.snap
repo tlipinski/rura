@@ -2,8 +2,8 @@
 source: src/details_widget.rs
 expression: terminal.backend()
 ---
-"Command           Time       Lines      Size      "
-"<stdin>           -          0          0 B       "
+"Command                 Time      Lines       Size"
+"<stdin>                    -          0        0 B"
 "                                                  "
 "                                                  "
 "                                                  "

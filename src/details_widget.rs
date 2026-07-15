@@ -1,11 +1,11 @@
 use crate::shell::pipeline_runner::PipelineRun;
-use humansize::FormatSize;
 use itertools::Itertools;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Rect};
 use ratatui::prelude::Widget;
 use ratatui::style::Style;
-use ratatui::widgets::{Row, Table};
+use ratatui::text::Text;
+use ratatui::widgets::{Cell, Row, Table};
 
 pub struct DetailsWidget {
     pub pipeline_run: PipelineRun,
@@ -36,20 +36,28 @@ impl Default for DetailsWidget {
 
 impl Widget for &DetailsWidget {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let header = Row::new(["Command", "Time", "Lines", "Size"]).style(Style::new().bold());
+        let header = Row::new([
+            Cell::from("Command"),
+            Cell::from(Text::from("Time").right_aligned()),
+            Cell::from(Text::from("Lines").right_aligned()),
+            Cell::from(Text::from("Size").right_aligned()),
+        ])
+        .style(Style::new().bold());
 
         let mut rows = vec![];
 
         if self.show_stdin {
             rows.push(Row::new([
-                String::from("<stdin>"),
-                String::from("-"),
-                self.pipeline_run.stdin.lines.to_string(),
-                self.pipeline_run
-                    .stdin
-                    .bytes
-                    .len()
-                    .format_size(humansize::BINARY),
+                Cell::from(String::from("<stdin>")),
+                Cell::from(Text::from(String::from("-")).right_aligned()),
+                Cell::from(
+                    Text::from(format_thousands(self.pipeline_run.stdin.lines as u128))
+                        .right_aligned(),
+                ),
+                Cell::from(
+                    Text::from(format_file_size(self.pipeline_run.stdin.bytes.len() as u64))
+                        .right_aligned(),
+                ),
             ]))
         }
 
@@ -60,14 +68,16 @@ impl Widget for &DetailsWidget {
             .map(|step| {
                 let duration = step
                     .duration
-                    .map(|d| format!("{} ms", d.as_millis().to_string()))
+                    .map(|d| format_duration(d.as_millis().try_into().unwrap()))
                     .unwrap_or("-".into());
 
-                Row::new([
-                    step.command.clone(),
-                    duration,
-                    step.lines.to_string(),
-                    step.bytes.len().format_size(humansize::BINARY),
+                Row::new(vec![
+                    Cell::from(step.command.clone()),
+                    Cell::from(Text::from(duration).right_aligned()),
+                    Cell::from(Text::from(format_thousands(step.lines as u128)).right_aligned()),
+                    Cell::from(
+                        Text::from(format_file_size(step.bytes.len() as u64)).right_aligned(),
+                    ),
                 ])
             })
             .collect_vec();
@@ -77,15 +87,17 @@ impl Widget for &DetailsWidget {
         if let Some(failure) = &self.pipeline_run.failure {
             rows.push(
                 Row::new([
-                    failure.command.clone(),
-                    format!("{} ms", failure.duration.as_millis()),
-                    failure
-                        .bytes
-                        .iter()
-                        .filter(|&&b| b == b'\n')
-                        .count()
-                        .to_string(),
-                    failure.bytes.len().format_size(humansize::BINARY),
+                    Cell::from(failure.command.clone()),
+                    Cell::from(
+                        Text::from(format_duration(
+                            failure.duration.as_millis().try_into().unwrap(),
+                        ))
+                        .right_aligned(),
+                    ),
+                    Cell::from(Text::from(format_thousands(failure.lines as u128)).right_aligned()),
+                    Cell::from(
+                        Text::from(format_file_size(failure.bytes.len() as u64)).right_aligned(),
+                    ),
                 ])
                 .style(Style::new().red()),
             )
@@ -148,15 +160,23 @@ mod test {
             stdin: Stdin::new(Arc::from("stdin".as_bytes())),
             steps: vec![
                 StepOutput::new("cmd1".into(), Arc::from("1234567890".as_bytes()), None),
-                StepOutput::new("cmd2".into(), Arc::from("1234567890".as_bytes()), None),
-                StepOutput::new("cmd3".into(), Arc::from("x".as_bytes()), None),
+                StepOutput::new(
+                    "cmd2".into(),
+                    Arc::from("1234567890".as_bytes()),
+                    Some(Duration::from_millis(20000)),
+                ),
+                StepOutput::new(
+                    "cmd3".into(),
+                    Arc::from("x".as_bytes()),
+                    Some(Duration::from_millis(1000)),
+                ),
             ],
-            failure: Some(StepFailure {
-                command: "failed".to_string(),
-                bytes: Arc::from("failed".as_bytes()),
-                duration: Duration::from_millis(10),
-                code: Some(1),
-            }),
+            failure: Some(StepFailure::new(
+                "failed".into(),
+                Arc::from("failed".as_bytes()),
+                None,
+                Duration::from_millis(10),
+            )),
         };
 
         let mut terminal = TestTerminal::default().0;
@@ -165,5 +185,54 @@ mod test {
             .unwrap();
 
         assert_snapshot!(terminal.backend());
+    }
+}
+
+pub fn format_thousands(n: u128) -> String {
+    let num_str = n.to_string();
+    let mut result = String::new();
+
+    for (i, c) in num_str.chars().rev().enumerate() {
+        if i > 0 && i % 3 == 0 {
+            result.push(',');
+        }
+        result.push(c);
+    }
+
+    result.chars().rev().collect()
+}
+
+pub fn format_file_size(bytes: u64) -> String {
+    if bytes < 1024 {
+        return format!("{} B", bytes);
+    }
+    let suffixes = ["B", "KiB", "MiB", "GiB"];
+    let bytes_f = bytes as f64;
+    let scale = ((bytes_f.log2() / 10.0).floor() as usize).min(suffixes.len() - 1);
+    let value = bytes_f / 1024.0_f64.powi(scale as i32);
+    format!("{:.1} {}", value, suffixes[scale])
+}
+
+pub fn format_duration(ms: u64) -> String {
+    const MS_PER_SEC: u64 = 1_000;
+    const MS_PER_MIN: u64 = 60_000;
+    const MS_PER_HOUR: u64 = 3_600_000;
+
+    if ms < MS_PER_SEC {
+        format!("{}ms", ms)
+    } else if ms < MS_PER_MIN {
+        let secs = ms as f64 / 1000.0;
+        format!("{:.1}s", secs)
+    } else if ms < MS_PER_HOUR {
+        let mins = ms / MS_PER_MIN;
+        let remaining_ms = ms % MS_PER_MIN;
+        let secs = remaining_ms / MS_PER_SEC;
+        format!("{}m {}s", mins, secs)
+    } else {
+        let hours = ms / MS_PER_HOUR;
+        let remaining_ms = ms % MS_PER_HOUR;
+        let mins = remaining_ms / MS_PER_MIN;
+        let secs = (remaining_ms % MS_PER_MIN) / MS_PER_SEC;
+        format!("{}h {}m {}s", hours, mins, secs)
     }
 }
