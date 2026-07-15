@@ -78,7 +78,7 @@ impl OutputWidget {
             error_output_opt: None,
             theme: Theme::from_config(theme_config),
             error_pane_placement,
-            pipeline_run: PipelineRun::new(),
+            pipeline_run: PipelineRun::default(),
             content_mode: ContentMode::Normal,
             diff_base: None,
             diff_ready: false,
@@ -105,7 +105,7 @@ impl OutputWidget {
             return;
         }
         let step_bytes = self.pipeline_run.step_bytes().clone();
-        let last_bytes = step_bytes.last().unwrap_or(&self.pipeline_run.stdin);
+        let last_bytes = step_bytes.last().unwrap_or(&self.pipeline_run.stdin.bytes);
         let vec = self.pipeline_run.step_bytes();
         let stdin_bytes = if let Some(base) = self.diff_base {
             if let Some(b) = vec.get(base) {
@@ -114,7 +114,7 @@ impl OutputWidget {
                 return;
             }
         } else {
-            self.pipeline_run.stdin.as_ref()
+            self.pipeline_run.stdin.bytes.as_ref()
         };
 
         let old = String::from_utf8_lossy(&stdin_bytes);
@@ -214,7 +214,7 @@ impl OutputWidget {
 
                 self.error_output_opt = None;
             } else {
-                let str = String::from_utf8_lossy(&self.pipeline_run.stdin);
+                let str = String::from_utf8_lossy(&self.pipeline_run.stdin.bytes);
                 let lines = str.lines().map(|a| a.into()).collect_vec();
                 self.content.with_content(lines);
 

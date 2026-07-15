@@ -28,7 +28,7 @@ impl DetailsWidget {
 impl Default for DetailsWidget {
     fn default() -> Self {
         DetailsWidget {
-            pipeline_run: PipelineRun::new(),
+            pipeline_run: PipelineRun::default(),
             show_stdin: true,
         }
     }
@@ -36,7 +36,7 @@ impl Default for DetailsWidget {
 
 impl Widget for &DetailsWidget {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let header = Row::new(["Command", "Time", "Size"]).style(Style::new().bold());
+        let header = Row::new(["Command", "Time", "Lines", "Size"]).style(Style::new().bold());
 
         let mut rows = vec![];
 
@@ -44,7 +44,12 @@ impl Widget for &DetailsWidget {
             rows.push(Row::new([
                 String::from("<stdin>"),
                 String::from("-"),
-                self.pipeline_run.stdin.len().format_size(humansize::BINARY),
+                self.pipeline_run.stdin.lines.to_string(),
+                self.pipeline_run
+                    .stdin
+                    .bytes
+                    .len()
+                    .format_size(humansize::BINARY),
             ]))
         }
 
@@ -57,9 +62,11 @@ impl Widget for &DetailsWidget {
                     .duration
                     .map(|d| format!("{} ms", d.as_millis().to_string()))
                     .unwrap_or("-".into());
+
                 Row::new([
                     step.command.clone(),
                     duration,
+                    step.lines.to_string(),
                     step.bytes.len().format_size(humansize::BINARY),
                 ])
             })
@@ -72,6 +79,12 @@ impl Widget for &DetailsWidget {
                 Row::new([
                     failure.command.clone(),
                     format!("{} ms", failure.duration.as_millis()),
+                    failure
+                        .bytes
+                        .iter()
+                        .filter(|&&b| b == b'\n')
+                        .count()
+                        .to_string(),
                     failure.bytes.len().format_size(humansize::BINARY),
                 ])
                 .style(Style::new().red()),
@@ -84,6 +97,7 @@ impl Widget for &DetailsWidget {
             Constraint::Max(40),
             Constraint::Length(10),
             Constraint::Length(10),
+            Constraint::Length(10),
         ];
         let table = Table::new(rows, widths).header(header).column_spacing(1);
 
@@ -94,7 +108,7 @@ impl Widget for &DetailsWidget {
 #[cfg(test)]
 mod test {
     use crate::details_widget::DetailsWidget;
-    use crate::shell::pipeline_runner::{PipelineRun, StepFailure, StepOutput};
+    use crate::shell::pipeline_runner::{PipelineRun, Stdin, StepFailure, StepOutput};
     use insta::assert_snapshot;
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
@@ -113,7 +127,11 @@ mod test {
     #[test]
     fn empty_run() {
         let mut widget = DetailsWidget::default();
-        widget.pipeline_run = PipelineRun::new();
+        widget.pipeline_run = PipelineRun {
+            stdin: Stdin::default(),
+            steps: vec![],
+            failure: None,
+        };
 
         let mut terminal = TestTerminal::default().0;
         terminal
@@ -127,23 +145,11 @@ mod test {
     fn non_empty_run() {
         let mut widget = DetailsWidget::default();
         widget.pipeline_run = PipelineRun {
-            stdin: Arc::from("stdin".as_bytes()),
+            stdin: Stdin::new(Arc::from("stdin".as_bytes())),
             steps: vec![
-                StepOutput {
-                    command: "cmd1".to_string(),
-                    bytes: Arc::from("1234567890".as_bytes()),
-                    duration: None,
-                },
-                StepOutput {
-                    command: "cmd2".to_string(),
-                    bytes: Arc::from("1234567890".as_bytes()),
-                    duration: Some(Duration::from_millis(1000)),
-                },
-                StepOutput {
-                    command: "cmd3".to_string(),
-                    bytes: Arc::from("x".as_bytes()),
-                    duration: Some(Duration::from_millis(100)),
-                },
+                StepOutput::new("cmd1".into(), Arc::from("1234567890".as_bytes()), None),
+                StepOutput::new("cmd2".into(), Arc::from("1234567890".as_bytes()), None),
+                StepOutput::new("cmd3".into(), Arc::from("x".as_bytes()), None),
             ],
             failure: Some(StepFailure {
                 command: "failed".to_string(),

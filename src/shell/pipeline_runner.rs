@@ -31,7 +31,24 @@ impl PipelineRunners {
 pub struct StepOutput {
     pub command: String,
     pub bytes: Arc<[u8]>,
+    pub lines: usize,
     pub duration: Option<Duration>,
+}
+
+impl StepOutput {
+    pub fn new(command: String, bytes: Arc<[u8]>, duration: Option<Duration>) -> StepOutput {
+        let newlines = bytes.iter().filter(|&&b| b == b'\n').count();
+        StepOutput {
+            command,
+            bytes: bytes.clone(),
+            lines: if !bytes.is_empty() && newlines == 0 {
+                1
+            } else {
+                newlines
+            },
+            duration,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -69,11 +86,44 @@ impl Debug for StepFailure {
     }
 }
 
+#[derive(Clone, Default)]
+pub struct Stdin {
+    pub bytes: Arc<[u8]>,
+    pub lines: usize,
+}
+
+impl Stdin {
+    pub fn new(bytes: Arc<[u8]>) -> Stdin {
+        let newlines = bytes.iter().filter(|&&b| b == b'\n').count();
+        Stdin {
+            bytes: bytes.clone(),
+            lines: if !bytes.is_empty() && newlines == 0 {
+                1
+            } else {
+                newlines
+            },
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct PipelineRun {
-    pub stdin: Arc<[u8]>,
+    pub stdin: Stdin,
     pub steps: Vec<StepOutput>,
     pub failure: Option<StepFailure>,
+}
+
+impl Default for PipelineRun {
+    fn default() -> Self {
+        PipelineRun {
+            stdin: Stdin {
+                bytes: Arc::from([]),
+                lines: 0,
+            },
+            steps: vec![],
+            failure: None,
+        }
+    }
 }
 
 impl Debug for PipelineRun {
@@ -81,8 +131,8 @@ impl Debug for PipelineRun {
         write!(
             f,
             "PipelineRun {{ stdin: {} ({}), steps: {:?}, failure: {:?}, duration: {:?} }}",
-            self.stdin.len(),
-            self.stdin.len().format_size(humansize::DECIMAL),
+            self.stdin.bytes.len(),
+            self.stdin.bytes.len().format_size(humansize::DECIMAL),
             self.steps,
             self.failure,
             self.total_duration()
@@ -91,17 +141,12 @@ impl Debug for PipelineRun {
 }
 
 impl PipelineRun {
-    pub fn new() -> PipelineRun {
-        PipelineRun {
-            stdin: Arc::from("".as_bytes()),
-            steps: vec![],
-            failure: None,
-        }
-    }
-
     pub fn error(err: String, code: Option<i32>) -> PipelineRun {
         PipelineRun {
-            stdin: Arc::from("".as_bytes()),
+            stdin: Stdin {
+                bytes: Arc::from("".as_bytes()),
+                lines: 0,
+            },
             steps: vec![],
             failure: Some(StepFailure {
                 command: "".into(),
@@ -114,7 +159,10 @@ impl PipelineRun {
 
     pub fn error_bytes(err: Arc<[u8]>, code: Option<i32>) -> PipelineRun {
         PipelineRun {
-            stdin: Arc::from("".as_bytes()),
+            stdin: Stdin {
+                bytes: Arc::from("".as_bytes()),
+                lines: 0,
+            },
             steps: vec![],
             failure: Some(StepFailure {
                 command: "".into(),
@@ -159,24 +207,24 @@ impl PipelineRun {
 impl PipelineRun {
     pub fn from_bytes(bytes: Arc<[u8]>) -> PipelineRun {
         PipelineRun {
-            stdin: Arc::from("".as_bytes()),
-            steps: vec![StepOutput {
+            stdin: Stdin::new(Arc::from([])),
+            steps: vec![StepOutput::new(
+                "test-cmd".into(),
                 bytes,
-                command: "test-cmd".into(),
-                duration: Some(Duration::from_millis(1)),
-            }],
+                Some(Duration::from_millis(1)),
+            )],
             failure: None,
         }
     }
 
     pub fn from_bytes_with_stdin(bytes: Arc<[u8]>, stdin: Arc<[u8]>) -> PipelineRun {
         PipelineRun {
-            stdin,
-            steps: vec![StepOutput {
+            stdin: Stdin::new(stdin),
+            steps: vec![StepOutput::new(
+                "test-cmd".into(),
                 bytes,
-                command: "test-cmd".into(),
-                duration: Some(Duration::from_millis(1)),
-            }],
+                Some(Duration::from_millis(1)),
+            )],
             failure: None,
         }
     }

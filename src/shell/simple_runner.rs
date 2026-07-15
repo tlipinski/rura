@@ -2,7 +2,7 @@ use crate::rura::Rura;
 use crate::shell::builder::CommandBuilder;
 use crate::shell::exec::Exec;
 use crate::shell::output::ExecOutput;
-use crate::shell::pipeline_runner::{PipelineRun, PipelineRunner, StepFailure, StepOutput};
+use crate::shell::pipeline_runner::{PipelineRun, PipelineRunner, Stdin, StepFailure, StepOutput};
 use log::info;
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -11,7 +11,7 @@ use std::time::SystemTime;
 pub struct SimplePipelineRunner {
     exec: Box<dyn Exec>,
     builder: Box<dyn CommandBuilder>,
-    stdin: Arc<[u8]>,
+    stdin: Stdin,
 }
 
 impl SimplePipelineRunner {
@@ -24,7 +24,10 @@ impl SimplePipelineRunner {
             builder: Box::new(PwshCommandBuilder {
                 shell: shell.into(),
             }),
-            stdin,
+            stdin: Stdin {
+                bytes: stdin.clone(),
+                lines: stdin.iter().filter(|c| **c == b'\n').count(),
+            },
         }
     }
 }
@@ -44,18 +47,14 @@ impl PipelineRunner for SimplePipelineRunner {
         let now = SystemTime::now();
 
         let command = self.builder.build(&rura.to_string());
-        let exec_output = self.exec.exec(command, self.stdin.clone())?;
+        let exec_output = self.exec.exec(command, self.stdin.bytes.clone())?;
 
         let elapsed = now.elapsed()?;
 
         match exec_output {
             ExecOutput::Ok(bytes) => Ok(PipelineRun {
                 stdin: self.stdin.clone(),
-                steps: vec![StepOutput {
-                    bytes,
-                    command: rura.to_string(),
-                    duration: Some(elapsed),
-                }],
+                steps: vec![StepOutput::new(rura.to_string(), bytes, Some(elapsed))],
                 failure: None,
             }),
             ExecOutput::Err(bytes, code) => Ok(PipelineRun {
@@ -72,7 +71,7 @@ impl PipelineRunner for SimplePipelineRunner {
     }
 
     fn update_stdin(&mut self, stdin: Arc<[u8]>) {
-        self.stdin = stdin;
+        self.stdin = Stdin::new(stdin);
     }
 }
 
@@ -81,7 +80,7 @@ mod tests {
     use crate::shell::builder::TestBuilder;
     use crate::shell::exec::Exec;
     use crate::shell::exec::MockExec;
-    use crate::shell::pipeline_runner::PipelineRunner;
+    use crate::shell::pipeline_runner::{PipelineRunner, Stdin};
     use crate::shell::simple_runner::SimplePipelineRunner;
     use itertools::Itertools;
     use std::cell::RefCell;
@@ -91,7 +90,7 @@ mod tests {
     fn simple_runner(exec: Box<dyn Exec>, stdin: Arc<[u8]>) -> SimplePipelineRunner {
         SimplePipelineRunner {
             exec,
-            stdin,
+            stdin: Stdin::new(stdin),
             builder: Box::new(TestBuilder {}),
         }
     }
@@ -112,7 +111,7 @@ mod tests {
 
         let result = runner.run(&"echo hello".into()).unwrap();
 
-        assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
+        assert_eq!(result.stdin.bytes, Arc::from("stdin".as_bytes()));
         assert_eq!(as_strings(result.step_bytes()), vec!["echo hello-output"])
     }
 
@@ -126,7 +125,7 @@ mod tests {
 
         let result = runner.run(&vec![].into()).unwrap();
 
-        assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
+        assert_eq!(result.stdin.bytes, Arc::from("stdin".as_bytes()));
         assert_eq!(as_strings(result.step_bytes()), Vec::<String>::new())
     }
 }

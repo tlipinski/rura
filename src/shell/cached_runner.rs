@@ -2,7 +2,7 @@ use crate::rura::Rura;
 use crate::shell::builder::{CommandBuilder, UsrBinEnvCommandBuilder};
 use crate::shell::exec::{Exec, SystemExec};
 use crate::shell::output::ExecOutput;
-use crate::shell::pipeline_runner::{PipelineRun, PipelineRunner, StepFailure, StepOutput};
+use crate::shell::pipeline_runner::{PipelineRun, PipelineRunner, Stdin, StepFailure, StepOutput};
 use log::{debug, info};
 use std::cell::RefCell;
 use std::sync::Arc;
@@ -11,7 +11,7 @@ use std::time::SystemTime;
 pub struct CachedPipelineRunner {
     exec: Box<dyn Exec>,
     builder: Box<dyn CommandBuilder>,
-    stdin: Arc<[u8]>,
+    stdin: Stdin,
     cache: RefCell<Vec<(String, Arc<[u8]>)>>,
     use_cache: bool,
 }
@@ -23,7 +23,7 @@ impl CachedPipelineRunner {
             builder: Box::new(UsrBinEnvCommandBuilder {
                 shell: shell.into(),
             }),
-            stdin,
+            stdin: Stdin::new(stdin),
             cache: RefCell::new(vec![]),
             use_cache,
         }
@@ -59,18 +59,14 @@ impl PipelineRunner for CachedPipelineRunner {
 
         for (i, step) in rura.trimmed().iter().enumerate() {
             if let Some((_, bytes)) = cache.get(i) {
-                steps.push(StepOutput {
-                    bytes: bytes.clone(),
-                    command: step.clone(),
-                    duration: None,
-                });
+                steps.push(StepOutput::new(step.clone(), bytes.clone(), None));
                 continue;
             }
 
             let current_stdin = if let Some(cached_bytes) = steps.last() {
                 &cached_bytes.bytes
             } else {
-                &self.stdin
+                &self.stdin.bytes
             };
 
             let now_sub = SystemTime::now();
@@ -85,11 +81,7 @@ impl PipelineRunner for CachedPipelineRunner {
                     if self.use_cache {
                         cache.push((step.clone(), bytes.clone()));
                     }
-                    steps.push(StepOutput {
-                        bytes,
-                        command: step.clone(),
-                        duration: Some(exec_duration),
-                    });
+                    steps.push(StepOutput::new(step.clone(), bytes, Some(exec_duration)));
                 }
                 ExecOutput::Err(bytes, code) => {
                     debug!("  failed - aborting further execution");
@@ -119,7 +111,7 @@ impl PipelineRunner for CachedPipelineRunner {
     }
 
     fn update_stdin(&mut self, stdin: Arc<[u8]>) {
-        self.stdin = stdin;
+        self.stdin = Stdin::new(stdin);
         self.cache.borrow_mut().clear();
     }
 }
@@ -140,7 +132,7 @@ mod tests {
         CachedPipelineRunner {
             exec,
             builder: Box::new(TestBuilder {}),
-            stdin,
+            stdin: Stdin::new(stdin),
             cache: RefCell::new(vec![]),
             use_cache: true,
         }
@@ -181,7 +173,7 @@ mod tests {
             .run(&vec!["cmd1".into(), "cmd2".into(), "cmd3".into()].into())
             .unwrap();
 
-        assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
+        assert_eq!(result.stdin.bytes, Arc::from("stdin".as_bytes()));
 
         assert_eq!(
             as_strings(result.step_bytes()),
@@ -226,7 +218,7 @@ mod tests {
         // second run
         let result = runner.run(&vec!["cmd1".into()].into()).unwrap();
 
-        assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
+        assert_eq!(result.stdin.bytes, Arc::from("stdin".as_bytes()));
 
         // only cmd1 is in the output
         assert_eq!(as_strings(result.step_bytes()), vec!["cmd1-output",]);
@@ -264,7 +256,7 @@ mod tests {
             .run(&vec!["cmd1".into(), "cmd2".into(), "cmd3".into(), "cmd4".into()].into())
             .unwrap();
 
-        assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
+        assert_eq!(result.stdin.bytes, Arc::from("stdin".as_bytes()));
 
         assert_eq!(
             as_strings(result.step_bytes()),
@@ -310,7 +302,7 @@ mod tests {
             .run(&vec!["cmd1".into(), "cmd2mod".into()].into())
             .unwrap();
 
-        assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
+        assert_eq!(result.stdin.bytes, Arc::from("stdin".as_bytes()));
 
         // all outputs of the last called command
         assert_eq!(
@@ -352,7 +344,7 @@ mod tests {
             .run(&vec!["cmd1".into(), "cmd2mod".into(), "cmd3".into()].into())
             .unwrap();
 
-        assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
+        assert_eq!(result.stdin.bytes, Arc::from("stdin".as_bytes()));
 
         // all outputs of the last called command
         assert_eq!(
@@ -393,7 +385,7 @@ mod tests {
             .run(&vec!["cmd1".into(), "cmd2err".into(), "cmd3".into()].into())
             .unwrap();
 
-        assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
+        assert_eq!(result.stdin.bytes, Arc::from("stdin".as_bytes()));
 
         // all outputs of the last called command - breaks on first error
         assert_eq!(as_strings(result.step_bytes()), vec!["cmd1-output",]);
@@ -436,7 +428,7 @@ mod tests {
             .run(&vec!["cmd1".into(), "cmd2err".into(), "cmd3".into()].into())
             .unwrap();
 
-        assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
+        assert_eq!(result.stdin.bytes, Arc::from("stdin".as_bytes()));
 
         // all outputs of the last called command - breaks on first error
         assert_eq!(as_strings(result.step_bytes()), vec!["cmd1-output",]);
@@ -476,7 +468,7 @@ mod tests_no_cache {
         CachedPipelineRunner {
             exec,
             builder: Box::new(TestBuilder {}),
-            stdin,
+            stdin: Stdin::new(stdin),
             cache: RefCell::new(vec![]),
             use_cache: false,
         }
@@ -513,7 +505,7 @@ mod tests_no_cache {
             .run(&vec!["cmd1".into(), "cmd2".into(), "cmd3".into()].into())
             .unwrap();
 
-        assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
+        assert_eq!(result.stdin.bytes, Arc::from("stdin".as_bytes()));
 
         assert_eq!(
             as_strings(result.step_bytes()),
@@ -550,7 +542,7 @@ mod tests_no_cache {
         // second run
         let result = runner.run(&vec!["cmd1".into()].into()).unwrap();
 
-        assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
+        assert_eq!(result.stdin.bytes, Arc::from("stdin".as_bytes()));
 
         // only cmd1 is in the output
         assert_eq!(as_strings(result.step_bytes()), vec!["cmd1-output",]);
@@ -578,7 +570,7 @@ mod tests_no_cache {
             .run(&vec!["cmd1".into(), "cmd2".into(), "cmd3".into(), "cmd4".into()].into())
             .unwrap();
 
-        assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
+        assert_eq!(result.stdin.bytes, Arc::from("stdin".as_bytes()));
 
         assert_eq!(
             as_strings(result.step_bytes()),
@@ -615,7 +607,7 @@ mod tests_no_cache {
             .run(&vec!["cmd1".into(), "cmd2mod".into()].into())
             .unwrap();
 
-        assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
+        assert_eq!(result.stdin.bytes, Arc::from("stdin".as_bytes()));
 
         // all outputs of the last called command
         assert_eq!(
@@ -651,7 +643,7 @@ mod tests_no_cache {
             .run(&vec!["cmd1".into(), "cmd2mod".into(), "cmd3".into()].into())
             .unwrap();
 
-        assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
+        assert_eq!(result.stdin.bytes, Arc::from("stdin".as_bytes()));
 
         // all outputs of the last called command
         assert_eq!(
@@ -685,7 +677,7 @@ mod tests_no_cache {
             .run(&vec!["cmd1".into(), "cmd2err".into(), "cmd3".into()].into())
             .unwrap();
 
-        assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
+        assert_eq!(result.stdin.bytes, Arc::from("stdin".as_bytes()));
 
         // all outputs of the last called command - breaks on first error
         assert_eq!(as_strings(result.step_bytes()), vec!["cmd1-output",]);
@@ -724,7 +716,7 @@ mod tests_no_cache {
             .run(&vec!["cmd1".into(), "cmd2err".into(), "cmd3".into()].into())
             .unwrap();
 
-        assert_eq!(result.stdin, Arc::from("stdin".as_bytes()));
+        assert_eq!(result.stdin.bytes, Arc::from("stdin".as_bytes()));
 
         // all outputs of the last called command - breaks on first error
         assert_eq!(as_strings(result.step_bytes()), vec!["cmd1-output",]);
