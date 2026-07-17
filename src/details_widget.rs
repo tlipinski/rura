@@ -66,10 +66,11 @@ impl Widget for &DetailsWidget {
             .steps
             .iter()
             .map(|step| {
-                let duration = step
-                    .duration
-                    .map(|d| format_duration(d.as_millis().try_into().unwrap()))
-                    .unwrap_or("-".into());
+                let mut duration = format_duration(step.duration.as_millis().try_into().unwrap());
+
+                if step.cached {
+                    duration = format!("{} *", duration);
+                }
 
                 Row::new(vec![
                     Cell::from(step.command.clone()),
@@ -159,16 +160,23 @@ mod test {
         widget.pipeline_run = PipelineRun {
             stdin: Stdin::new(Arc::from("stdin".as_bytes())),
             steps: vec![
-                StepOutput::new("cmd1".into(), Arc::from("1234567890".as_bytes()), None),
+                StepOutput::new(
+                    "cmd1".into(),
+                    Arc::from("1234567890".as_bytes()),
+                    Duration::from_millis(1),
+                    true,
+                ),
                 StepOutput::new(
                     "cmd2".into(),
                     Arc::from("1234567890".as_bytes()),
-                    Some(Duration::from_millis(20000)),
+                    Duration::from_millis(20000),
+                    true,
                 ),
                 StepOutput::new(
                     "cmd3".into(),
                     Arc::from("x".as_bytes()),
-                    Some(Duration::from_millis(1000)),
+                    Duration::from_millis(1000),
+                    false,
                 ),
             ],
             failure: Some(StepFailure::new(

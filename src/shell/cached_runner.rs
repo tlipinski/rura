@@ -6,13 +6,13 @@ use crate::shell::pipeline_runner::{PipelineRun, PipelineRunner, Stdin, StepFail
 use log::{debug, info};
 use std::cell::RefCell;
 use std::sync::Arc;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 pub struct CachedPipelineRunner {
     exec: Box<dyn Exec>,
     builder: Box<dyn CommandBuilder>,
     stdin: Stdin,
-    cache: RefCell<Vec<(String, Arc<[u8]>)>>,
+    cache: RefCell<Vec<(String, Arc<[u8]>, Duration)>>,
     use_cache: bool,
 }
 
@@ -46,7 +46,7 @@ impl PipelineRunner for CachedPipelineRunner {
 
         // check how many subcommands are equal between command and cache
         // and truncate cache to only keep those subcommands
-        for (i, (cached_command_str, _)) in cache.iter().enumerate() {
+        for (i, (cached_command_str, _, _)) in cache.iter().enumerate() {
             if let Some(command_str) = rura.trimmed().get(i) {
                 if cached_command_str != command_str {
                     cache.truncate(i);
@@ -58,8 +58,13 @@ impl PipelineRunner for CachedPipelineRunner {
         let mut steps: Vec<StepOutput> = vec![];
 
         for (i, step) in rura.trimmed().iter().enumerate() {
-            if let Some((_, bytes)) = cache.get(i) {
-                steps.push(StepOutput::new(step.clone(), bytes.clone(), None));
+            if let Some((_, bytes, duration)) = cache.get(i) {
+                steps.push(StepOutput::new(
+                    step.clone(),
+                    bytes.clone(),
+                    *duration,
+                    true,
+                ));
                 continue;
             }
 
@@ -79,9 +84,9 @@ impl PipelineRunner for CachedPipelineRunner {
             match exec_output {
                 ExecOutput::Ok(bytes) => {
                     if self.use_cache {
-                        cache.push((step.clone(), bytes.clone()));
+                        cache.push((step.clone(), bytes.clone(), exec_duration.clone()));
                     }
-                    steps.push(StepOutput::new(step.clone(), bytes, Some(exec_duration)));
+                    steps.push(StepOutput::new(step.clone(), bytes, exec_duration, false));
                 }
                 ExecOutput::Err(bytes, code) => {
                     debug!("  failed - aborting further execution");
@@ -137,6 +142,13 @@ mod tests {
         (command.into(), stdin.as_bytes().into())
     }
 
+    fn cache_no_duration(entries: Vec<(String, Arc<[u8]>, Duration)>) -> Vec<(String, Arc<[u8]>)> {
+        entries
+            .into_iter()
+            .map(|(command, bytes, _)| (command, bytes))
+            .collect_vec()
+    }
+
     fn as_strings(o: Vec<Arc<[u8]>>) -> Vec<String> {
         o.iter()
             .map(|a| String::from_utf8_lossy(a).into_owned())
@@ -187,7 +199,7 @@ mod tests {
 
         // all commands are cached
         assert_eq!(
-            *runner.cache.borrow(),
+            cache_no_duration(runner.cache.borrow().clone()),
             vec![
                 cache_entry("cmd1", "cmd1-output"),
                 cache_entry("cmd2", "cmd2-output"),
@@ -223,7 +235,7 @@ mod tests {
 
         // all commands are still cached
         assert_eq!(
-            *runner.cache.borrow(),
+            cache_no_duration(runner.cache.borrow().clone()),
             vec![
                 cache_entry("cmd1", "cmd1-output"),
                 cache_entry("cmd2", "cmd2-output"),
@@ -269,7 +281,7 @@ mod tests {
 
         // all commands are still cached
         assert_eq!(
-            *runner.cache.borrow(),
+            cache_no_duration(runner.cache.borrow().clone()),
             vec![
                 cache_entry("cmd1", "cmd1-output"),
                 cache_entry("cmd2", "cmd2-output"),
@@ -313,7 +325,7 @@ mod tests {
 
         // cmd2 replaced with cmd2mod and cmd3 removed since it's invalid after modified command
         assert_eq!(
-            *runner.cache.borrow(),
+            cache_no_duration(runner.cache.borrow().clone()),
             vec![
                 cache_entry("cmd1", "cmd1-output"),
                 cache_entry("cmd2mod", "cmd2mod-output"),
@@ -359,7 +371,7 @@ mod tests {
 
         // cmd2 replaced with cmd2mod and cmd3 replaced with updated output
         assert_eq!(
-            *runner.cache.borrow(),
+            cache_no_duration(runner.cache.borrow().clone()),
             vec![
                 cache_entry("cmd1", "cmd1-output"),
                 cache_entry("cmd2mod", "cmd2mod-output"),
@@ -401,7 +413,7 @@ mod tests {
 
         // only cmd1 is cached since it didn't fail
         assert_eq!(
-            *runner.cache.borrow(),
+            cache_no_duration(runner.cache.borrow().clone()),
             vec![cache_entry("cmd1", "cmd1-output"),]
         );
     }
@@ -441,7 +453,7 @@ mod tests {
         // only cmd1 is cached since it didn't fail
         // entry for cmd3 is cleared because cmd2err failed before
         assert_eq!(
-            *runner.cache.borrow(),
+            cache_no_duration(runner.cache.borrow().clone()),
             vec![cache_entry("cmd1", "cmd1-output"),]
         );
     }

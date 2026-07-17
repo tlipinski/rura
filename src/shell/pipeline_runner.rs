@@ -30,16 +30,18 @@ pub struct StepOutput {
     pub command: String,
     pub bytes: Arc<[u8]>,
     pub lines: usize,
-    pub duration: Option<Duration>,
+    pub duration: Duration,
+    pub cached: bool,
 }
 
 impl StepOutput {
-    pub fn new(command: String, bytes: Arc<[u8]>, duration: Option<Duration>) -> StepOutput {
+    pub fn new(command: String, bytes: Arc<[u8]>, duration: Duration, cached: bool) -> StepOutput {
         StepOutput {
             command,
             lines: line_count(&bytes),
             bytes: bytes.clone(),
             duration,
+            cached,
         }
     }
 }
@@ -139,10 +141,7 @@ impl PipelineRun {
     }
 
     pub fn total_duration(&self) -> Duration {
-        self.steps
-            .iter()
-            .map(|o| o.duration.unwrap_or(Duration::ZERO))
-            .sum()
+        self.steps.iter().map(|o| o.duration).sum()
     }
 
     pub fn succeeded(&self) -> bool {
@@ -176,7 +175,8 @@ impl PipelineRun {
             steps: vec![StepOutput::new(
                 "test-cmd".into(),
                 bytes,
-                Some(Duration::from_millis(1)),
+                Duration::from_millis(1),
+                false,
             )],
             failure: None,
         }
@@ -188,7 +188,8 @@ impl PipelineRun {
             steps: vec![StepOutput::new(
                 "test-cmd".into(),
                 bytes,
-                Some(Duration::from_millis(1)),
+                Duration::from_millis(1),
+                false,
             )],
             failure: None,
         }

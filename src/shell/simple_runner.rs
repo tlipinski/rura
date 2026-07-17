@@ -54,7 +54,7 @@ impl PipelineRunner for SimplePipelineRunner {
         match exec_output {
             ExecOutput::Ok(bytes) => Ok(PipelineRun {
                 stdin: self.stdin.clone(),
-                steps: vec![StepOutput::new(rura.to_string(), bytes, Some(elapsed))],
+                steps: vec![StepOutput::new(rura.to_string(), bytes, elapsed, false)],
                 failure: None,
             }),
             ExecOutput::Err(bytes, code) => Ok(PipelineRun {
