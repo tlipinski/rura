@@ -61,16 +61,21 @@ impl<T: ContentLine> ContentWidget<T> {
     }
 
     pub fn with_content(&mut self, lines: Vec<T>) {
-        if lines.len() <= self.offset.row {
-            self.offset.row = lines
-                .len()
-                .saturating_sub(self.output_content_area_size.get().height as usize);
-        }
+        let new_lines_len = lines.len();
         self.lines = lines;
 
         self.highlight_index = 0;
         self.highlight_positions = vec![];
         self.main_output_width = self.main_output_width();
+
+        if new_lines_len <= self.offset.row {
+            self.offset.row =
+                new_lines_len.saturating_sub(self.output_content_area_size.get().height as usize);
+        }
+
+        if self.main_output_width <= self.offset.col {
+            self.offset.col = 0
+        }
     }
 
     pub fn highlight_info(&self) -> (usize, usize) {
@@ -765,5 +770,29 @@ mod tests {
             .unwrap();
 
         assert_snapshot!("shorter_content_after", terminal.backend());
+    }
+
+    #[test]
+    fn vertical_shorter_content_cursor_goes_back_to_0() {
+        let mut terminal = Terminal::new(TestBackend::new(14, 10)).unwrap();
+
+        let mut widget: ContentWidget<String> = ContentWidget::default();
+
+        widget.with_content(vec!["loooooooooooooooooooooooooong line".into()]);
+        widget.offset.col = 25;
+
+        // call render once so output height is properly determined
+        terminal
+            .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
+            .unwrap();
+        assert_snapshot!("vertical_shorter_content_before", terminal.backend());
+
+        widget.with_content(vec!["shorter line".into()]);
+
+        terminal
+            .draw(|frame| widget.render(frame.area(), frame.buffer_mut()))
+            .unwrap();
+
+        assert_snapshot!("vertical_shorter_content_after", terminal.backend());
     }
 }
