@@ -1,3 +1,15 @@
+## v1.10.0 - 2026-07-20
+
+### Features
+
+- Added "Execution details" view
+- Added file overwrite confirmation dialog for save commands
+
+### Bug Fixes
+
+- `stdin` mark incorrectly displayed if started with no stdin nor file
+- *(ui)* Reset cursor offset when content width changes
+
 ## v1.9.0 - 2026-07-10
 
 ### Features
