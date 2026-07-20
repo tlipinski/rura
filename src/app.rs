@@ -7,7 +7,7 @@ use crate::completable_input::CompletableInput;
 use crate::config::{Config, history_path, search_history_path};
 use crate::debouncer::debouncer_task;
 use crate::details_widget::DetailsWidget;
-use crate::file_saver::{FileSaver, FileSavers};
+use crate::file_saver::FileSavers;
 use crate::help_widget::HelpWidget;
 use crate::history::History;
 use crate::output_widget::{ContentMode, ErrorPanePlacement, OutputWidget};
@@ -27,7 +27,6 @@ use anyhow::Result;
 use cfg_if::cfg_if;
 use crossterm::event::KeyCode::Char;
 use crossterm::event::{KeyCode, KeyModifiers};
-use itertools::Itertools;
 use log::{debug, error};
 use ratatui::crossterm::event;
 use ratatui::crossterm::event::Event;
@@ -52,10 +51,11 @@ pub struct App {
     output_widget: OutputWidget,
     search_widget: SearchWidget,
     help_widget: HelpWidget,
-    save_output_widget: SaveToFileWidget,
-    save_command_widget: SaveToFileWidget,
     presets_widget: PresetsWidget,
     details_widget: DetailsWidget,
+    save_command_widget: SaveToFileWidget,
+    save_output_widget: SaveToFileWidget,
+    shell: String,
     action_rx: Receiver<Action>,
     pipeline_tx: Sender<PipelineRunnerAction>,
     stdin_controller_tx: Sender<StdinControllerAction>,
@@ -67,7 +67,6 @@ pub struct App {
     active_modal: ActiveModal,
     in_progress: Option<SystemTime>,
     theme: Theme,
-    file_saver: Box<dyn FileSaver>,
     success_output_bytes: Arc<[u8]>,
     stdin_state: StdinState,
     follow: bool,
@@ -180,18 +179,21 @@ impl App {
                     .map(|p| History::using_file(p))
                     .unwrap_or(History::in_mem()),
             },
-            save_output_widget: SaveToFileWidget::new(
-                " Save output to file ".to_string(),
-                shell.clone(),
-                Theme::from_config(&config.theme),
-            ),
+            presets_widget: PresetsWidget::new(Theme::from_config(&config.theme)),
+            details_widget: DetailsWidget::default(),
             save_command_widget: SaveToFileWidget::new(
+                FileSavers::new(),
                 " Save command to file ".to_string(),
                 shell.clone(),
                 Theme::from_config(&config.theme),
             ),
-            presets_widget: PresetsWidget::new(Theme::from_config(&config.theme)),
-            details_widget: DetailsWidget::default(),
+            save_output_widget: SaveToFileWidget::new(
+                FileSavers::new(),
+                " Save output to file ".to_string(),
+                shell.clone(),
+                Theme::from_config(&config.theme),
+            ),
+            shell: shell.clone(),
             action_rx,
             pipeline_tx,
             debouncer_tx,
@@ -204,7 +206,6 @@ impl App {
             active_modal: ActiveModal::default(),
             in_progress: None,
             theme: Theme::from_config(&config.theme),
-            file_saver: FileSavers::new(&shell),
             success_output_bytes: Arc::from(Vec::new()),
             stdin_state: if args.file.is_some() {
                 StdinState::Completed
@@ -250,6 +251,9 @@ impl App {
                 if pipeline_run.succeeded() {
                     if let Some(bytes) = pipeline_run.step_bytes().last() {
                         self.success_output_bytes = bytes.clone();
+                    } else {
+                        // basically it just allows saving raw input somewhere else
+                        self.success_output_bytes = pipeline_run.stdin.bytes.clone();
                     }
                 }
 
@@ -320,31 +324,38 @@ impl App {
 
     fn handle_event_save_command(&mut self, event: &Event, code: KeyCode, mods: KeyModifiers) {
         match (code, mods) {
+            (Esc, KeyModifiers::NONE) if self.save_command_widget.overwrite_confirm() => {
+                self.save_command_widget.cancel();
+            }
             (Esc, KeyModifiers::NONE) => {
+                self.save_command_widget.cancel();
                 self.active_modal = ActiveModal::default();
             }
-            (Enter, KeyModifiers::NONE) => match self.save_command_to_file() {
-                Ok(()) => {
+            (Enter, KeyModifiers::NONE) => {
+                if self.save_command_widget.confirm(self.script(), true, false) {
                     self.active_modal = ActiveModal::default();
-                    self.save_command_widget.error_message = None;
                 }
-                Err(e) => {
-                    self.save_command_widget.error_message = Some(e.to_string());
-                    error!("Error saving output to file: {}", e);
+            }
+            (Char('y'), KeyModifiers::NONE) if self.save_command_widget.overwrite_confirm() => {
+                if self.save_command_widget.confirm(self.script(), true, true) {
+                    self.active_modal = ActiveModal::default();
                 }
-            },
+            }
+            (Char('n'), KeyModifiers::NONE) if self.save_command_widget.overwrite_confirm() => {
+                self.save_command_widget.cancel()
+            }
             _ => match to_ui_command(&self.key_bindings, code, mods) {
                 Some(UiCmd::Quit) => {
                     self.exit = true;
                 }
                 Some(UiCmd::Complete) => {
-                    self.save_command_widget.file_path_input.complete(true);
+                    self.save_command_widget.complete();
                 }
                 Some(UiCmd::CompletePrev) => {
-                    self.save_command_widget.file_path_input.complete(false);
+                    self.save_command_widget.complete_prev();
                 }
                 _ => {
-                    self.save_command_widget.file_path_input.handle_event(event);
+                    self.save_command_widget.handle_event(event);
                 }
             },
         }
@@ -352,31 +363,44 @@ impl App {
 
     fn handle_event_save_output(&mut self, event: &Event, code: KeyCode, mods: KeyModifiers) {
         match (code, mods) {
+            (Esc, KeyModifiers::NONE) if self.save_output_widget.overwrite_confirm() => {
+                self.save_output_widget.cancel();
+            }
             (Esc, KeyModifiers::NONE) => {
+                self.save_output_widget.cancel();
                 self.active_modal = ActiveModal::default();
             }
-            (Enter, KeyModifiers::NONE) => match self.save_output_to_file() {
-                Ok(()) => {
-                    self.save_output_widget.error_message = None;
+            (Enter, KeyModifiers::NONE) => {
+                if self
+                    .save_output_widget
+                    .confirm(self.success_output_bytes.to_vec(), false, false)
+                {
                     self.active_modal = ActiveModal::default();
                 }
-                Err(e) => {
-                    self.save_output_widget.error_message = Some(e.to_string());
-                    error!("Error saving output to file: {}", e);
+            }
+            (Char('y'), KeyModifiers::NONE) if self.save_output_widget.overwrite_confirm() => {
+                if self
+                    .save_output_widget
+                    .confirm(self.success_output_bytes.to_vec(), false, true)
+                {
+                    self.active_modal = ActiveModal::default();
                 }
-            },
+            }
+            (Char('n'), KeyModifiers::NONE) if self.save_output_widget.overwrite_confirm() => {
+                self.save_output_widget.cancel()
+            }
             _ => match to_ui_command(&self.key_bindings, code, mods) {
                 Some(UiCmd::Quit) => {
                     self.exit = true;
                 }
                 Some(UiCmd::Complete) => {
-                    self.save_output_widget.file_path_input.complete(true);
+                    self.save_output_widget.complete();
                 }
                 Some(UiCmd::CompletePrev) => {
-                    self.save_output_widget.file_path_input.complete(false);
+                    self.save_output_widget.complete_prev();
                 }
                 _ => {
-                    self.save_output_widget.file_path_input.handle_event(event);
+                    self.save_output_widget.handle_event(event);
                 }
             },
         }
@@ -834,21 +858,6 @@ impl App {
         }
     }
 
-    fn save_output_to_file(&mut self) -> Result<()> {
-        let path = PathBuf::from(self.save_output_widget.file_path_input.value().trim());
-        self.file_saver
-            .save(path, self.success_output_bytes.to_vec())
-    }
-
-    fn save_command_to_file(&mut self) -> Result<()> {
-        let path = PathBuf::from(self.save_command_widget.file_path_input.value().trim());
-
-        self.file_saver.save_script(
-            path,
-            self.rura_widget.command_input.value().bytes().collect_vec(),
-        )
-    }
-
     fn handle_execute(&mut self, kind: ExecuteType) {
         match self.rura_widget.execute(kind) {
             Ok(command) => self
@@ -857,6 +866,15 @@ impl App {
                 .unwrap(),
             Err(_) => {}
         }
+    }
+
+    fn script(&self) -> Vec<u8> {
+        format!(
+            "#!/usr/bin/env {}\n\n{}\n",
+            self.shell,
+            self.rura_widget.command_input.value()
+        )
+        .into_bytes()
     }
 
     pub fn render(&self, frame: &mut Frame, area: Rect) {
@@ -1059,12 +1077,16 @@ impl App {
             ActiveModal::SaveOutput => {
                 self.save_output_widget
                     .render(frame.area(), frame.buffer_mut());
-                frame.set_cursor_position(self.save_output_widget.cursor())
+                if let Some(cursor) = self.save_output_widget.cursor() {
+                    frame.set_cursor_position(cursor)
+                }
             }
             ActiveModal::SaveCommand => {
                 self.save_command_widget
                     .render(frame.area(), frame.buffer_mut());
-                frame.set_cursor_position(self.save_command_widget.cursor())
+                if let Some(cursor) = self.save_command_widget.cursor() {
+                    frame.set_cursor_position(cursor)
+                }
             }
             ActiveModal::Presets => {
                 self.presets_widget.render(frame.area(), frame.buffer_mut());
@@ -1266,12 +1288,14 @@ mod tests {
                 },
                 output_widget: OutputWidget::new(&theme_config, ErrorPanePlacement::Bottom),
                 save_output_widget: SaveToFileWidget::new(
-                    " Save output to file ".into(),
+                    FileSavers::new(),
+                    " Save output to file ".to_string(),
                     "".into(),
                     Theme::from_config(&theme_config),
                 ),
                 save_command_widget: SaveToFileWidget::new(
-                    " Save command to file ".into(),
+                    FileSavers::new(),
+                    " Save command to file ".to_string(),
                     "".into(),
                     Theme::from_config(&theme_config),
                 ),
@@ -1284,6 +1308,7 @@ mod tests {
                     total: 0,
                     history: History::in_mem(),
                 },
+                shell: "".into(),
                 details_widget: DetailsWidget::default(),
                 action_rx,
                 pipeline_tx: command_tx,
@@ -1297,7 +1322,6 @@ mod tests {
                 active_mode: ActiveMode::default(),
                 active_modal: ActiveModal::default(),
                 theme: Theme::from_config(&theme_config),
-                file_saver: FileSavers::new(""),
                 success_output_bytes: Arc::from([]),
                 stdin_state: StdinState::Completed,
                 follow: true,

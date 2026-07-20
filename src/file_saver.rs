@@ -1,62 +1,60 @@
 use anyhow::Result;
-use itertools::Itertools;
 use log::debug;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::PathBuf;
 
 pub trait FileSaver {
-    fn save(&self, path: PathBuf, content: Vec<u8>) -> Result<()>;
-    fn save_script(&self, path: PathBuf, content: Vec<u8>) -> Result<()>;
+    fn save(
+        &self,
+        path: PathBuf,
+        content: Vec<u8>,
+        executable: bool,
+        overwrite: bool,
+    ) -> Result<()>;
 }
 
 pub struct FileSavers;
 
 impl FileSavers {
-    pub fn new(shell: &str) -> Box<dyn FileSaver> {
+    pub fn new() -> Box<dyn FileSaver> {
         #[cfg(unix)]
-        return Box::new(UnixFileSaver {
-            shell: shell.into(),
-        });
+        return Box::new(UnixFileSaver {});
         #[cfg(windows)]
         return Box::new(WindowsFileSaver {});
     }
 }
 
 #[cfg(unix)]
-struct UnixFileSaver {
-    shell: String,
-}
+struct UnixFileSaver {}
 
 #[cfg(unix)]
 impl FileSaver for UnixFileSaver {
-    fn save(&self, path: PathBuf, content: Vec<u8>) -> Result<()> {
-        UnixFileSaver::save(path, content, 0o644)
-    }
-
-    fn save_script(&self, path: PathBuf, content: Vec<u8>) -> Result<()> {
-        let shebang = format!("#!/usr/bin/env {}\n\n", self.shell);
-        let full_content = shebang
-            .bytes()
-            .into_iter()
-            .chain(content.into_iter())
-            .collect_vec();
-        UnixFileSaver::save(path, full_content, 0o755)
-    }
-}
-
-#[cfg(unix)]
-impl UnixFileSaver {
-    fn save(path: PathBuf, content: Vec<u8>, mode: u32) -> Result<()> {
+    fn save(
+        &self,
+        path: PathBuf,
+        content: Vec<u8>,
+        executable: bool,
+        overwrite: bool,
+    ) -> Result<()> {
         use std::os::unix::fs::OpenOptionsExt;
 
-        let mut file = OpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .mode(mode)
-            .open(&path)?;
+        let mode = if executable { 0o755 } else { 0o644 };
+        let mut file = if overwrite {
+            OpenOptions::new()
+                .write(true)
+                .truncate(true)
+                .mode(mode)
+                .open(&path)?
+        } else {
+            OpenOptions::new()
+                .create_new(true)
+                .write(true)
+                .mode(mode)
+                .open(&path)?
+        };
 
-        debug!("Saving with len: {:?}", content.len());
+        debug!("Saving file {:?}, size: {:?}", path, content.len());
 
         file.write_all(&content)?;
 
@@ -71,22 +69,28 @@ struct WindowsFileSaver {}
 
 #[cfg(windows)]
 impl FileSaver for WindowsFileSaver {
-    fn save(&self, path: PathBuf, content: Vec<u8>) -> Result<()> {
-        let mut file = OpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .open(&path)?;
+    fn save(
+        &self,
+        path: PathBuf,
+        content: Vec<u8>,
+        executable: bool,
+        overwrite: bool,
+    ) -> Result<()> {
+        let mut file = if overwrite {
+            OpenOptions::new()
+                .create_new(true)
+                .write(true)
+                .open(&path)?
+        } else {
+            OpenOptions::new().write(true).truncate(true).open(&path)?
+        };
 
-        debug!("Saving with len: {:?}", content.len());
+        debug!("Saving file {:?}, size: {:?}", path, content.len());
 
         file.write_all(&content)?;
 
         debug!("Successfully saved file: {:?}", path);
 
         Ok(())
-    }
-
-    fn save_script(&self, path: PathBuf, content: Vec<u8>) -> Result<()> {
-        self.save(path, content)
     }
 }
