@@ -1,6 +1,6 @@
 [package]
 name = "rura"
-version = "1.9.0"
+version = "1.10.0"
 license = "MIT"
 edition = "2024"
 description = "Interactive TUI for building shell pipelines with per-stage inspection and diffs"
