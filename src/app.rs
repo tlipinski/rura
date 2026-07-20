@@ -866,7 +866,7 @@ impl App {
 
         let (command_input_area, search_input_area, output_area, status_area, details_area) = {
             let search_height = if matches!(self.active_mode, ActiveMode::Search) {
-                self.search_widget.height(inner_area.width) + 3
+                self.search_widget.height(inner_area.width) + 2
             } else {
                 0
             };
