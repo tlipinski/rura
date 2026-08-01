@@ -65,4 +65,6 @@ pub struct Args {
     pub last: bool,
     #[arg(long = "no-cache", help = "Disable caching of command output")]
     pub no_cache: bool,
+    #[arg(long = "default-config", help = "Prints default config to stdout")]
+    pub default_config: bool,
 }

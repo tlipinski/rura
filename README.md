@@ -150,6 +150,7 @@ rura --last
 | `-f, --file <FILE>`       | Path to the input file.                                                                                                                     |
 | `-c, --command <COMMAND>` | Initial command to populate the input field.                                                                                                |
 | `-C, --config <FILE>`     | Path to a custom TOML configuration file.                                                                                                   |
+| `--default-config`        | Prints default config to stdout.                                                                                                            |
 | `-l, --last`              | Print the last command from history and exit.                                                                                               |
 | `--no-cache`              | Disable caching of command output.                                                                                                          |
 | `-s, --shell <SHELL>`     | Specify the shell to use for execution and completions (e.g., `bash`, `zsh`, `fish`). Defaults to `sh` on Unix and `powershell` on Windows. |

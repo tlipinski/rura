@@ -230,6 +230,11 @@ pub fn search_history_path() -> Option<PathBuf> {
     dirs::data_dir().map(|d| d.join(APP_NAME).join("search_history.txt"))
 }
 
+pub fn default_toml() -> String {
+    let default = Config::default();
+    toml::to_string_pretty(&default).unwrap_or_default()
+}
+
 pub fn load_config(custom_path: Option<&str>) -> Config {
     if let Some(p) = custom_path {
         info!("Loading config from arg path: {}", p);

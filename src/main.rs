@@ -65,6 +65,11 @@ fn main() {
         }
     }
 
+    if args.default_config {
+        println!("{}", config::default_toml());
+        exit(0)
+    }
+
     let config = load_config(args.config.as_deref());
 
     info!("{args:?}");
