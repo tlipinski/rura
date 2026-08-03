@@ -1,3 +1,9 @@
+## v1.11.0 - 2026-08-03
+
+### Features
+
+- Added CLI arg for printing default config to stdout (`--default-config`)
+
 ## v1.10.0 - 2026-07-20
 
 ### Features
