@@ -1512,7 +1512,7 @@ dependencies = [
 
 [[package]]
 name = "rura"
-version = "1.11.0"
+version = "1.12.0"
 dependencies = [
  "anyhow",
  "cfg-if",
