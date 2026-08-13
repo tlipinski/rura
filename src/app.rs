@@ -19,6 +19,7 @@ use crate::save_to_file_widget::SaveToFileWidget;
 use crate::search_widget::SearchWidget;
 use crate::shell::pipeline_runner::{PipelineRun, PipelineRunner, PipelineRunners};
 use crate::stdin::{StdinControllerAction, start_input_read_task};
+use crate::text_input::ModalInputMode;
 use crate::theme::Theme;
 use crate::uicmd::{KeyBindings, UiCmd, to_ui_command};
 use Action::StdinCompleted;
@@ -103,6 +104,8 @@ impl App {
 
         debug!("Shell: {:?}", shell);
 
+        let text_input_mode = args.mode.or(config.editing_mode).unwrap_or_default();
+
         let (action_tx, action_rx) = std::sync::mpsc::channel::<Action>();
         let (highlight_reset_tx, highlight_reset_rx) = std::sync::mpsc::channel::<()>();
         let (debouncer_tx, debouncer_rx) = std::sync::mpsc::channel::<()>();
@@ -151,7 +154,11 @@ impl App {
 
         Self {
             rura_widget: RuraWidget {
-                command_input: CompletableInput::from(&args.command.unwrap_or_default(), &shell),
+                command_input: CompletableInput::from(
+                    text_input_mode,
+                    &args.command.unwrap_or_default(),
+                    &shell,
+                ),
                 highlight_until: None,
                 theme: Theme::from_config(&config.theme),
                 history: history_path()
@@ -430,7 +437,7 @@ impl App {
                 (KeyCode::Down, KeyModifiers::NONE) => self.presets_widget.next(),
                 (Char('t'), KeyModifiers::CONTROL) => {
                     self.presets_widget
-                        .new_from(self.rura_widget.command_input.value());
+                        .new_from(&self.rura_widget.command_input.value());
                 }
                 (Char('n'), KeyModifiers::CONTROL) => {
                     self.presets_widget.new_empty();
@@ -671,9 +678,14 @@ impl App {
 
     fn handle_event_normal(&mut self, event: &Event, code: KeyCode, mods: KeyModifiers) {
         match (code, mods) {
-            (Esc, KeyModifiers::NONE) => {
-                self.output_widget.clear_highlight();
-            }
+            (Esc, KeyModifiers::NONE) => match self.rura_widget.command_input.input.mode() {
+                ModalInputMode::Insert => {
+                    self.rura_widget.handle_event(event);
+                }
+                ModalInputMode::Normal => {
+                    self.output_widget.clear_highlight();
+                }
+            },
             (F(1), KeyModifiers::NONE) => {
                 self.active_modal = ActiveModal::Help;
             }
@@ -986,6 +998,8 @@ impl App {
             .areas(status_area);
 
         let [
+            modal_area,
+            _,
             exec_area,
             _,
             stdin_area,
@@ -1000,6 +1014,8 @@ impl App {
             .constraints(vec![
                 Constraint::Length(3),
                 Constraint::Length(1), // separator
+                Constraint::Length(3),
+                Constraint::Length(1), // separator
                 Constraint::Length(5),
                 Constraint::Length(1), // separator
                 Constraint::Length(1),
@@ -1009,6 +1025,14 @@ impl App {
                 Constraint::Length(7),
             ])
             .areas(status_left_area);
+
+        frame.render_widget(
+            match self.rura_widget.command_input.input.mode() {
+                ModalInputMode::Insert => "INS",
+                ModalInputMode::Normal => "",
+            },
+            modal_area,
+        );
 
         let [_, lines_area] = Layout::default()
             .direction(Direction::Horizontal)
@@ -1249,6 +1273,7 @@ enum InputMode {
 mod tests {
     use super::*;
     use crate::config::{KeyBindingsConfig, ThemeConfig};
+    use crate::text_input::EditingMode;
     use crossterm::event::Event::Key;
     use crossterm::event::{KeyEvent, KeyEventKind, KeyEventState};
     use insta::assert_snapshot;
@@ -1277,7 +1302,7 @@ mod tests {
 
             Self {
                 rura_widget: RuraWidget {
-                    command_input: CompletableInput::from("", ""),
+                    command_input: CompletableInput::from(EditingMode::Std, "", ""),
                     highlight_until: None,
                     theme: Theme::from_config(&theme_config),
                     history: History::in_mem(),

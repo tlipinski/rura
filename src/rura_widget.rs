@@ -13,7 +13,6 @@ use ratatui::prelude::{Line, Style, Widget};
 use ratatui::style::Styled;
 use ratatui::text::StyledGrapheme;
 use std::sync::mpsc::Sender;
-use tui_input::InputRequest;
 use unicode_width::UnicodeWidthStr;
 
 pub struct RuraWidget {
@@ -34,7 +33,7 @@ impl Widget for &RuraWidget {
     {
         let command_input_line = {
             match RuraInput::new(
-                self.command_input.value(),
+                &self.command_input.value(),
                 self.command_input.visual_cursor(),
             ) {
                 Ok(r) => to_line(
@@ -71,11 +70,7 @@ impl RuraWidget {
     }
 
     pub fn handle_event(&mut self, event: &Event) -> bool {
-        let changed_value = self
-            .command_input
-            .handle_event(event)
-            .map(|change| change.value)
-            .unwrap_or(false);
+        let changed_value = self.command_input.handle_event(event);
 
         if changed_value {
             self.failed_step_index = None
@@ -86,11 +81,11 @@ impl RuraWidget {
 
     pub fn subcommand_next(&mut self) {
         if let Ok(r) = RuraInput::new(
-            self.command_input.value(),
+            &self.command_input.value(),
             self.command_input.visual_cursor(),
         ) {
             if let Some(cursor) = r.cursor_next(false) {
-                self.command_input.handle(InputRequest::SetCursor(cursor));
+                self.command_input.set_cursor(cursor);
             }
         }
 
@@ -99,11 +94,11 @@ impl RuraWidget {
 
     pub fn subcommand_prev(&mut self) {
         if let Ok(r) = RuraInput::new(
-            self.command_input.value(),
+            &self.command_input.value(),
             self.command_input.visual_cursor(),
         ) {
             if let Some(cursor) = r.cursor_prev() {
-                self.command_input.handle(InputRequest::SetCursor(cursor));
+                self.command_input.set_cursor(cursor);
             }
         }
 
@@ -112,7 +107,7 @@ impl RuraWidget {
 
     pub fn copy_current(&mut self) {
         if let Ok(r) = RuraInput::new(
-            self.command_input.value(),
+            &self.command_input.value(),
             self.command_input.visual_cursor(),
         ) {
             self.copied = r.current_subcommand();
@@ -121,20 +116,20 @@ impl RuraWidget {
 
     pub fn cut_current(&mut self) {
         if let Ok(mut r) = RuraInput::new(
-            self.command_input.value(),
+            &self.command_input.value(),
             self.command_input.visual_cursor(),
         ) {
             if let Some((removed, cursor)) = r.delete_current() {
                 self.copied = Some(removed);
-                self.command_input.with_value(r.to_string());
-                self.command_input.handle(InputRequest::SetCursor(cursor));
+                self.command_input.set_value(r.to_string());
+                self.command_input.set_cursor(cursor);
             }
         }
     }
 
     pub fn current_index(&mut self) -> Option<usize> {
         if let Ok(r) = RuraInput::new(
-            self.command_input.value(),
+            &self.command_input.value(),
             self.command_input.visual_cursor(),
         ) {
             Some(r.current())
@@ -145,54 +140,54 @@ impl RuraWidget {
 
     pub fn paste_after_current(&mut self) {
         if let Ok(mut r) = RuraInput::new(
-            self.command_input.value(),
+            &self.command_input.value(),
             self.command_input.visual_cursor(),
         ) {
             if let Some(yanked) = self.copied.clone() {
                 let cursor = r.insert_after(&yanked);
-                self.command_input.with_value(r.to_string());
-                self.command_input.handle(InputRequest::SetCursor(cursor));
+                self.command_input.set_value(r.to_string());
+                self.command_input.set_cursor(cursor);
             }
         }
     }
 
     pub fn insert_after_current(&mut self, value: &str) {
         if let Ok(mut r) = RuraInput::new(
-            self.command_input.value(),
+            &self.command_input.value(),
             self.command_input.visual_cursor(),
         ) {
             let cursor = r.insert_after(value);
-            self.command_input.with_value(r.to_string());
-            self.command_input.handle(InputRequest::SetCursor(cursor));
+            self.command_input.set_value(r.to_string());
+            self.command_input.set_cursor(cursor);
         } else if self.command_input.cursor() == self.command_input.value().len() {
             // special case that allows inserting value even if
             // rura command might not be valid, for instance - `grep abc | `
             let new_val = format!("{}{}", self.command_input.value(), value);
-            self.command_input.with_value(new_val);
-            self.command_input.handle(InputRequest::GoToEnd);
+            self.command_input.set_cursor(new_val.len());
+            self.command_input.set_value(new_val);
         }
     }
 
     pub fn insert_before_current(&mut self, value: &str) {
         if let Ok(mut r) = RuraInput::new(
-            self.command_input.value(),
+            &self.command_input.value(),
             self.command_input.visual_cursor(),
         ) {
             let _cursor = r.insert_before(value);
-            self.command_input.with_value(r.to_string());
+            self.command_input.set_value(r.to_string());
             // self.command_input.handle(InputRequest::SetCursor(cursor));
         } else if self.command_input.cursor() == self.command_input.value().len() {
             // special case that allows inserting value even if
             // rura command might not be valid, for instance - `grep abc | `
             let new_val = format!("{}{}", self.command_input.value(), value);
-            self.command_input.with_value(new_val);
-            self.command_input.handle(InputRequest::GoToEnd);
+            self.command_input.set_cursor(new_val.len());
+            self.command_input.set_value(new_val);
         }
     }
 
     pub fn history_next(&mut self) {
         self.command_input
-            .with_value(self.history.next(self.command_input.value()));
+            .set_value(self.history.next(&self.command_input.value()));
 
         self.command_input.clear_completions();
         self.failed_step_index = None;
@@ -200,7 +195,7 @@ impl RuraWidget {
 
     pub fn history_prev(&mut self) {
         self.command_input
-            .with_value(self.history.previous(self.command_input.value()));
+            .set_value(self.history.previous(&self.command_input.value()));
 
         self.command_input.clear_completions();
         self.failed_step_index = None;
@@ -208,11 +203,11 @@ impl RuraWidget {
 
     pub fn format(&mut self) {
         if let Ok(mut r) = RuraInput::new(
-            self.command_input.value(),
+            &self.command_input.value(),
             self.command_input.visual_cursor(),
         ) {
             let cursor = r.format();
-            self.command_input.with_value(r.to_string());
+            self.command_input.set_value(r.to_string());
             self.command_input.set_cursor(cursor);
         }
     }
@@ -222,7 +217,7 @@ impl RuraWidget {
             return Ok(Rura::empty());
         }
         match RuraInput::new(
-            self.command_input.value(),
+            &self.command_input.value(),
             self.command_input.visual_cursor(),
         ) {
             Ok(r) => {
@@ -361,6 +356,7 @@ mod tests {
     use super::*;
     use crate::config::ThemeConfig;
     use crate::history::History;
+    use crate::text_input::EditingMode;
     use crate::theme::Theme;
     use crossterm::event::KeyCode::Char;
     use crossterm::event::{Event, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
@@ -381,7 +377,7 @@ mod tests {
             let (highlight_reset_tx, _) = std::sync::mpsc::channel::<()>();
             let theme_config = ThemeConfig::default();
             RuraWidget {
-                command_input: CompletableInput::from("", ""),
+                command_input: CompletableInput::from(EditingMode::Std, "", ""),
                 highlight_until: None,
                 theme: Theme::from_config(&theme_config),
                 history: History::in_mem(),

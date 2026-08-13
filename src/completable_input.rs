@@ -1,29 +1,28 @@
 use crate::completion::Completers;
 use crate::completion::{Completer, CompletionType};
+use crate::text_input::{EditingMode, Inputs, TextInput};
 use crossterm::event::Event;
-use tui_input::backend::crossterm::to_input_request;
-use tui_input::{Input, InputRequest, InputResponse, StateChanged};
 
 pub struct CompletableInput {
-    input: Input,
+    pub input: Box<dyn TextInput>,
     completions: Option<(CompletionResult, usize)>,
     completer: Box<dyn Completer>,
     completion_type_rule: Option<CompletionType>,
 }
 
 impl CompletableInput {
-    pub fn from(str: &str, shell: &str) -> Self {
+    pub fn from(mode: EditingMode, str: &str, shell: &str) -> Self {
         Self {
-            input: Input::new(str.to_string()),
+            input: Inputs::from(mode, str.to_string()),
             completions: None,
             completer: Completers::for_shell(shell),
             completion_type_rule: None,
         }
     }
 
-    pub fn file_only(str: &str, shell: &str) -> Self {
+    pub fn file_only(mode: EditingMode, str: &str, shell: &str) -> Self {
         Self {
-            input: Input::new(str.to_string()),
+            input: Inputs::from(mode, str.to_string()),
             completions: None,
             completer: Completers::for_shell(shell),
             completion_type_rule: Some(CompletionType::File),
@@ -34,29 +33,25 @@ impl CompletableInput {
         self.input.cursor()
     }
 
-    pub fn handle(&mut self, req: InputRequest) -> InputResponse {
-        self.input.handle(req)
-    }
-
-    pub fn handle_event(&mut self, evt: &Event) -> Option<StateChanged> {
+    pub fn handle_event(&mut self, evt: &Event) -> bool {
         self.completions = None;
-        to_input_request(evt).and_then(|req| self.input.handle(req))
+        self.input.handle_event(evt)
     }
 
-    pub fn value(&self) -> &str {
+    pub fn value(&self) -> String {
         self.input.value()
     }
 
-    pub fn with_value(&mut self, value: String) {
-        self.input = Input::from(value);
+    pub fn set_value(&mut self, value: String) {
+        self.input.set_value(&value);
     }
 
     pub fn set_cursor(&mut self, pos: usize) {
-        self.input.handle(InputRequest::SetCursor(pos));
+        self.input.set_cursor(pos);
     }
 
     pub fn visual_cursor(&self) -> usize {
-        self.input.visual_cursor()
+        self.input.cursor()
     }
 
     pub fn clear_completions(&mut self) {
@@ -65,7 +60,7 @@ impl CompletableInput {
 
     pub fn complete(&mut self, next: bool) {
         let current_value = self.input.value().to_string();
-        let cursor_pos = self.input.visual_cursor();
+        let cursor_pos = self.input.cursor();
 
         if let Some((res, index)) = self.completions.as_mut() {
             if next {
@@ -84,9 +79,8 @@ impl CompletableInput {
                 completion,
                 &current_value[cursor_pos..]
             );
-            self.input = Input::from(new_value);
-            self.input
-                .handle(InputRequest::SetCursor(res.word_start + completion.len()));
+            self.input.set_value(&new_value);
+            self.input.set_cursor(res.word_start + completion.len());
         } else if let Some(res) = self.get_completions(&current_value, cursor_pos) {
             let index = if next { 0 } else { res.completions.len() - 1 };
             let word_start = res.word_start;
@@ -98,9 +92,8 @@ impl CompletableInput {
                 &current_value[cursor_pos..]
             );
             self.completions = Some((res, index));
-            self.input = Input::from(new_value);
-            self.input
-                .handle(InputRequest::SetCursor(word_start + completion.len()));
+            self.input.set_value(&new_value);
+            self.input.set_cursor(word_start + completion.len());
         }
     }
 
@@ -179,7 +172,6 @@ mod tests {
     use super::*;
     use crossterm::event::KeyCode::Char;
     use crossterm::event::{Event, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
-    use tui_input::Input;
 
     struct TestCompleter;
 
@@ -192,7 +184,7 @@ mod tests {
     impl Default for CompletableInput {
         fn default() -> Self {
             CompletableInput {
-                input: Input::from(""),
+                input: Inputs::from(EditingMode::Std, "".into()),
                 completions: None,
                 completer: Box::new(TestCompleter {}),
                 completion_type_rule: None,

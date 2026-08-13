@@ -20,6 +20,7 @@ mod save_to_file_widget;
 mod search_widget;
 mod shell;
 mod stdin;
+mod text_input;
 mod theme;
 mod uicmd;
 

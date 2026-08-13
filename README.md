@@ -13,6 +13,7 @@
 - **Context-aware Completion**: Tab-complete commands and file paths using your system's bash, zsh, or fish tools.
 - **Command Caching**: Automatically caches output of subcommands to speed up iteration.
 - **Customizable**: Fully configurable key bindings, themes, and UI placement via TOML.
+- **Vim Mode**: Full Vim-style keybindings for command editing (optional).
 
 <details>
 <summary>More features</summary>
@@ -154,6 +155,7 @@ rura --last
 | `-l, --last`              | Print the last command from history and exit.                                                                                               |
 | `--no-cache`              | Disable caching of command output.                                                                                                          |
 | `-s, --shell <SHELL>`     | Specify the shell to use for execution and completions (e.g., `bash`, `zsh`, `fish`). Defaults to `sh` on Unix and `powershell` on Windows. |
+| `-m, --mode <MODE>`       | Input mode for command editing (`std`, `vim`). Defaults to `std`.                                                                           |
 | `-V, --version`           | Print version information.                                                                                                                  |
 
 ## Key Bindings
@@ -218,6 +220,8 @@ rura --last
 | `Home / End` <br> `Ctrl + a / e` | Move cursor to the beginning or end of the command line.                                  |
 | `Ctrl + p`                       | Previous command in history.                                                              |
 | `Ctrl + n`                       | Next command in history.                                                                  |
+
+> **Note**: If you enable **Vim Mode**, standard Vim keybindings are supported for command editing. It starts in **Insert mode** by default. Press `Esc` to enter **Normal mode**.
 
 ### Presets
 
@@ -303,6 +307,7 @@ The configuration path is determined as follows:
 | `debounce_duration_ms`      | Duration in milliseconds to wait before executing commands in live mode (default: `500`).         |
 | `no_cache`                  | Disable caching of command output when set to `true` (default: `false`).                          |
 | `log_level`                 | Set the logging level (e.g., `"info"`, `"debug"`, `"error"`). Default is `"info"`.                |
+| `editing_mode`             | The input mode for command editing (`"std"`, `"vim"`). Default: `"std"`.                          |
 | `stdin_reading_interval_ms` | Duration in milliseconds between stdin updates (default: `1000`).                                 |
 
 ### Customizing Key Bindings

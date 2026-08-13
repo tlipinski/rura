@@ -1,3 +1,4 @@
+use crate::text_input::EditingMode;
 use clap::Parser;
 use clap::builder::styling::{AnsiColor, Effects, Styles};
 
@@ -67,4 +68,6 @@ pub struct Args {
     pub no_cache: bool,
     #[arg(long = "default-config", help = "Prints default config to stdout")]
     pub default_config: bool,
+    #[arg(short, long, value_enum, help = "Input mode for command editing")]
+    pub mode: Option<EditingMode>,
 }

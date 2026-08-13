@@ -1,5 +1,6 @@
 use crate::app::CommandLinePlacement;
 use crate::props::APP_NAME;
+use crate::text_input::EditingMode;
 use log::info;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -200,6 +201,7 @@ pub struct Config {
     pub shell: Option<String>,
     pub no_cache: bool,
     pub stdin_reading_interval_ms: u64,
+    pub editing_mode: Option<EditingMode>,
 }
 
 impl Default for Config {
@@ -214,6 +216,7 @@ impl Default for Config {
             shell: None,
             no_cache: false,
             stdin_reading_interval_ms: 1000,
+            editing_mode: Some(EditingMode::Std),
         }
     }
 }

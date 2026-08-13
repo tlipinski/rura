@@ -1,5 +1,6 @@
 use crate::completable_input::CompletableInput;
 use crate::file_saver::FileSaver;
+use crate::text_input::EditingMode;
 use crate::theme::Theme;
 use crossterm::event::Event;
 use log::error;
@@ -28,7 +29,7 @@ impl SaveToFileWidget {
             file_saver,
             title,
             theme,
-            file_path_input: CompletableInput::file_only("", &shell),
+            file_path_input: CompletableInput::file_only(EditingMode::Std, "", &shell),
             error_message: None,
             cursor: Cell::new((0, 0)),
             overwrite_confirm: false,
