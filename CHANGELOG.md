@@ -1,3 +1,9 @@
+## v1.12.0 - 2026-08-13
+
+### Features
+
+- Added Vim-style editing mode for command input
+
 ## v1.11.0 - 2026-08-03
 
 ### Features
