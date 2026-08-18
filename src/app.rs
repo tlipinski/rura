@@ -311,18 +311,23 @@ impl App {
                 let code = key_event.code;
                 let mods = key_event.modifiers;
 
-                match &self.active_modal {
-                    ActiveModal::None => match &self.active_mode {
-                        ActiveMode::Normal => self.handle_event_normal(event, code, mods),
-                        ActiveMode::Search => self.handle_event_search(event, code, mods),
+                match to_ui_command(&self.key_bindings, code, mods) {
+                    Some(UiCmd::Quit) => self.exit = Some(Exit::Normal),
+                    _ => match &self.active_modal {
+                        ActiveModal::None => match &self.active_mode {
+                            ActiveMode::Normal => self.handle_event_normal(event, code, mods),
+                            ActiveMode::Search => self.handle_event_search(event, code, mods),
+                        },
+                        ActiveModal::LiveConfirmation(input_mode) => {
+                            self.handle_event_live_confirmation(code, mods, input_mode.clone())
+                        }
+                        ActiveModal::Help => self.handle_event_help(code, mods),
+                        ActiveModal::SaveOutput => self.handle_event_save_output(event, code, mods),
+                        ActiveModal::SaveCommand => {
+                            self.handle_event_save_command(event, code, mods)
+                        }
+                        ActiveModal::Presets => self.handle_event_presets(event, code, mods),
                     },
-                    ActiveModal::LiveConfirmation(input_mode) => {
-                        self.handle_event_live_confirmation(code, mods, input_mode.clone())
-                    }
-                    ActiveModal::Help => self.handle_event_help(code, mods),
-                    ActiveModal::SaveOutput => self.handle_event_save_output(event, code, mods),
-                    ActiveModal::SaveCommand => self.handle_event_save_command(event, code, mods),
-                    ActiveModal::Presets => self.handle_event_presets(event, code, mods),
                 }
             }
             _ => {}
@@ -352,12 +357,6 @@ impl App {
                 self.save_command_widget.cancel()
             }
             _ => match to_ui_command(&self.key_bindings, code, mods) {
-                Some(UiCmd::Quit) => {
-                    self.exit = Some(Exit::Normal);
-                }
-                Some(UiCmd::QuitAndCopy) => {
-                    self.exit = Some(Exit::CopyToClipboard);
-                }
                 Some(UiCmd::Complete) => {
                     self.save_command_widget.complete();
                 }
@@ -400,9 +399,6 @@ impl App {
                 self.save_output_widget.cancel()
             }
             _ => match to_ui_command(&self.key_bindings, code, mods) {
-                Some(UiCmd::Quit) => {
-                    self.exit = Some(Exit::Normal);
-                }
                 Some(UiCmd::Complete) => {
                     self.save_output_widget.complete();
                 }
@@ -478,9 +474,6 @@ impl App {
                     }
                 }
                 _ => match to_ui_command(&self.key_bindings, code, mods) {
-                    Some(UiCmd::Quit) => {
-                        self.exit = Some(Exit::Normal);
-                    }
                     Some(UiCmd::TogglePresets) => {
                         self.active_modal = ActiveModal::default();
                     }
@@ -493,9 +486,6 @@ impl App {
                     self.presets_widget.delete();
                 }
                 _ => match to_ui_command(&self.key_bindings, code, mods) {
-                    Some(UiCmd::Quit) => {
-                        self.exit = Some(Exit::Normal);
-                    }
                     _ => {}
                 },
             },
@@ -508,9 +498,6 @@ impl App {
                     self.presets_widget.save_edit();
                 }
                 _ => match to_ui_command(&self.key_bindings, code, mods) {
-                    Some(UiCmd::Quit) => {
-                        self.exit = Some(Exit::Normal);
-                    }
                     _ => {
                         self.presets_widget.handle_event(&event);
                     }
@@ -528,9 +515,6 @@ impl App {
                 self.active_modal = ActiveModal::default();
             }
             _ => match to_ui_command(&self.key_bindings, code, mods) {
-                Some(UiCmd::Quit) => {
-                    self.exit = Some(Exit::Normal);
-                }
                 Some(UiCmd::ScrollUp) => {
                     self.help_widget.scroll_up();
                 }
@@ -561,9 +545,6 @@ impl App {
                 self.active_modal = ActiveModal::default();
             }
             _ => match to_ui_command(&self.key_bindings, code, mods) {
-                Some(UiCmd::Quit) => {
-                    self.exit = Some(Exit::Normal);
-                }
                 _ => {}
             },
         }
@@ -610,9 +591,6 @@ impl App {
             }
             _ => match to_ui_command(&self.key_bindings, code, mods) {
                 Some(ui_cmd) => match ui_cmd {
-                    UiCmd::Quit => {
-                        self.exit = Some(Exit::Normal);
-                    }
                     UiCmd::SearchNext => {
                         self.output_widget.highlight_next();
                         self.search_widget
@@ -694,12 +672,6 @@ impl App {
             }
             _ => match to_ui_command(&self.key_bindings, code, mods) {
                 Some(ui_cmd) => match ui_cmd {
-                    UiCmd::Quit => {
-                        self.exit = Some(Exit::Normal);
-                    }
-                    UiCmd::QuitAndCopy => {
-                        self.exit = Some(Exit::CopyToClipboard);
-                    }
                     UiCmd::SearchNext | UiCmd::SearchPrev => {
                         self.active_mode = ActiveMode::Search;
                     }
@@ -861,6 +833,7 @@ impl App {
                     UiCmd::ToggleDetails => {
                         self.show_details = !self.show_details;
                     }
+                    _ => {}
                 },
                 _ => {
                     if self.rura_widget.handle_event(event) {
