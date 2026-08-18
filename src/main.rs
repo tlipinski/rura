@@ -36,6 +36,9 @@ use props::APP_NAME;
 use std::fs;
 use std::fs::OpenOptions;
 use std::process::exit;
+use std::thread::sleep;
+use std::time::Duration;
+use arboard::Clipboard;
 
 fn main() {
     let _: Vec<_> = dirs::cache_dir()
@@ -83,7 +86,15 @@ fn main() {
                     println!("{}", command);
                 }
                 Exit::QuitAndCopy(command) => {
-
+                    match save_to_clipboard(&command) {
+                        Ok(_) => {
+                            println!("{}", command);
+                            println!("Command copied to clipboard");
+                        }
+                        Err(_) => {
+                            error!("Failed to save command to clipboard");
+                        }
+                    }
                 }
             }
         }
@@ -107,6 +118,14 @@ fn run_tui(args: Args, config: config::Config) -> Result<Exit> {
     ratatui::restore();
 
     Ok(exit)
+}
+
+fn save_to_clipboard(s: &str) -> Result<()> {
+    let mut cb = Clipboard::new()?;
+    cb.set_text(s)?;
+    #[cfg(unix)]
+    sleep(Duration::from_millis(250));
+    Ok(())
 }
 
 enum Exit {
