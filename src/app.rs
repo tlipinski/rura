@@ -72,7 +72,7 @@ pub struct App {
     stdin_state: StdinState,
     follow: bool,
     show_details: bool,
-    exit: bool,
+    exit: Option<Exit>,
 }
 
 impl App {
@@ -221,12 +221,12 @@ impl App {
             },
             follow: true,
             show_details: false,
-            exit: false,
+            exit: None,
         }
     }
 
     pub fn run(mut self, terminal: &mut DefaultTerminal) -> Result<String> {
-        while !self.exit {
+        while self.exit.is_none() {
             terminal.draw(|frame| self.render(frame, frame.area()))?;
 
             let action = self.action_rx.recv()?;
@@ -353,7 +353,10 @@ impl App {
             }
             _ => match to_ui_command(&self.key_bindings, code, mods) {
                 Some(UiCmd::Quit) => {
-                    self.exit = true;
+                    self.exit = Some(Exit::Normal);
+                }
+                Some(UiCmd::QuitAndCopy) => {
+                    self.exit = Some(Exit::CopyToClipboard);
                 }
                 Some(UiCmd::Complete) => {
                     self.save_command_widget.complete();
@@ -398,7 +401,7 @@ impl App {
             }
             _ => match to_ui_command(&self.key_bindings, code, mods) {
                 Some(UiCmd::Quit) => {
-                    self.exit = true;
+                    self.exit = Some(Exit::Normal);
                 }
                 Some(UiCmd::Complete) => {
                     self.save_output_widget.complete();
@@ -476,7 +479,7 @@ impl App {
                 }
                 _ => match to_ui_command(&self.key_bindings, code, mods) {
                     Some(UiCmd::Quit) => {
-                        self.exit = true;
+                        self.exit = Some(Exit::Normal);
                     }
                     Some(UiCmd::TogglePresets) => {
                         self.active_modal = ActiveModal::default();
@@ -491,7 +494,7 @@ impl App {
                 }
                 _ => match to_ui_command(&self.key_bindings, code, mods) {
                     Some(UiCmd::Quit) => {
-                        self.exit = true;
+                        self.exit = Some(Exit::Normal);
                     }
                     _ => {}
                 },
@@ -506,7 +509,7 @@ impl App {
                 }
                 _ => match to_ui_command(&self.key_bindings, code, mods) {
                     Some(UiCmd::Quit) => {
-                        self.exit = true;
+                        self.exit = Some(Exit::Normal);
                     }
                     _ => {
                         self.presets_widget.handle_event(&event);
@@ -526,7 +529,7 @@ impl App {
             }
             _ => match to_ui_command(&self.key_bindings, code, mods) {
                 Some(UiCmd::Quit) => {
-                    self.exit = true;
+                    self.exit = Some(Exit::Normal);
                 }
                 Some(UiCmd::ScrollUp) => {
                     self.help_widget.scroll_up();
@@ -559,7 +562,7 @@ impl App {
             }
             _ => match to_ui_command(&self.key_bindings, code, mods) {
                 Some(UiCmd::Quit) => {
-                    self.exit = true;
+                    self.exit = Some(Exit::Normal);
                 }
                 _ => {}
             },
@@ -608,7 +611,7 @@ impl App {
             _ => match to_ui_command(&self.key_bindings, code, mods) {
                 Some(ui_cmd) => match ui_cmd {
                     UiCmd::Quit => {
-                        self.exit = true;
+                        self.exit = Some(Exit::Normal);
                     }
                     UiCmd::SearchNext => {
                         self.output_widget.highlight_next();
@@ -692,7 +695,10 @@ impl App {
             _ => match to_ui_command(&self.key_bindings, code, mods) {
                 Some(ui_cmd) => match ui_cmd {
                     UiCmd::Quit => {
-                        self.exit = true;
+                        self.exit = Some(Exit::Normal);
+                    }
+                    UiCmd::QuitAndCopy => {
+                        self.exit = Some(Exit::CopyToClipboard);
                     }
                     UiCmd::SearchNext | UiCmd::SearchPrev => {
                         self.active_mode = ActiveMode::Search;
@@ -1339,7 +1345,7 @@ mod tests {
                 pipeline_tx: command_tx,
                 debouncer_tx,
                 stdin_controller_tx: stdin_agr_tx,
-                exit: false,
+                exit: None,
                 key_bindings: KeyBindings::from_config(&kb_config),
                 command_line_placement: CommandLinePlacement::Bottom,
                 help_widget: HelpWidget::new(kb_config, Theme::from_config(&theme_config)),
@@ -1622,4 +1628,9 @@ enum StdinState {
     Reading,
     Paused,
     Completed,
+}
+
+enum Exit {
+    Normal,
+    CopyToClipboard,
 }

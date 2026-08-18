@@ -6,6 +6,7 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum UiCmd {
     Quit,
+    QuitAndCopy,
     ExecuteFull,
     ExecuteUntilCurrent,
     ExecuteUntilPrev,
