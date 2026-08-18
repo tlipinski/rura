@@ -46,6 +46,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, SystemTime};
 use std::{env, thread};
 use tui_input::Input;
+use crate::Exit;
 
 pub struct App {
     rura_widget: RuraWidget,
@@ -72,7 +73,8 @@ pub struct App {
     stdin_state: StdinState,
     follow: bool,
     show_details: bool,
-    exit: Option<Exit>,
+    exit: bool,
+    copy_on_exit: bool,
 }
 
 impl App {
@@ -131,7 +133,7 @@ impl App {
                 pipeline_rx,
                 s2,
             )
-            .unwrap();
+                .unwrap();
         });
 
         let s4 = action_tx.clone();
@@ -149,7 +151,7 @@ impl App {
                         .expect("Sending to channel failed");
                 },
             )
-            .unwrap()
+                .unwrap()
         });
 
         Self {
@@ -221,19 +223,25 @@ impl App {
             },
             follow: true,
             show_details: false,
-            exit: None,
+            exit: false,
+            copy_on_exit: false,
         }
     }
 
-    pub fn run(mut self, terminal: &mut DefaultTerminal) -> Result<String> {
-        while self.exit.is_none() {
+    pub fn run(mut self, terminal: &mut DefaultTerminal) -> Result<Exit> {
+        while !self.exit {
             terminal.draw(|frame| self.render(frame, frame.area()))?;
 
             let action = self.action_rx.recv()?;
             self.handle_action(action);
         }
 
-        Ok(self.rura_widget.command_input.value().to_string())
+        let last_command = self.rura_widget.command_input.value().to_string();
+        if self.copy_on_exit {
+            Ok(Exit::QuitAndCopy(last_command))
+        } else {
+            Ok(Exit::Quit(last_command))
+        }
     }
 
     fn handle_action(&mut self, action: Action) {
@@ -312,7 +320,13 @@ impl App {
                 let mods = key_event.modifiers;
 
                 match to_ui_command(&self.key_bindings, code, mods) {
-                    Some(UiCmd::Quit) => self.exit = Some(Exit::Normal),
+                    Some(UiCmd::Quit) => {
+                        self.exit = true
+                    }
+                    Some(UiCmd::QuitAndCopy) => {
+                        self.exit = true;
+                        self.copy_on_exit = true;
+                    }
                     _ => match &self.active_modal {
                         ActiveModal::None => match &self.active_mode {
                             ActiveMode::Normal => self.handle_event_normal(event, code, mods),
@@ -865,7 +879,7 @@ impl App {
             self.shell,
             self.rura_widget.command_input.value()
         )
-        .into_bytes()
+            .into_bytes()
     }
 
     pub fn render(&self, frame: &mut Frame, area: Rect) {
@@ -960,11 +974,11 @@ impl App {
         frame.render_widget(&self.details_widget, details_area.inner(margin));
 
         let [
-            _,
-            status_left_area,
-            status_center_area,
-            status_right_area,
-            _,
+        _,
+        status_left_area,
+        status_center_area,
+        status_right_area,
+        _,
         ] = Layout::default()
             .direction(Direction::Horizontal)
             .constraints(vec![
@@ -977,17 +991,17 @@ impl App {
             .areas(status_area);
 
         let [
-            modal_area,
-            _,
-            exec_area,
-            _,
-            stdin_area,
-            _,
-            follow_area,
-            _,
-            diff_area,
-            _,
-            live_area,
+        modal_area,
+        _,
+        exec_area,
+        _,
+        stdin_area,
+        _,
+        follow_area,
+        _,
+        diff_area,
+        _,
+        live_area,
         ] = Layout::default()
             .direction(Direction::Horizontal)
             .constraints(vec![
@@ -1318,7 +1332,8 @@ mod tests {
                 pipeline_tx: command_tx,
                 debouncer_tx,
                 stdin_controller_tx: stdin_agr_tx,
-                exit: None,
+                exit: false,
+                copy_on_exit: false,
                 key_bindings: KeyBindings::from_config(&kb_config),
                 command_line_placement: CommandLinePlacement::Bottom,
                 help_widget: HelpWidget::new(kb_config, Theme::from_config(&theme_config)),
@@ -1467,7 +1482,7 @@ mod tests {
 
         assert_eq!(
             *app.rura_widget.history.history(),
-            VecDeque::from(vec!["grep 'abc'".into(), "grep".into(),])
+            VecDeque::from(vec!["grep 'abc'".into(), "grep".into(), ])
         );
     }
 
@@ -1601,9 +1616,4 @@ enum StdinState {
     Reading,
     Paused,
     Completed,
-}
-
-enum Exit {
-    Normal,
-    CopyToClipboard,
 }

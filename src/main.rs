@@ -76,8 +76,16 @@ fn main() {
     info!("{args:?}");
 
     match run_tui(args, config) {
-        Ok(()) => {
+        Ok(exit) => {
             info!("Exiting application");
+            match exit {
+                Exit::Quit(command) => {
+                    println!("{}", command);
+                }
+                Exit::QuitAndCopy(command) => {
+
+                }
+            }
         }
         Err(e) => {
             error!("{e}");
@@ -85,19 +93,23 @@ fn main() {
     }
 }
 
-fn run_tui(args: Args, config: config::Config) -> Result<()> {
+fn run_tui(args: Args, config: config::Config) -> Result<Exit> {
     info!("Starting TUI");
 
     let mut terminal = ratatui::init();
 
     let app = App::new(args, config);
 
-    let last_command = app.run(&mut terminal)?;
+    let exit = app.run(&mut terminal)?;
 
     info!("Restoring terminal");
+
     ratatui::restore();
 
-    println!("{}", last_command);
+    Ok(exit)
+}
 
-    Ok(())
+enum Exit {
+    Quit(String),
+    QuitAndCopy(String),
 }
