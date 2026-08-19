@@ -139,7 +139,7 @@ impl Default for KeyBindingsConfig {
     fn default() -> Self {
         KeyBindingsConfig {
             quit: vec!["ctrl+c".into()],
-            quit_and_copy: vec!["ctrl+alt+c".into()],
+            quit_and_copy: vec!["ctrl+q".into()],
             execute_full: vec!["enter".into()],
             execute_until_current: vec!["alt+\\".into()],
             execute_until_prev: vec!["alt+|".into()],
