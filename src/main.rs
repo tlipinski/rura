@@ -29,6 +29,8 @@ use crate::args::Args;
 use crate::config::{history_path, load_config};
 use crate::history::History;
 use anyhow::Result;
+use arboard::Clipboard;
+use cfg_if::cfg_if;
 use clap::Parser;
 use env_logger::{Builder, Target};
 use log::{LevelFilter, error, info};
@@ -38,7 +40,6 @@ use std::fs::OpenOptions;
 use std::process::exit;
 use std::thread::sleep;
 use std::time::Duration;
-use arboard::Clipboard;
 
 fn main() {
     let _: Vec<_> = dirs::cache_dir()
@@ -85,17 +86,15 @@ fn main() {
                 Exit::Quit(command) => {
                     println!("{}", command);
                 }
-                Exit::QuitAndCopy(command) => {
-                    match save_to_clipboard(&command) {
-                        Ok(_) => {
-                            println!("{}", command);
-                            println!("Command copied to clipboard");
-                        }
-                        Err(_) => {
-                            error!("Failed to save command to clipboard");
-                        }
+                Exit::QuitAndCopy(command) => match save_to_clipboard(&command) {
+                    Ok(_) => {
+                        println!("{}", command);
+                        println!("Command copied to clipboard");
                     }
-                }
+                    Err(_) => {
+                        error!("Failed to save command to clipboard");
+                    }
+                },
             }
         }
         Err(e) => {
@@ -122,9 +121,16 @@ fn run_tui(args: Args, config: config::Config) -> Result<Exit> {
 
 fn save_to_clipboard(s: &str) -> Result<()> {
     let mut cb = Clipboard::new()?;
-    cb.set_text(s)?;
-    #[cfg(unix)]
-    sleep(Duration::from_millis(500));
+    cfg_if! {
+        if #[cfg(unix)] {
+            use arboard::{LinuxClipboardKind, SetExtLinux};
+
+            cb.set().clipboard(LinuxClipboardKind::Primary).text(s)?;
+            sleep(Duration::from_millis(500));
+        } else {
+            cb.set_text(s)?;
+        }
+    }
     Ok(())
 }
 

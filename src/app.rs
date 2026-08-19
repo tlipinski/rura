@@ -1,3 +1,4 @@
+use crate::Exit;
 use crate::app::Action::{
     Debounced, Failure, PipelineCompleted, ResetHighlight, StartProgress, StopProgress, UserInput,
 };
@@ -46,7 +47,6 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, SystemTime};
 use std::{env, thread};
 use tui_input::Input;
-use crate::Exit;
 
 pub struct App {
     rura_widget: RuraWidget,
@@ -133,7 +133,7 @@ impl App {
                 pipeline_rx,
                 s2,
             )
-                .unwrap();
+            .unwrap();
         });
 
         let s4 = action_tx.clone();
@@ -151,7 +151,7 @@ impl App {
                         .expect("Sending to channel failed");
                 },
             )
-                .unwrap()
+            .unwrap()
         });
 
         Self {
@@ -320,9 +320,7 @@ impl App {
                 let mods = key_event.modifiers;
 
                 match to_ui_command(&self.key_bindings, code, mods) {
-                    Some(UiCmd::Quit) => {
-                        self.exit = true
-                    }
+                    Some(UiCmd::Quit) => self.exit = true,
                     Some(UiCmd::QuitAndCopy) => {
                         self.exit = true;
                         self.copy_on_exit = true;
@@ -879,7 +877,7 @@ impl App {
             self.shell,
             self.rura_widget.command_input.value()
         )
-            .into_bytes()
+        .into_bytes()
     }
 
     pub fn render(&self, frame: &mut Frame, area: Rect) {
@@ -974,11 +972,11 @@ impl App {
         frame.render_widget(&self.details_widget, details_area.inner(margin));
 
         let [
-        _,
-        status_left_area,
-        status_center_area,
-        status_right_area,
-        _,
+            _,
+            status_left_area,
+            status_center_area,
+            status_right_area,
+            _,
         ] = Layout::default()
             .direction(Direction::Horizontal)
             .constraints(vec![
@@ -991,17 +989,17 @@ impl App {
             .areas(status_area);
 
         let [
-        modal_area,
-        _,
-        exec_area,
-        _,
-        stdin_area,
-        _,
-        follow_area,
-        _,
-        diff_area,
-        _,
-        live_area,
+            modal_area,
+            _,
+            exec_area,
+            _,
+            stdin_area,
+            _,
+            follow_area,
+            _,
+            diff_area,
+            _,
+            live_area,
         ] = Layout::default()
             .direction(Direction::Horizontal)
             .constraints(vec![
@@ -1482,7 +1480,7 @@ mod tests {
 
         assert_eq!(
             *app.rura_widget.history.history(),
-            VecDeque::from(vec!["grep 'abc'".into(), "grep".into(), ])
+            VecDeque::from(vec!["grep 'abc'".into(), "grep".into(),])
         );
     }
 
