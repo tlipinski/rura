@@ -121,7 +121,7 @@ fn run_tui(args: Args, config: config::Config) -> Result<Exit> {
 fn save_to_clipboard(s: &str) -> Result<()> {
     let mut cb = Clipboard::new()?;
     cfg_if! {
-        if #[cfg(unix)] {
+        if #[cfg(target_os = "linux")] {
             use arboard::{LinuxClipboardKind, SetExtLinux};
 
             cb.set().clipboard(LinuxClipboardKind::Primary).text(s)?;
