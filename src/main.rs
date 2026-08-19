@@ -89,7 +89,6 @@ fn main() {
                 Exit::QuitAndCopy(command) => match save_to_clipboard(&command) {
                     Ok(_) => {
                         println!("{}", command);
-                        println!("Command copied to clipboard");
                     }
                     Err(_) => {
                         error!("Failed to save command to clipboard");
