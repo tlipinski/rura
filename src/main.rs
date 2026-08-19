@@ -124,7 +124,7 @@ fn save_to_clipboard(s: &str) -> Result<()> {
     let mut cb = Clipboard::new()?;
     cb.set_text(s)?;
     #[cfg(unix)]
-    sleep(Duration::from_millis(250));
+    sleep(Duration::from_millis(500));
     Ok(())
 }
 
