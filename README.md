@@ -274,10 +274,13 @@ overwritten.
 
 ### General
 
-| Key        | Action                                                            |
-|------------|-------------------------------------------------------------------|
-| `F1`       | Toggle help screen.                                               |
-| `Ctrl + c` | Exit Rura. The last executed command is printed to your terminal. |
+| Key        | Action                                                                                                 |
+|------------|--------------------------------------------------------------------------------------------------------|
+| `F1`       | Toggle help screen.                                                                                    |
+| `Ctrl + c` | Exit Rura. The last executed command is printed to your terminal.                                      |
+| `Ctrl + q` | Exit Rura and copy the last executed command to the clipboard.                                         |
+
+> **Note for Linux users**: Due to how the X11/Wayland clipboard works, the clipboard content might be lost when Rura exits if you don't have a clipboard manager running. If you experience this, we recommend using a clipboard manager.
 
 ## Configuration
 

@@ -112,6 +112,11 @@ impl HelpWidget {
             Line::from("Stdin").reversed().centered(),
             Line::from(format!("{:012} - Toggle stdin reading", self.kb_config.toggle_stdin_reading.first().unwrap().to_string())),
             Line::from(format!("{:012} - Toggle stdin follow", self.kb_config.toggle_follow.first().unwrap().to_string())),
+            Line::from(""),
+            Line::from("General").reversed().centered(),
+            Line::from(format!("{:012} - Toggle help screen", "F1")),
+            Line::from(format!("{:012} - Exit Rura", self.kb_config.quit.first().unwrap().to_string())),
+            Line::from(format!("{:012} - Exit and copy command", self.kb_config.quit_and_copy.first().unwrap().to_string())),
         ]
     }
 }
