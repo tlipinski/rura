@@ -1,3 +1,9 @@
+## v1.13.0 - 2026-08-20
+
+### Features
+
+- Added a "quit and save" option to save command to the clipboard when the app exits
+
 ## v1.12.0 - 2026-08-13
 
 ### Features
