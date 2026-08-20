@@ -29,6 +29,8 @@ use crate::args::Args;
 use crate::config::{history_path, load_config};
 use crate::history::History;
 use anyhow::Result;
+use arboard::Clipboard;
+use cfg_if::cfg_if;
 use clap::Parser;
 use env_logger::{Builder, Target};
 use log::{LevelFilter, error, info};
@@ -36,6 +38,8 @@ use props::APP_NAME;
 use std::fs;
 use std::fs::OpenOptions;
 use std::process::exit;
+use std::thread::sleep;
+use std::time::Duration;
 
 fn main() {
     let _: Vec<_> = dirs::cache_dir()
@@ -76,8 +80,21 @@ fn main() {
     info!("{args:?}");
 
     match run_tui(args, config) {
-        Ok(()) => {
+        Ok(exit) => {
             info!("Exiting application");
+            match exit {
+                Exit::Quit(command) => {
+                    eprintln!("{}", command);
+                }
+                Exit::QuitAndCopy(command) => match save_to_clipboard(&command) {
+                    Ok(_) => {
+                        eprintln!("{}", command);
+                    }
+                    Err(_) => {
+                        error!("Failed to save command to clipboard");
+                    }
+                },
+            }
         }
         Err(e) => {
             error!("{e}");
@@ -85,19 +102,38 @@ fn main() {
     }
 }
 
-fn run_tui(args: Args, config: config::Config) -> Result<()> {
+fn run_tui(args: Args, config: config::Config) -> Result<Exit> {
     info!("Starting TUI");
 
     let mut terminal = ratatui::init();
 
     let app = App::new(args, config);
 
-    let last_command = app.run(&mut terminal)?;
+    let exit = app.run(&mut terminal)?;
 
     info!("Restoring terminal");
+
     ratatui::restore();
 
-    println!("{}", last_command);
+    Ok(exit)
+}
 
+fn save_to_clipboard(s: &str) -> Result<()> {
+    let mut cb = Clipboard::new()?;
+    cfg_if! {
+        if #[cfg(target_os = "linux")] {
+            use arboard::{LinuxClipboardKind, SetExtLinux};
+
+            cb.set().clipboard(LinuxClipboardKind::Primary).text(s)?;
+            sleep(Duration::from_millis(500));
+        } else {
+            cb.set_text(s)?;
+        }
+    }
     Ok(())
+}
+
+enum Exit {
+    Quit(String),
+    QuitAndCopy(String),
 }

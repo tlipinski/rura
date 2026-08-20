@@ -1,3 +1,4 @@
+use crate::Exit;
 use crate::app::Action::{
     Debounced, Failure, PipelineCompleted, ResetHighlight, StartProgress, StopProgress, UserInput,
 };
@@ -73,6 +74,7 @@ pub struct App {
     follow: bool,
     show_details: bool,
     exit: bool,
+    copy_on_exit: bool,
 }
 
 impl App {
@@ -222,10 +224,11 @@ impl App {
             follow: true,
             show_details: false,
             exit: false,
+            copy_on_exit: false,
         }
     }
 
-    pub fn run(mut self, terminal: &mut DefaultTerminal) -> Result<String> {
+    pub fn run(mut self, terminal: &mut DefaultTerminal) -> Result<Exit> {
         while !self.exit {
             terminal.draw(|frame| self.render(frame, frame.area()))?;
 
@@ -233,7 +236,12 @@ impl App {
             self.handle_action(action);
         }
 
-        Ok(self.rura_widget.command_input.value().to_string())
+        let last_command = self.rura_widget.command_input.value().to_string();
+        if self.copy_on_exit {
+            Ok(Exit::QuitAndCopy(last_command))
+        } else {
+            Ok(Exit::Quit(last_command))
+        }
     }
 
     fn handle_action(&mut self, action: Action) {
@@ -311,18 +319,27 @@ impl App {
                 let code = key_event.code;
                 let mods = key_event.modifiers;
 
-                match &self.active_modal {
-                    ActiveModal::None => match &self.active_mode {
-                        ActiveMode::Normal => self.handle_event_normal(event, code, mods),
-                        ActiveMode::Search => self.handle_event_search(event, code, mods),
-                    },
-                    ActiveModal::LiveConfirmation(input_mode) => {
-                        self.handle_event_live_confirmation(code, mods, input_mode.clone())
+                match to_ui_command(&self.key_bindings, code, mods) {
+                    Some(UiCmd::Quit) => self.exit = true,
+                    Some(UiCmd::QuitAndCopy) => {
+                        self.exit = true;
+                        self.copy_on_exit = true;
                     }
-                    ActiveModal::Help => self.handle_event_help(code, mods),
-                    ActiveModal::SaveOutput => self.handle_event_save_output(event, code, mods),
-                    ActiveModal::SaveCommand => self.handle_event_save_command(event, code, mods),
-                    ActiveModal::Presets => self.handle_event_presets(event, code, mods),
+                    _ => match &self.active_modal {
+                        ActiveModal::None => match &self.active_mode {
+                            ActiveMode::Normal => self.handle_event_normal(event, code, mods),
+                            ActiveMode::Search => self.handle_event_search(event, code, mods),
+                        },
+                        ActiveModal::LiveConfirmation(input_mode) => {
+                            self.handle_event_live_confirmation(code, mods, input_mode.clone())
+                        }
+                        ActiveModal::Help => self.handle_event_help(code, mods),
+                        ActiveModal::SaveOutput => self.handle_event_save_output(event, code, mods),
+                        ActiveModal::SaveCommand => {
+                            self.handle_event_save_command(event, code, mods)
+                        }
+                        ActiveModal::Presets => self.handle_event_presets(event, code, mods),
+                    },
                 }
             }
             _ => {}
@@ -352,9 +369,6 @@ impl App {
                 self.save_command_widget.cancel()
             }
             _ => match to_ui_command(&self.key_bindings, code, mods) {
-                Some(UiCmd::Quit) => {
-                    self.exit = true;
-                }
                 Some(UiCmd::Complete) => {
                     self.save_command_widget.complete();
                 }
@@ -397,9 +411,6 @@ impl App {
                 self.save_output_widget.cancel()
             }
             _ => match to_ui_command(&self.key_bindings, code, mods) {
-                Some(UiCmd::Quit) => {
-                    self.exit = true;
-                }
                 Some(UiCmd::Complete) => {
                     self.save_output_widget.complete();
                 }
@@ -475,9 +486,6 @@ impl App {
                     }
                 }
                 _ => match to_ui_command(&self.key_bindings, code, mods) {
-                    Some(UiCmd::Quit) => {
-                        self.exit = true;
-                    }
                     Some(UiCmd::TogglePresets) => {
                         self.active_modal = ActiveModal::default();
                     }
@@ -490,9 +498,6 @@ impl App {
                     self.presets_widget.delete();
                 }
                 _ => match to_ui_command(&self.key_bindings, code, mods) {
-                    Some(UiCmd::Quit) => {
-                        self.exit = true;
-                    }
                     _ => {}
                 },
             },
@@ -505,9 +510,6 @@ impl App {
                     self.presets_widget.save_edit();
                 }
                 _ => match to_ui_command(&self.key_bindings, code, mods) {
-                    Some(UiCmd::Quit) => {
-                        self.exit = true;
-                    }
                     _ => {
                         self.presets_widget.handle_event(&event);
                     }
@@ -525,9 +527,6 @@ impl App {
                 self.active_modal = ActiveModal::default();
             }
             _ => match to_ui_command(&self.key_bindings, code, mods) {
-                Some(UiCmd::Quit) => {
-                    self.exit = true;
-                }
                 Some(UiCmd::ScrollUp) => {
                     self.help_widget.scroll_up();
                 }
@@ -558,9 +557,6 @@ impl App {
                 self.active_modal = ActiveModal::default();
             }
             _ => match to_ui_command(&self.key_bindings, code, mods) {
-                Some(UiCmd::Quit) => {
-                    self.exit = true;
-                }
                 _ => {}
             },
         }
@@ -607,9 +603,6 @@ impl App {
             }
             _ => match to_ui_command(&self.key_bindings, code, mods) {
                 Some(ui_cmd) => match ui_cmd {
-                    UiCmd::Quit => {
-                        self.exit = true;
-                    }
                     UiCmd::SearchNext => {
                         self.output_widget.highlight_next();
                         self.search_widget
@@ -691,9 +684,6 @@ impl App {
             }
             _ => match to_ui_command(&self.key_bindings, code, mods) {
                 Some(ui_cmd) => match ui_cmd {
-                    UiCmd::Quit => {
-                        self.exit = true;
-                    }
                     UiCmd::SearchNext | UiCmd::SearchPrev => {
                         self.active_mode = ActiveMode::Search;
                     }
@@ -855,6 +845,7 @@ impl App {
                     UiCmd::ToggleDetails => {
                         self.show_details = !self.show_details;
                     }
+                    _ => {}
                 },
                 _ => {
                     if self.rura_widget.handle_event(event) {
@@ -1340,6 +1331,7 @@ mod tests {
                 debouncer_tx,
                 stdin_controller_tx: stdin_agr_tx,
                 exit: false,
+                copy_on_exit: false,
                 key_bindings: KeyBindings::from_config(&kb_config),
                 command_line_placement: CommandLinePlacement::Bottom,
                 help_widget: HelpWidget::new(kb_config, Theme::from_config(&theme_config)),

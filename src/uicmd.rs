@@ -6,6 +6,7 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum UiCmd {
     Quit,
+    QuitAndCopy,
     ExecuteFull,
     ExecuteUntilCurrent,
     ExecuteUntilPrev,
@@ -53,6 +54,7 @@ impl KeyBindings {
     pub fn from_config(config: &KeyBindingsConfig) -> Self {
         let mut bindings: HashMap<UiCmd, Vec<(KeyCode, KeyModifiers)>> = HashMap::new();
         bindings.insert(UiCmd::Quit, parse_bindings(&config.quit));
+        bindings.insert(UiCmd::QuitAndCopy, parse_bindings(&config.quit_and_copy));
         bindings.insert(UiCmd::ExecuteFull, parse_bindings(&config.execute_full));
         bindings.insert(
             UiCmd::ExecuteUntilCurrent,
