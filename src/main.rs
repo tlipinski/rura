@@ -84,11 +84,11 @@ fn main() {
             info!("Exiting application");
             match exit {
                 Exit::Quit(command) => {
-                    println!("{}", command);
+                    eprintln!("{}", command);
                 }
                 Exit::QuitAndCopy(command) => match save_to_clipboard(&command) {
                     Ok(_) => {
-                        println!("{}", command);
+                        eprintln!("{}", command);
                     }
                     Err(_) => {
                         error!("Failed to save command to clipboard");
