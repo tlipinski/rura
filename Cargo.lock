@@ -1768,7 +1768,7 @@ dependencies = [
 
 [[package]]
 name = "rura"
-version = "1.12.0"
+version = "1.13.0"
 dependencies = [
  "anyhow",
  "arboard",
