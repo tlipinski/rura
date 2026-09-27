@@ -3,13 +3,9 @@ use std::fmt;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-/// Coordinates cancellation of pipeline runs between the UI and the pipeline thread.
-///
-/// Every run request gets a generation number. Calling `cancel` invalidates all runs requested
-/// so far and kills the process of the run that is currently executing, if it's one of them.
 #[derive(Default)]
 pub struct Canceller {
-    latest: AtomicU64,
+    latest_gen: AtomicU64,
     running: Mutex<Running>,
 }
 
@@ -20,10 +16,8 @@ struct Running {
 }
 
 impl Canceller {
-    /// Invalidates all runs requested so far and kills the running process, if any.
-    /// Returns the generation to be used for the next run request.
     pub fn cancel(&self) -> u64 {
-        let generation = self.latest.fetch_add(1, Ordering::SeqCst) + 1;
+        let generation = self.latest_gen.fetch_add(1, Ordering::SeqCst) + 1;
         let running = self.running.lock().unwrap();
         if let Some(pid) = running.pid
             && running.generation < generation
@@ -34,25 +28,21 @@ impl Canceller {
     }
 
     pub fn latest(&self) -> u64 {
-        self.latest.load(Ordering::SeqCst)
+        self.latest_gen.load(Ordering::SeqCst)
     }
 
     pub fn is_stale(&self, generation: u64) -> bool {
         generation < self.latest()
     }
 
-    /// Marks the start of a run with the given generation.
     pub fn begin(&self, generation: u64) {
         self.running.lock().unwrap().generation = generation;
     }
 
-    /// Whether the current run has been cancelled.
     pub fn is_cancelled(&self) -> bool {
         self.is_stale(self.running.lock().unwrap().generation)
     }
 
-    /// Registers a spawned process of the current run.
-    /// The process is killed right away if the run has been cancelled in the meantime.
     pub fn register(&self, pid: u32) {
         let mut running = self.running.lock().unwrap();
         if self.is_stale(running.generation) {
@@ -84,7 +74,6 @@ fn kill(pid: u32) {
         .output();
 }
 
-/// Error returned by pipeline runners when a run has been cancelled.
 #[derive(Debug)]
 pub struct Cancelled;
 

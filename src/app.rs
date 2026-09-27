@@ -882,7 +882,6 @@ impl App {
         }
     }
 
-    /// Requests a run of the command, cancelling the one that might be still running.
     fn run_command(&self, command: Rura) {
         let generation = self.canceller.cancel();
         self.pipeline_tx
@@ -1640,7 +1639,6 @@ enum ActiveModal {
 }
 
 pub enum PipelineRunnerAction {
-    /// Command to run with the generation of the run request, see `Canceller`
     Run(Rura, u64),
     UpdateStdin(Arc<[u8]>),
 }
