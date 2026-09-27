@@ -883,6 +883,7 @@ impl App {
     }
 
     fn run_command(&self, command: Rura) {
+        // cancel any previous run when starting a new one
         let generation = self.canceller.cancel();
         self.pipeline_tx
             .send(PipelineRunnerAction::Run(command, generation))
