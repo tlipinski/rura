@@ -168,6 +168,7 @@ rura --last
 | `Alt + \`  | Execute the pipeline up to the current subcommand (where your cursor is). |
 | `Alt + \|` | Execute the pipeline up to the *previous* subcommand.                     |
 | `Alt + i`  | Reset view to show the original input data.                               |
+| `Ctrl + g` | Cancel the running command.                                               |
 | `F9`       | Toggle execution details view.                                            |
 
 ### Navigation & View

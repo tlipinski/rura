@@ -1,5 +1,6 @@
 use crate::rura::Rura;
 use crate::shell::cached_runner::CachedPipelineRunner;
+use crate::shell::cancel::Canceller;
 use anyhow::Result;
 use itertools::Itertools;
 use std::sync::Arc;
@@ -13,15 +14,27 @@ pub trait PipelineRunner {
 pub struct PipelineRunners;
 impl PipelineRunners {
     #[cfg(unix)]
-    pub fn new(shell: &str, stdin: Arc<[u8]>, no_cache: bool) -> Box<dyn PipelineRunner> {
-        Box::new(CachedPipelineRunner::new(shell, stdin, !no_cache))
+    pub fn new(
+        shell: &str,
+        stdin: Arc<[u8]>,
+        no_cache: bool,
+        canceller: Arc<Canceller>,
+    ) -> Box<dyn PipelineRunner> {
+        Box::new(CachedPipelineRunner::new(
+            shell, stdin, !no_cache, canceller,
+        ))
     }
 
     #[cfg(windows)]
-    pub fn new(shell: &str, stdin: Arc<[u8]>, _no_cache: bool) -> Box<dyn PipelineRunner> {
+    pub fn new(
+        shell: &str,
+        stdin: Arc<[u8]>,
+        _no_cache: bool,
+        canceller: Arc<Canceller>,
+    ) -> Box<dyn PipelineRunner> {
         use crate::shell::simple_runner::SimplePipelineRunner;
 
-        Box::new(SimplePipelineRunner::new(shell, stdin))
+        Box::new(SimplePipelineRunner::new(shell, stdin, canceller))
     }
 }
 

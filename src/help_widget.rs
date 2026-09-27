@@ -60,6 +60,7 @@ impl HelpWidget {
             Line::from(format!("{:012} - Execute until cursor", self.kb_config.execute_until_current.first().unwrap().to_string())),
             Line::from(format!("{:012} - Execute before cursor", self.kb_config.execute_until_prev.first().unwrap().to_string())),
             Line::from(format!("{:012} - Reset input", self.kb_config.reset_input.first().unwrap().to_string())),
+            Line::from(format!("{:012} - Cancel running command", self.kb_config.cancel.first().unwrap().to_string())),
             Line::from(""),
             Line::from(format!("{:012} - Toggle execution details", self.kb_config.toggle_details.first().unwrap().to_string())),
             Line::from(format!("{:012} - Toggle Live mode", self.kb_config.toggle_live.first().unwrap().to_string())),

@@ -1,5 +1,6 @@
 use crate::rura::Rura;
 use crate::shell::builder::{CommandBuilder, UsrBinEnvCommandBuilder};
+use crate::shell::cancel::{Cancelled, Canceller};
 use crate::shell::exec::{Exec, SystemExec};
 use crate::shell::output::ExecOutput;
 use crate::shell::pipeline_runner::{PipelineRun, PipelineRunner, Stdin, StepFailure, StepOutput};
@@ -17,9 +18,9 @@ pub struct CachedPipelineRunner {
 }
 
 impl CachedPipelineRunner {
-    pub fn new(shell: &str, stdin: Arc<[u8]>, use_cache: bool) -> Self {
+    pub fn new(shell: &str, stdin: Arc<[u8]>, use_cache: bool, canceller: Arc<Canceller>) -> Self {
         Self {
-            exec: Box::new(SystemExec),
+            exec: Box::new(SystemExec { canceller }),
             builder: Box::new(UsrBinEnvCommandBuilder {
                 shell: shell.into(),
             }),
@@ -95,6 +96,10 @@ impl PipelineRunner for CachedPipelineRunner {
                         steps,
                         failure: Some(StepFailure::new(step.clone(), bytes, code, exec_duration)),
                     });
+                }
+                ExecOutput::Cancelled => {
+                    debug!("  cancelled - aborting further execution");
+                    return Err(Cancelled.into());
                 }
             }
         }
