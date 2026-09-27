@@ -47,6 +47,7 @@ impl Exec for SystemExec {
 
         let result = child.wait_with_output();
 
+        // process finished
         self.canceller.unregister();
 
         if self.canceller.is_cancelled() {

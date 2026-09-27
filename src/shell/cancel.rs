@@ -16,6 +16,18 @@ struct Running {
 }
 
 impl Canceller {
+    pub fn begin(&self, generation: u64) {
+        self.running.lock().unwrap().generation = generation;
+    }
+
+    pub fn register(&self, pid: u32) {
+        let mut running = self.running.lock().unwrap();
+        if self.is_stale(running.generation) {
+            kill(pid);
+        }
+        running.pid = Some(pid);
+    }
+
     pub fn cancel(&self) -> u64 {
         let generation = self.latest_gen.fetch_add(1, Ordering::SeqCst) + 1;
         let running = self.running.lock().unwrap();
@@ -32,23 +44,11 @@ impl Canceller {
     }
 
     pub fn is_stale(&self, generation: u64) -> bool {
-        generation < self.latest()
-    }
-
-    pub fn begin(&self, generation: u64) {
-        self.running.lock().unwrap().generation = generation;
+        self.latest() > generation
     }
 
     pub fn is_cancelled(&self) -> bool {
         self.is_stale(self.running.lock().unwrap().generation)
-    }
-
-    pub fn register(&self, pid: u32) {
-        let mut running = self.running.lock().unwrap();
-        if self.is_stale(running.generation) {
-            kill(pid);
-        }
-        running.pid = Some(pid);
     }
 
     pub fn unregister(&self) {
