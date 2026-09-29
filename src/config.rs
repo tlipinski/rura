@@ -96,6 +96,7 @@ impl Default for ThemeConfig {
 pub struct KeyBindingsConfig {
     pub quit: Vec<String>,
     pub quit_and_copy: Vec<String>,
+    pub cancel: Vec<String>,
     pub execute_full: Vec<String>,
     pub execute_until_current: Vec<String>,
     pub execute_until_prev: Vec<String>,
@@ -140,6 +141,7 @@ impl Default for KeyBindingsConfig {
         KeyBindingsConfig {
             quit: vec!["ctrl+c".into()],
             quit_and_copy: vec!["ctrl+q".into()],
+            cancel: vec!["ctrl+g".into()],
             execute_full: vec!["enter".into()],
             execute_until_current: vec!["alt+\\".into()],
             execute_until_prev: vec!["alt+|".into()],

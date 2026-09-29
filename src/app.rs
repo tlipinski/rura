@@ -18,6 +18,7 @@ use crate::rura_input::ExecuteType;
 use crate::rura_widget::RuraWidget;
 use crate::save_to_file_widget::SaveToFileWidget;
 use crate::search_widget::SearchWidget;
+use crate::shell::cancel::{Cancelled, Canceller};
 use crate::shell::pipeline_runner::{PipelineRun, PipelineRunner, PipelineRunners};
 use crate::stdin::{StdinControllerAction, start_input_read_task};
 use crate::text_input::ModalInputMode;
@@ -60,6 +61,7 @@ pub struct App {
     shell: String,
     action_rx: Receiver<Action>,
     pipeline_tx: Sender<PipelineRunnerAction>,
+    canceller: Arc<Canceller>,
     stdin_controller_tx: Sender<StdinControllerAction>,
     key_bindings: KeyBindings,
     command_line_placement: CommandLinePlacement,
@@ -125,13 +127,22 @@ impl App {
 
         let no_cache = args.no_cache || config.no_cache;
 
+        let canceller = Arc::new(Canceller::default());
+
         let s2 = action_tx.clone();
         let shell_clone = shell.clone();
+        let canceller_clone = canceller.clone();
         thread::spawn(move || {
             handle_pipeline_task(
-                PipelineRunners::new(&shell_clone, Arc::from("".as_bytes()), no_cache),
+                PipelineRunners::new(
+                    &shell_clone,
+                    Arc::from("".as_bytes()),
+                    no_cache,
+                    canceller_clone.clone(),
+                ),
                 pipeline_rx,
                 s2,
+                canceller_clone,
             )
             .unwrap();
         });
@@ -205,6 +216,7 @@ impl App {
             shell: shell.clone(),
             action_rx,
             pipeline_tx,
+            canceller,
             debouncer_tx,
             stdin_controller_tx: stdin_tx,
             key_bindings: KeyBindings::from_config(&config.keybindings),
@@ -235,6 +247,9 @@ impl App {
             let action = self.action_rx.recv()?;
             self.handle_action(action);
         }
+
+        // kill the command that might be still running
+        self.canceller.cancel();
 
         let last_command = self.rura_widget.command_input.value().to_string();
         if self.copy_on_exit {
@@ -324,6 +339,9 @@ impl App {
                     Some(UiCmd::QuitAndCopy) => {
                         self.exit = true;
                         self.copy_on_exit = true;
+                    }
+                    Some(UiCmd::Cancel) => {
+                        self.canceller.cancel();
                     }
                     _ => match &self.active_modal {
                         ActiveModal::None => match &self.active_mode {
@@ -692,11 +710,7 @@ impl App {
                     }
                     UiCmd::ExecuteUntilCurrent => self.handle_execute(ExecuteType::UntilCurrent),
                     UiCmd::ExecuteUntilPrev => self.handle_execute(ExecuteType::UntilCurrentPrev),
-                    UiCmd::ResetInput => {
-                        self.pipeline_tx
-                            .send(PipelineRunnerAction::Run(Rura::empty()))
-                            .unwrap();
-                    }
+                    UiCmd::ResetInput => self.run_command(Rura::empty()),
                     UiCmd::SubcommandNext => {
                         self.rura_widget.subcommand_next();
                     }
@@ -863,12 +877,17 @@ impl App {
 
     fn handle_execute(&mut self, kind: ExecuteType) {
         match self.rura_widget.execute(kind) {
-            Ok(command) => self
-                .pipeline_tx
-                .send(PipelineRunnerAction::Run(command))
-                .unwrap(),
+            Ok(command) => self.run_command(command),
             Err(_) => {}
         }
+    }
+
+    fn run_command(&self, command: Rura) {
+        // cancel any previous run when starting a new one
+        let generation = self.canceller.cancel();
+        self.pipeline_tx
+            .send(PipelineRunnerAction::Run(command, generation))
+            .unwrap()
     }
 
     fn script(&self) -> Vec<u8> {
@@ -1184,19 +1203,29 @@ fn handle_pipeline_task(
     mut pipeline_runner: Box<dyn PipelineRunner>,
     pipeline_rx: Receiver<PipelineRunnerAction>,
     action_tx: Sender<Action>,
+    canceller: Arc<Canceller>,
 ) -> Result<()> {
     let mut last_command: Option<Rura> = None;
 
     loop {
         if let Ok(runner_action) = pipeline_rx.recv() {
             match runner_action {
-                PipelineRunnerAction::Run(rura) => {
+                PipelineRunnerAction::Run(rura, generation) => {
+                    if canceller.is_stale(generation) {
+                        debug!("Skipping stale run {:?}", rura);
+                        continue;
+                    }
+                    canceller.begin(generation);
+
                     action_tx.send(Action::StartProgress(SystemTime::now()))?;
 
                     match pipeline_runner.run(&rura) {
                         Ok(result) => {
                             last_command = Some(rura.clone());
                             let _ = action_tx.send(Action::PipelineCompleted(rura, result));
+                        }
+                        Err(e) if e.is::<Cancelled>() => {
+                            debug!("Cancelled running command {:?}", rura);
                         }
                         Err(e) => {
                             error!("Failed running command {:?}: {}", rura, e);
@@ -1210,6 +1239,7 @@ fn handle_pipeline_task(
                 }
                 UpdateStdin(stdin) => {
                     pipeline_runner.update_stdin(stdin);
+                    canceller.begin(canceller.latest());
 
                     let command = last_command.clone().unwrap_or(Rura::empty()).clone();
 
@@ -1218,6 +1248,9 @@ fn handle_pipeline_task(
                     match pipeline_runner.run(&command) {
                         Ok(result) => {
                             let _ = action_tx.send(Action::PipelineCompleted(command, result));
+                        }
+                        Err(e) if e.is::<Cancelled>() => {
+                            debug!("Cancelled running command {:?}", command);
                         }
                         Err(e) => {
                             error!("Failed running command {:?}: {}", command, e);
@@ -1328,6 +1361,7 @@ mod tests {
                 details_widget: DetailsWidget::default(),
                 action_rx,
                 pipeline_tx: command_tx,
+                canceller: Arc::new(Canceller::default()),
                 debouncer_tx,
                 stdin_controller_tx: stdin_agr_tx,
                 exit: false,
@@ -1606,7 +1640,7 @@ enum ActiveModal {
 }
 
 pub enum PipelineRunnerAction {
-    Run(Rura),
+    Run(Rura, u64),
     UpdateStdin(Arc<[u8]>),
 }
 

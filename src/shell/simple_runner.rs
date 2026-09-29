@@ -1,5 +1,6 @@
 use crate::rura::Rura;
 use crate::shell::builder::CommandBuilder;
+use crate::shell::cancel::Cancelled;
 use crate::shell::exec::Exec;
 use crate::shell::output::ExecOutput;
 use crate::shell::pipeline_runner::{PipelineRun, PipelineRunner, Stdin, StepFailure, StepOutput};
@@ -16,11 +17,15 @@ pub struct SimplePipelineRunner {
 
 impl SimplePipelineRunner {
     #[cfg(windows)]
-    pub fn new(shell: &str, stdin: Arc<[u8]>) -> Self {
+    pub fn new(
+        shell: &str,
+        stdin: Arc<[u8]>,
+        canceller: Arc<crate::shell::cancel::Canceller>,
+    ) -> Self {
         use crate::shell::builder::PwshCommandBuilder;
         use crate::shell::exec::SystemExec;
         SimplePipelineRunner {
-            exec: Box::new(SystemExec),
+            exec: Box::new(SystemExec { canceller }),
             builder: Box::new(PwshCommandBuilder {
                 shell: shell.into(),
             }),
@@ -62,6 +67,7 @@ impl PipelineRunner for SimplePipelineRunner {
                 steps: vec![],
                 failure: Some(StepFailure::new(rura.to_string(), bytes, code, elapsed)),
             }),
+            ExecOutput::Cancelled => Err(Cancelled.into()),
         }
     }
 

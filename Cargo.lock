@@ -1779,6 +1779,7 @@ dependencies = [
  "env_logger",
  "insta",
  "itertools 0.15.0",
+ "libc",
  "log",
  "modalkit",
  "ratatui",
