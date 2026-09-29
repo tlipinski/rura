@@ -62,7 +62,7 @@ pub struct App {
     action_rx: Receiver<Action>,
     pipeline_tx: Sender<PipelineRunnerAction>,
     canceller: Arc<Canceller>,
-    stdin_controller_tx: Sender<StdinControllerAction>,
+    stdin_controller_tx: crossbeam_channel::Sender<StdinControllerAction>,
     key_bindings: KeyBindings,
     command_line_placement: CommandLinePlacement,
     input_mode: InputMode,
@@ -1319,7 +1319,7 @@ mod tests {
             let (command_tx, _) = std::sync::mpsc::channel::<PipelineRunnerAction>();
             let (highlight_reset_tx, _) = std::sync::mpsc::channel::<()>();
             let (debouncer_tx, _) = std::sync::mpsc::channel::<()>();
-            let (stdin_agr_tx, _) = std::sync::mpsc::channel::<StdinControllerAction>();
+            let (stdin_agr_tx, _) = crossbeam_channel::unbounded::<StdinControllerAction>();
 
             let theme_config = ThemeConfig::default();
             let kb_config = KeyBindingsConfig::default();
