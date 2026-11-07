@@ -1,3 +1,10 @@
+## v1.14.0 - 2026-11-07
+
+### 🚀 Features
+
+- Command cancellation functionality
+- Added input file handling to script generation
+
 ## v1.13.0 - 2026-08-20
 
 ### Features

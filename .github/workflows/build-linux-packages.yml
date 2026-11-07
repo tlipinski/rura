@@ -1,0 +1,76 @@
+# Builds .deb and .rpm packages for Linux targets.
+#
+# Called from release.yml via dist's `local-artifacts-jobs` hook (see
+# dist-workspace.toml). Uploaded artifacts must be named `artifacts-*` so the
+# dist `host` job picks them up and attaches them to the GitHub Release.
+
+name: Build Linux packages
+
+on:
+  workflow_call:
+    inputs:
+      plan:
+        required: true
+        type: string
+
+jobs:
+  build-linux-packages:
+    name: build-linux-packages (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            rpm_arch: x86_64
+          - target: aarch64-unknown-linux-gnu
+            rpm_arch: aarch64
+    runs-on: "ubuntu-24.04"
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          submodules: recursive
+      - name: Install Rust
+        run: |
+          rustup update stable
+          rustup target add ${{ matrix.target }}
+      - name: Install tools
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deb,cargo-generate-rpm
+      - name: Setup cross-toolchain
+        uses: taiki-e/setup-cross-toolchain-action@v1
+        with:
+          target: ${{ matrix.target }}
+      - name: Build release binary
+        run: cargo build --release --target ${{ matrix.target }}
+      - name: Build deb package
+        run: cargo deb --target ${{ matrix.target }} --no-build
+      - name: Build rpm package
+        run: |
+          # Copy binary to where cargo-generate-rpm expects it based on Cargo.toml
+          mkdir -p target/release
+          cp target/${{ matrix.target }}/release/rura target/release/rura
+          # RPM versions can't contain '-'. Map the SemVer pre-release
+          # separator to '~' (sorts before the release: 1.0.0~rc.1 < 1.0.0)
+          # and any other '-' to '_'.
+          VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "rura") | .version')
+          TILDE='~'
+          RPM_VERSION="${VERSION/-/$TILDE}"
+          RPM_VERSION="${RPM_VERSION//-/_}"
+          echo "RPM version: $RPM_VERSION"
+          cargo generate-rpm --arch ${{ matrix.rpm_arch }} --set-metadata "version = \"$RPM_VERSION\""
+      - name: Prepare artifacts
+        run: |
+          mkdir -p target/packages
+          # Collect packages from their respective build locations
+          cp target/debian/*.deb target/packages/ 2>/dev/null || true
+          cp target/*/debian/*.deb target/packages/ 2>/dev/null || true
+          cp target/generate-rpm/*.rpm target/packages/ 2>/dev/null || true
+      - name: "Upload artifacts"
+        uses: actions/upload-artifact@v7
+        with:
+          name: artifacts-build-linux-packages-${{ matrix.target }}
+          path: target/packages/*
