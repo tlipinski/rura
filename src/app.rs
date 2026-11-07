@@ -30,6 +30,7 @@ use anyhow::Result;
 use cfg_if::cfg_if;
 use crossterm::event::KeyCode::Char;
 use crossterm::event::{KeyCode, KeyModifiers};
+use crossterm::tty::IsTty;
 use log::{debug, error};
 use ratatui::crossterm::event;
 use ratatui::crossterm::event::Event;
@@ -42,6 +43,7 @@ use ratatui::text::{Line, Text};
 use ratatui::widgets::{Block, BorderType, Borders, Clear, Paragraph, Shadow, Widget};
 use ratatui::{DefaultTerminal, Frame};
 use serde::{Deserialize, Serialize};
+use std::io::stdin;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender};
@@ -77,6 +79,7 @@ pub struct App {
     show_details: bool,
     exit: bool,
     copy_on_exit: bool,
+    has_input: bool,
 }
 
 impl App {
@@ -237,6 +240,7 @@ impl App {
             show_details: false,
             exit: false,
             copy_on_exit: false,
+            has_input: args.file.is_some() || !stdin().is_tty(),
         }
     }
 
@@ -891,10 +895,10 @@ impl App {
     }
 
     fn script(&self) -> Vec<u8> {
-        format!(
-            "#!/usr/bin/env {}\n\n{}\n",
-            self.shell,
-            self.rura_widget.command_input.value()
+        script(
+            &self.shell,
+            &self.rura_widget.command_input.value(),
+            self.has_input,
         )
         .into_bytes()
     }
@@ -1366,6 +1370,7 @@ mod tests {
                 stdin_controller_tx: stdin_agr_tx,
                 exit: false,
                 copy_on_exit: false,
+                has_input: false,
                 key_bindings: KeyBindings::from_config(&kb_config),
                 command_line_placement: CommandLinePlacement::Bottom,
                 help_widget: HelpWidget::new(kb_config, Theme::from_config(&theme_config)),
@@ -1600,6 +1605,36 @@ mod tests {
         assert_snapshot!(terminal.backend());
     }
 
+    #[test]
+    fn script_without_input() {
+        assert_eq!(
+            script("bash", "curl -s example.com | jq .", false),
+            "#!/usr/bin/env bash\n\ncurl -s example.com | jq .\n"
+        );
+    }
+
+    #[test]
+    fn script_with_input() {
+        assert_eq!(
+            script("bash", "jq . | sort", true),
+            "#!/usr/bin/env bash\n\n\
+            # Usage: <script> [FILE]\n\
+            # Reads FILE, or stdin when FILE is omitted.\n\
+            if [ $# -gt 0 ]; then\n  \
+              exec < \"$1\" || exit 1\n\
+            fi\n\n\
+            jq . | sort\n"
+        );
+    }
+
+    #[test]
+    fn script_with_input_non_posix_shell() {
+        assert_eq!(
+            script("fish", "jq . | sort", true),
+            "#!/usr/bin/env fish\n\njq . | sort\n"
+        );
+    }
+
     fn input_text(app: &mut App, text: &str) {
         for c in text.chars() {
             app.handle_event(&Key(KeyEvent {
@@ -1648,4 +1683,26 @@ enum StdinState {
     Reading,
     Paused,
     Completed,
+}
+
+fn script(shell: &str, command: &str, has_input: bool) -> String {
+    let shell_name = std::path::Path::new(shell)
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or(shell);
+    let posix_like = matches!(shell_name, "sh" | "bash" | "zsh" | "dash" | "ksh");
+
+    if has_input && posix_like {
+        format!(
+            "#!/usr/bin/env {shell}\n\n\
+            # Usage: <script> [FILE]\n\
+            # Reads FILE, or stdin when FILE is omitted.\n\
+            if [ $# -gt 0 ]; then\n  \
+              exec < \"$1\" || exit 1\n\
+            fi\n\n\
+            {command}\n"
+        )
+    } else {
+        format!("#!/usr/bin/env {shell}\n\n{command}\n")
+    }
 }
